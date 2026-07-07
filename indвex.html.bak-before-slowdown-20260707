@@ -941,8 +941,7 @@
 
       const STORAGE_KEY = "aaa_president_sim_state_v4";
       const SLOTS_KEY = "aaa_president_sim_slots_v4";
-      const DAY_MS = 1800;
-      const DAYS_PER_YEAR = 365;
+      const DAY_MS = 900;
       const tabs = [
         ["dashboard", "Обзор", "⌂"],
         ["map", "Карта", "◇"],
@@ -981,7 +980,7 @@
       const ideologies = ["социал-демократия","консерватизм","либерализм","национал-демократия","зелёная политика","технократия","социализм","центризм","федерализм","суверенизм"];
       const continents = ["Евразия","Африка","Северная Америка","Южная Америка","Океания","Арктический пояс"];
       const newsCategories = ["Экономика","Политика","Армия","Мир","Катастрофы","Эпидемии","Скандалы","Выборы","Аварии","Безопасность","Открытия"];
-      const speeds = [0, 1, 2, 5, 10, 20, 50];
+      const speeds = [0, 1, 2, 5, 10, 30, 100];
 
       let state = null;
       let activeTab = "dashboard";
@@ -1499,8 +1498,8 @@
         return (m.land / 10000) + m.air * .13 + m.navy * .42 + m.airDefense * .22 + m.strategic * 1.8 + m.cyber * .8 + m.special / 2600 + m.readiness * .75 + m.morale * .55;
       }
 
-      function totalBuildings(key, game = state) {
-        return game.regions.reduce((sum, r) => sum + (r.buildings[key] || 0), 0);
+      function totalBuildings(key) {
+        return state.regions.reduce((sum, r) => sum + (r.buildings[key] || 0), 0);
       }
 
       function init() {
@@ -2591,8 +2590,8 @@
         simulateRegions(game);
         simulateDiplomacy(game);
         simulateMilitary(game);
-        if (Math.random() < .18) generateDailyNews(game);
-        if (Math.random() < .018) triggerRandomEvent(game);
+        if (Math.random() < .52) generateDailyNews(game);
+        if (Math.random() < .055) triggerRandomEvent(game);
         if (game.date.day === 1 || game.history.date.length < 6) pushHistory(game);
       }
 
@@ -2617,27 +2616,11 @@
         const e = game.economy;
         const pop = game.population;
         const infra = totalBuildingValue(game, ["roads","ports","airports","plants"]);
-        const plants = totalBuildings("plants", game);
-        const factories = totalBuildings("factories", game);
-        const farms = totalBuildings("farms", game);
-        const ports = totalBuildings("ports", game);
-        const oil = totalBuildings("oil", game);
-        const gas = totalBuildings("gas", game);
         const education = pop.education / 100;
         const taxLoad = (e.taxes.income + e.taxes.vat + e.taxes.corporate + e.taxes.export) / 100;
         const stability = (game.politics.popularity + 100 - game.politics.corruption + pop.happiness) / 300;
-        const targetAnnualGrowth = clamp(
-          e.growth
-          + infra * .035
-          + (education - .55) * 1.8
-          + (stability - .5) * 2.5
-          - Math.max(0, taxLoad - .38) * 3.5
-          - Math.max(0, e.inflation - 4) * .18
-          - game.military.wars.length * 2.5,
-          -8,
-          10
-        );
-        const growthDaily = targetAnnualGrowth / 100 / DAYS_PER_YEAR;
+        const warPenalty = game.military.wars.length * .006;
+        const growthDaily = ((e.growth / 365) + infra * .000012 + education * .0008 + stability * .0007 - taxLoad * .0016 - e.inflation * .000035 - warPenalty);
         e.gdp = Math.max(1000, e.gdp * (1 + growthDaily));
         const income = calcIncome(game) / 365;
         const expenses = calcExpenses(game) / 365;
@@ -2649,33 +2632,23 @@
           game.politics.popularity -= .04;
         }
         e.debt = Math.max(0, e.debt + Math.max(0, expenses - income) * .18 - Math.max(0, income - expenses) * .05);
-        e.reserves = Math.max(0, e.reserves + (e.exports - e.imports) / DAYS_PER_YEAR * .12 - Math.max(0, e.emission) * .006);
-        const ratePressure = clamp((e.inflation - e.keyRate) * .00045, -.003, .003);
-        const welfarePressure = Math.max(0, e.spending.welfare - 24) * .00022;
-        e.inflation = clamp(e.inflation + (e.emission * .000002) + ratePressure + welfarePressure - plants * .00012, -2, 80);
-        e.unemployment = clamp(
-          e.unemployment
-          - e.growth * .00055
-          + Math.max(0, e.taxes.corporate - 18) * .00028
-          - factories * .00022
-          - farms * .0001,
-          1,
-          45
-        );
-        e.avgSalary = Math.max(e.minSalary, e.avgSalary * (1 + growthDaily * .55 + (e.inflation / 100) / DAYS_PER_YEAR * .6));
-        e.exchangeRate = clamp(e.exchangeRate * (1 + (e.inflation - e.keyRate) / 52000 - (e.reserves / Math.max(1, e.gdp)) * .00018), 0.1, 5000);
-        e.exports = Math.max(100, e.exports * (1 + growthDaily * .35 + ports * .00002 + oil * .000025 + gas * .000022));
-        e.imports = Math.max(100, e.imports * (1 + pop.life * .0000007 + e.growth * .000003 - farms * .000012));
-        e.investments = Math.max(0, e.investments * (1 + growthDaily * .8 + (100 - game.politics.corruption) * .000001 + (e.keyRate < 8 ? .00008 : -.000045)));
-        e.smallBusiness = clamp(e.smallBusiness + (e.taxes.corporate < 18 ? .002 : -.001) + (e.unemployment < 7 ? .0008 : -.0008), 0, 100);
-        e.bankruptcies = clamp(e.bankruptcies + (e.keyRate > 13 ? .002 : -.001) + (e.growth < 0 ? .004 : -.0008), 0, 30);
-        e.growth = clamp(targetAnnualGrowth * .008 + e.growth * .992, -12, 12);
+        e.reserves = Math.max(0, e.reserves + (e.exports - e.imports) / 365 * .12 - Math.max(0, e.emission) * .02);
+        e.inflation = clamp(e.inflation + (e.emission * .0008) + (e.keyRate < e.inflation ? .006 : -.004) + (e.spending.welfare > 24 ? .003 : 0) - totalBuildings("plants") * .0005, -2, 80);
+        e.unemployment = clamp(e.unemployment - growthDaily * 180 + e.taxes.corporate * .0008 - totalBuildings("factories") * .0015 - totalBuildings("farms") * .0006, 1, 45);
+        e.avgSalary = Math.max(e.minSalary, e.avgSalary * (1 + growthDaily * 2.4 + (e.inflation / 100) / 365));
+        e.exchangeRate = clamp(e.exchangeRate * (1 + (e.inflation - e.keyRate) / 36500 - (e.reserves / Math.max(1, e.gdp)) * .0006), 0.1, 5000);
+        e.exports = Math.max(100, e.exports * (1 + growthDaily * .45 + totalBuildings("ports") * .00008 + totalBuildings("oil") * .00011 + totalBuildings("gas") * .00009));
+        e.imports = Math.max(100, e.imports * (1 + pop.life * .000002 + e.growth * .00001 - totalBuildings("farms") * .00004));
+        e.investments = Math.max(0, e.investments * (1 + growthDaily + (100 - game.politics.corruption) * .000002 + (e.keyRate < 8 ? .0002 : -.00009)));
+        e.smallBusiness = clamp(e.smallBusiness + (e.taxes.corporate < 18 ? .006 : -.003) + (e.unemployment < 7 ? .002 : -.002), 0, 100);
+        e.bankruptcies = clamp(e.bankruptcies + (e.keyRate > 13 ? .006 : -.003) + (e.growth < 0 ? .012 : -.002), 0, 30);
+        e.growth = clamp((growthDaily * 365 * 100) * .06 + e.growth * .94, -22, 25);
         e.stockIndex = Math.max(100, e.stockIndex * (1 + growthDaily * 3 + (game.politics.popularity - 50) * .00001 - game.military.wars.length * .001));
         e.companies.forEach(c => {
           c.trend = clamp(c.trend * .7 + e.growth * .08 + rnd(-.45, .45) - e.keyRate * .01, -8, 8);
           c.value = Math.max(100, c.value * (1 + c.trend / 3650));
         });
-        e.emission *= .995;
+        e.emission *= .985;
       }
 
       function totalBuildingValue(game, keys) {
@@ -2687,13 +2660,12 @@
         const e = game.economy;
         const pop = game.population;
         const pressure = e.inflation * .09 + e.unemployment * .16 + pop.poverty * .1 + p.corruption * .07 - pop.happiness * .06;
-        const aiAdminRelief = game.tech.nodes.find(n => n.id === "ai_admin")?.done ? .02 : 0;
-        p.popularity = clamp(p.popularity + e.growth * .001 + (pop.happiness - 50) * .0007 - pressure * .006 + rnd(-.018, .018), 0, 100);
-        p.protests = clamp(p.protests + pressure * .004 + p.opposition * .0011 - p.popularity * .0012 + rnd(-.015, .015), 0, 100);
-        p.strikes = clamp(p.strikes + e.unemployment * .001 + e.inflation * .0007 - p.popularity * .00075, 0, 100);
-        p.opposition = clamp(p.opposition + (50 - p.popularity) * .0008 + p.corruption * .00035, 0, 100);
-        p.corruption = clamp(p.corruption + p.lobbyism * .00022 - aiAdminRelief - e.spending.security * .00025 + rnd(-.008, .01), 0, 100);
-        p.coalition = clamp(p.coalition + (p.popularity - 50) * .0015 + rnd(-.025, .025), 0, 100);
+        p.popularity = clamp(p.popularity + e.growth * .004 + pop.happiness * .002 - pressure * .01 + rnd(-.025, .025), 0, 100);
+        p.protests = clamp(p.protests + pressure * .008 + p.opposition * .003 - p.popularity * .003 + rnd(-.02, .02), 0, 100);
+        p.strikes = clamp(p.strikes + e.unemployment * .003 + e.inflation * .002 - p.popularity * .002, 0, 100);
+        p.opposition = clamp(p.opposition + (50 - p.popularity) * .002 + p.corruption * .001, 0, 100);
+        p.corruption = clamp(p.corruption + p.lobbyism * .0006 - state.tech.nodes.find(n => n.id === "ai_admin")?.done * .02 - e.spending.security * .0008 + rnd(-.015, .02), 0, 100);
+        p.coalition = clamp(p.coalition + (p.popularity - 50) * .004 + rnd(-.04, .04), 0, 100);
         p.impeachmentRisk = clamp((p.protests * .22 + p.corruption * .12 + Math.max(0, 45 - p.coalition) * .42 + Math.max(0, 30 - p.popularity) * .5), 0, 100);
         p.electionInDays--;
         if (p.referendumCooldown > 0) p.referendumCooldown--;
@@ -2712,24 +2684,24 @@
         const dailyDeath = p.total * (p.deathRate / 1000) / 365;
         const migration = p.total * (p.migration / 100) / 365;
         p.total = Math.max(10000, p.total + dailyBirth - dailyDeath + migration);
-        p.happiness = clamp(p.happiness + (game.politics.popularity - 50) * .0006 + e.growth * .0012 - e.inflation * .0008 - e.unemployment * .001 - p.crime * .0004 + e.spending.welfare * .0008, 0, 100);
+        p.happiness = clamp(p.happiness + game.politics.popularity * .0008 + e.growth * .006 - e.inflation * .003 - e.unemployment * .006 - p.crime * .002 + e.spending.welfare * .0016, 0, 100);
         p.discontent = clamp(100 - p.happiness + e.unemployment * .22 + e.inflation * .18 + game.politics.protests * .2, 0, 100);
-        p.crime = clamp(p.crime + p.poverty * .0007 + e.unemployment * .001 - e.spending.security * .0009 - totalBuildings("schools", game) * .00014, 0, 100);
-        p.education = clamp(p.education + e.spending.education * .00025 + totalBuildings("universities", game) * .00045 + totalBuildings("schools", game) * .00016, 0, 100);
-        p.life = clamp(p.life + e.spending.health * .00028 + totalBuildings("hospitals", game) * .00022 - p.crime * .00015 - e.inflation * .00012, 0, 100);
-        p.poverty = clamp(p.poverty + e.unemployment * .001 + e.inflation * .00045 - e.spending.welfare * .00055 - e.growth * .0022, 0, 80);
+        p.crime = clamp(p.crime + p.poverty * .003 + e.unemployment * .004 - e.spending.security * .002 - totalBuildings("schools") * .0005, 0, 100);
+        p.education = clamp(p.education + e.spending.education * .001 + totalBuildings("universities") * .002 + totalBuildings("schools") * .0007, 0, 100);
+        p.life = clamp(p.life + e.spending.health * .0013 + totalBuildings("hospitals") * .001 - p.crime * .0006 - e.inflation * .0005, 0, 100);
+        p.poverty = clamp(p.poverty + e.unemployment * .004 + e.inflation * .002 - e.spending.welfare * .002 - e.growth * .01, 0, 80);
         p.birthRate = clamp(p.birthRate + (p.happiness - 50) * .00015 - p.poverty * .00008, 3, 28);
-        p.deathRate = clamp(p.deathRate - p.life * .000012 + p.poverty * .000012, 3, 30);
+        p.deathRate = clamp(p.deathRate - p.life * .00005 + p.poverty * .00004, 3, 30);
       }
 
       function simulateTech(game) {
         const t = game.tech;
         const focus = t.nodes.find(n => n.id === t.focus && !n.done);
-        t.points += (t.labs * .14 + game.economy.spending.science * .025 + totalBuildings("universities", game) * .04) * (game.population.education / 80) * .45;
+        t.points += (t.labs * .14 + game.economy.spending.science * .025 + totalBuildings("universities") * .04) * (game.population.education / 80);
         if (focus) {
           const locked = focus.requires.some(id => !t.nodes.find(x => x.id === id)?.done);
           if (!locked) {
-            focus.progress += (t.labs * .09 + game.economy.spending.science * .018 + game.military.research * .004) * .55;
+            focus.progress += (t.labs * .09 + game.economy.spending.science * .018 + game.military.research * .004);
             if (focus.progress >= focus.cost) completeTech(game, focus);
           }
         }
@@ -2749,9 +2721,9 @@
       function simulateRegions(game) {
         for (const r of game.regions) {
           const infra = Object.entries(r.buildings).reduce((sum, [k, v]) => sum + v * (k === "cities" ? 3 : 1), 0);
-          r.wealth = clamp(r.wealth + game.economy.growth * .0015 + infra * .00025 - r.pollution * .00018, 0, 100);
-          r.loyalty = clamp(r.loyalty + (game.politics.popularity - 50) * .0008 - game.politics.protests * .00035 + r.budget * .000002, 0, 100);
-          r.security = clamp(r.security + game.economy.spending.security * .00035 + r.buildings.bases * .002 - game.population.crime * .00028, 0, 100);
+          r.wealth = clamp(r.wealth + game.economy.growth * .004 + infra * .0008 - r.pollution * .0005, 0, 100);
+          r.loyalty = clamp(r.loyalty + game.politics.popularity * .0006 - game.politics.protests * .0008 + r.budget * .00001, 0, 100);
+          r.security = clamp(r.security + game.economy.spending.security * .001 + r.buildings.bases * .006 - game.population.crime * .0009, 0, 100);
           r.pollution = clamp(r.pollution + r.buildings.factories * .001 + r.buildings.oil * .002 + r.buildings.gas * .001 - r.buildings.plants * .0005, 0, 100);
           r.population = Math.max(1000, r.population + r.population * ((game.population.birthRate - game.population.deathRate) / 1000) / 365 + r.buildings.cities * 5);
         }
@@ -2778,9 +2750,9 @@
 
       function simulateMilitary(game) {
         const m = game.military;
-        m.readiness = clamp(m.readiness + m.budget * .00025 + m.industry * .00016 - m.wars.length * .009, 0, 100);
-        m.morale = clamp(m.morale + (game.politics.popularity - 50) * .00035 - m.wars.length * .018 - m.mobilized * .0000004, 0, 100);
-        m.industry = clamp(m.industry + game.economy.spending.defense * .00025 + totalBuildings("factories", game) * .00018, 0, 100);
+        m.readiness = clamp(m.readiness + m.budget * .001 + m.industry * .0007 - m.wars.length * .018, 0, 100);
+        m.morale = clamp(m.morale + game.politics.popularity * .0004 - m.wars.length * .032 - m.mobilized * .0000008, 0, 100);
+        m.industry = clamp(m.industry + game.economy.spending.defense * .0009 + totalBuildings("factories") * .0007, 0, 100);
         for (const w of m.wars) {
           w.fatigue = clamp(w.fatigue + w.intensity * .002, 0, 100);
           game.economy.budget -= w.intensity * .9;
