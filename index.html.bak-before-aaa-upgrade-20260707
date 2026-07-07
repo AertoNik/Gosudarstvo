@@ -198,14 +198,6 @@
       background: rgba(5, 10, 18, .68);
       color: white;
       font-weight: 900;
-      overflow: hidden;
-    }
-
-    .seal img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
     }
 
     .brand h1 {
@@ -361,7 +353,6 @@
     .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-    .grid.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
     .grid.split { grid-template-columns: minmax(0, 1.45fr) minmax(310px, .8fr); }
     .grid.wide { grid-template-columns: minmax(0, 1fr) minmax(360px, .42fr); }
 
@@ -403,258 +394,6 @@
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
       gap: 10px;
-    }
-
-    .command-center {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background:
-        linear-gradient(90deg, rgba(5, 10, 18, .92), rgba(8, 18, 32, .74)),
-        repeating-linear-gradient(115deg, rgba(255,255,255,.065), rgba(255,255,255,.065) 1px, transparent 1px, transparent 24px),
-        linear-gradient(135deg, color-mix(in oklab, var(--accent) 28%, transparent), color-mix(in oklab, var(--accent-2) 20%, transparent));
-      box-shadow: var(--shadow);
-      overflow: hidden;
-      min-height: 230px;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(320px, .62fr);
-      position: relative;
-    }
-
-    body.light .command-center {
-      background:
-        linear-gradient(90deg, rgba(255,255,255,.92), rgba(235, 244, 255, .74)),
-        repeating-linear-gradient(115deg, rgba(20,30,45,.055), rgba(20,30,45,.055) 1px, transparent 1px, transparent 24px),
-        linear-gradient(135deg, color-mix(in oklab, var(--accent) 18%, transparent), color-mix(in oklab, var(--accent-2) 14%, transparent));
-    }
-
-    .command-main {
-      padding: clamp(18px, 3vw, 28px);
-      display: grid;
-      align-content: end;
-      gap: 16px;
-      min-width: 0;
-    }
-
-    .command-main h3 {
-      margin: 0;
-      font-size: clamp(28px, 4.6vw, 54px);
-      line-height: .95;
-      max-width: 880px;
-    }
-
-    .command-main p {
-      margin: 0;
-      color: color-mix(in oklab, var(--text) 74%, var(--muted));
-      line-height: 1.5;
-      max-width: 760px;
-    }
-
-    .command-side {
-      border-left: 1px solid var(--line);
-      padding: 18px;
-      display: grid;
-      align-content: center;
-      gap: 12px;
-      background: color-mix(in oklab, var(--panel) 76%, transparent);
-      min-width: 0;
-    }
-
-    .state-flag {
-      width: min(220px, 100%);
-      aspect-ratio: 7 / 4;
-      border-radius: 8px;
-      border: 1px solid var(--line-strong);
-      overflow: hidden;
-      box-shadow: 0 18px 42px rgba(0,0,0,.28);
-      display: grid;
-    }
-
-    .state-flag img,
-    .coat-seal img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-
-    .state-flag span { min-width: 0; min-height: 0; }
-
-    .coat-seal {
-      width: 96px;
-      height: 96px;
-      border-radius: 50%;
-      border: 1px solid var(--line-strong);
-      background:
-        radial-gradient(circle at 35% 25%, color-mix(in oklab, var(--warn) 38%, transparent), transparent 34%),
-        linear-gradient(135deg, var(--panel-2), var(--panel-3));
-      display: grid;
-      place-items: center;
-      overflow: hidden;
-      box-shadow: inset 0 0 0 7px rgba(255,255,255,.04), 0 16px 36px rgba(0,0,0,.24);
-      color: var(--warn);
-      font-size: 38px;
-      font-weight: 900;
-      flex: 0 0 auto;
-    }
-
-    .identity-stack {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      align-items: center;
-      gap: 14px;
-      min-width: 0;
-    }
-
-    .visual-card {
-      display: grid;
-      grid-template-columns: minmax(180px, .6fr) minmax(0, 1fr);
-      gap: 12px;
-      align-items: center;
-    }
-
-    .upload-note {
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.45;
-      margin: 0;
-    }
-
-    .status-strip {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-      gap: 8px;
-    }
-
-    .status-chip,
-    .sector-card,
-    .project-card,
-    .crisis-card {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: color-mix(in oklab, var(--panel-3) 86%, transparent);
-      min-width: 0;
-    }
-
-    .status-chip {
-      padding: 10px;
-      display: grid;
-      gap: 5px;
-    }
-
-    .status-chip span {
-      color: var(--muted);
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: .03em;
-    }
-
-    .status-chip strong {
-      font-size: 18px;
-      line-height: 1;
-    }
-
-    .signal-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-      gap: 10px;
-    }
-
-    .signal-card {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--panel-3);
-      padding: 12px;
-      display: grid;
-      gap: 9px;
-      min-height: 124px;
-    }
-
-    .signal-card header,
-    .project-card header,
-    .crisis-card header,
-    .sector-card header {
-      display: flex;
-      align-items: start;
-      justify-content: space-between;
-      gap: 10px;
-      min-width: 0;
-    }
-
-    .signal-card strong,
-    .project-card strong,
-    .crisis-card strong,
-    .sector-card strong {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .sector-card,
-    .project-card,
-    .crisis-card {
-      padding: 12px;
-      display: grid;
-      gap: 10px;
-    }
-
-    .project-card {
-      min-height: 214px;
-    }
-
-    .project-card.paused {
-      opacity: .68;
-    }
-
-    .project-card.done {
-      border-color: color-mix(in oklab, var(--ok) 60%, transparent);
-      background: color-mix(in oklab, var(--ok) 9%, var(--panel-3));
-    }
-
-    .crisis-card.high {
-      border-color: color-mix(in oklab, var(--danger) 56%, transparent);
-      background: color-mix(in oklab, var(--danger) 10%, var(--panel-3));
-    }
-
-    .crisis-card.medium {
-      border-color: color-mix(in oklab, var(--warn) 50%, transparent);
-      background: color-mix(in oklab, var(--warn) 9%, var(--panel-3));
-    }
-
-    .mini-bars {
-      display: grid;
-      gap: 7px;
-    }
-
-    .mini-bar {
-      display: grid;
-      grid-template-columns: 92px 1fr 42px;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      color: var(--muted);
-      min-width: 0;
-    }
-
-    .mini-bar > span:first-child {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .agenda-list {
-      display: grid;
-      gap: 8px;
-    }
-
-    .agenda-item {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-      align-items: center;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--panel-3);
-      padding: 10px;
     }
 
     .metric {
@@ -1127,41 +866,6 @@
       gap: 12px;
     }
 
-    .decision-brief {
-      display: grid;
-      gap: 12px;
-    }
-
-    .decision-banner {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--panel-3);
-      padding: 12px;
-      display: grid;
-      gap: 6px;
-    }
-
-    .decision-banner.good {
-      border-color: color-mix(in oklab, var(--ok) 55%, transparent);
-      background: color-mix(in oklab, var(--ok) 10%, var(--panel-3));
-    }
-
-    .decision-banner.warn {
-      border-color: color-mix(in oklab, var(--warn) 55%, transparent);
-      background: color-mix(in oklab, var(--warn) 10%, var(--panel-3));
-    }
-
-    .decision-banner.bad {
-      border-color: color-mix(in oklab, var(--danger) 55%, transparent);
-      background: color-mix(in oklab, var(--danger) 10%, var(--panel-3));
-    }
-
-    .decision-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 8px;
-    }
-
     .hidden { display: none !important; }
 
     @keyframes slideIn {
@@ -1189,25 +893,15 @@
       .topbar,
       .grid.split,
       .grid.wide,
-      .map-layout,
-      .command-center {
+      .map-layout {
         grid-template-columns: 1fr;
-      }
-      .command-side {
-        border-left: 0;
-        border-top: 1px solid var(--line);
       }
       .top-actions {
         justify-content: flex-start;
       }
       .grid.two,
       .grid.three,
-      .grid.four,
-      .grid.five {
-        grid-template-columns: 1fr;
-      }
-      .visual-card,
-      .identity-stack {
+      .grid.four {
         grid-template-columns: 1fr;
       }
     }
@@ -1251,14 +945,12 @@
       const DAYS_PER_YEAR = 365;
       const tabs = [
         ["dashboard", "Обзор", "⌂"],
-        ["governance", "Ситуационный центр", "◈"],
         ["map", "Карта", "◇"],
         ["economy", "Экономика", "₿"],
         ["politics", "Политика", "§"],
         ["diplomacy", "Дипломатия", "∞"],
         ["military", "Армия", "⚑"],
         ["tech", "Технологии", "⌬"],
-        ["projects", "Нацпроекты", "▦"],
         ["population", "Население", "◌"],
         ["news", "Новости", "▤"],
         ["editor", "Редактор", "✎"],
@@ -1302,10 +994,6 @@
       let drawingPoints = [];
       let timer = null;
       let pendingRender = false;
-      let deferredRenderTimer = null;
-      let saveTimer = null;
-      let lastSaveAt = 0;
-      let lastStorageWarningAt = 0;
       let modal = null;
       let setupDraft = defaultSetupDraft();
 
@@ -1406,110 +1094,22 @@
         return `${d.day} ${names[d.month - 1]} ${d.year}`;
       }
 
-      function currentGameDate() {
-        const now = new Date();
-        return { day: now.getDate(), month: now.getMonth() + 1, year: now.getFullYear() };
-      }
-
       function notify(text) {
-        if (!document.createElement || !toastBox?.appendChild) {
-          console.log(text);
-          return;
-        }
         const item = document.createElement("div");
         item.textContent = text;
         toastBox.appendChild(item);
         setTimeout(() => item.remove(), 3600);
       }
 
-      function sanitizeImageData(value, maxLength = 520000) {
-        return typeof value === "string" && value.length <= maxLength ? value : "";
-      }
-
-      function notifyStorageOnce(text) {
-        const now = Date.now();
-        if (now - lastStorageWarningAt < 30000) return;
-        lastStorageWarningAt = now;
-        notify(text);
-      }
-
-      function serializeStateForStorage(game = state, level = "normal") {
-        const copy = JSON.parse(JSON.stringify(game));
-        const historyLimit = level === "tiny" || level === "safe" ? 60 : 180;
-        const newsLimit = level === "tiny" || level === "safe" ? 24 : 90;
-        copy.news = (copy.news || []).slice(0, newsLimit);
-        if (copy.history) {
-          for (const key of Object.keys(copy.history)) copy.history[key] = (copy.history[key] || []).slice(-historyLimit);
-        }
-        if (level === "safe") {
-          if (copy.country?.president) copy.country.president.photo = "";
-          if (copy.country?.flag) copy.country.flag.image = "";
-          if (copy.country) copy.country.coatImage = "";
-        }
-        return copy;
-      }
-
-      function compactExistingSlots() {
-        const raw = localStorage.getItem(SLOTS_KEY);
-        if (!raw) return false;
-        try {
-          const slots = JSON.parse(raw);
-          const compacted = {};
-          for (const [slot, save] of Object.entries(slots || {})) {
-            compacted[slot] = serializeStateForStorage(migrateState(save), "tiny");
-          }
-          localStorage.removeItem(SLOTS_KEY);
-          try {
-            localStorage.setItem(SLOTS_KEY, JSON.stringify(compacted));
-          } catch {
-            const safeSlots = {};
-            for (const [slot, save] of Object.entries(compacted)) safeSlots[slot] = serializeStateForStorage(save, "safe");
-            localStorage.setItem(SLOTS_KEY, JSON.stringify(safeSlots));
-          }
-          return true;
-        } catch (err) {
-          console.warn(err);
-          try { localStorage.setItem(SLOTS_KEY, raw); } catch {}
-          return false;
-        }
-      }
-
-      function saveState(options = {}) {
+      function saveState() {
         if (!state) return;
-        const now = Date.now();
-        if (!options.force && now - lastSaveAt < 1500) return true;
         state.lastSaved = new Date().toISOString();
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeStateForStorage(state, "normal")));
-          lastSaveAt = now;
-          return true;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         } catch (err) {
           console.warn(err);
-          try {
-            compactExistingSlots();
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeStateForStorage(state, "tiny")));
-            lastSaveAt = now;
-            notifyStorageOnce("Хранилище оптимизировано: старые новости и графики в слотах сжаты.");
-            return true;
-          } catch (retryErr) {
-            console.warn(retryErr);
-            try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeStateForStorage(state, "safe")));
-              lastSaveAt = now;
-              notifyStorageOnce("Сохранение записано без изображений: LocalStorage слишком мал для текущих фото.");
-              return true;
-            } catch (safeErr) {
-              console.warn(safeErr);
-              notifyStorageOnce("LocalStorage переполнен. Экспортируйте сохранение или очистите старые слоты.");
-              return false;
-            }
-          }
+          notify("LocalStorage переполнен. Экспортируйте сохранение и очистите старые слоты.");
         }
-      }
-
-      function queueSave(delay = 900) {
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => saveState({ force: true }), delay);
       }
 
       function loadState() {
@@ -1526,9 +1126,9 @@
 
       function migrateState(loaded) {
         if (!loaded || typeof loaded !== "object") return null;
-        loaded.version = 5;
+        loaded.version = 4;
         loaded.news ||= [];
-        loaded.history = Object.assign(emptyHistory(), loaded.history || {});
+        loaded.history ||= emptyHistory();
         loaded.diplomacy ||= { countries: createWorldCountries([]), organizations: defaultOrganizations() };
         loaded.diplomacy.organizations ||= defaultOrganizations();
         loaded.tech ||= createTech();
@@ -1536,44 +1136,16 @@
         loaded.military ||= defaultMilitary();
         loaded.politics ||= defaultPolitics({});
         loaded.economy ||= defaultEconomy();
-        loaded.governance = migrateGovernance(loaded.governance);
         loaded.regions ||= defaultRegions();
         loaded.country ||= {};
         loaded.country.flag ||= { colors: ["#1f8fff", "#f8fafc", "#21c7a8"], layout: "horizontal" };
-        loaded.country.flag.colors ||= ["#1f8fff", "#f8fafc", "#21c7a8"];
-        loaded.country.flag.layout ||= "horizontal";
-        loaded.country.flag.image ||= "";
-        loaded.country.coat ||= "Государственный герб";
-        loaded.country.coatImage ||= "";
-        loaded.country.flag.image = sanitizeImageData(loaded.country.flag.image);
-        loaded.country.coatImage = sanitizeImageData(loaded.country.coatImage);
-        if (loaded.country.president) loaded.country.president.photo = sanitizeImageData(loaded.country.president.photo);
         for (const r of loaded.regions) r.buildings ||= emptyBuildings();
         if (!loaded.history.date?.length) pushHistory(loaded);
         return loaded;
       }
 
-      function migrateGovernance(value) {
-        const base = defaultGovernance();
-        const g = value && typeof value === "object" ? value : {};
-        return {
-          agenda: mergeById(base.agenda, g.agenda),
-          services: mergeById(base.services, g.services),
-          sectors: mergeById(base.sectors, g.sectors),
-          projects: mergeById(base.projects, g.projects),
-          media: Object.assign(base.media, g.media || {}),
-          intelligence: Object.assign(base.intelligence, g.intelligence || {}),
-          crises: Array.isArray(g.crises) ? g.crises : base.crises
-        };
-      }
-
-      function mergeById(base, incoming) {
-        const map = new Map((Array.isArray(incoming) ? incoming : []).map(item => [item.id, item]));
-        return base.map(item => Object.assign({}, item, map.get(item.id) || {}));
-      }
-
       function emptyHistory() {
-        return { date: [], gdp: [], inflation: [], popularity: [], army: [], population: [], unemployment: [], income: [], expenses: [], risk: [], governance: [], services: [] };
+        return { date: [], gdp: [], inflation: [], popularity: [], army: [], population: [], unemployment: [], income: [], expenses: [] };
       }
 
       function defaultEconomy() {
@@ -1723,46 +1295,6 @@
         };
       }
 
-      function defaultGovernance() {
-        return {
-          agenda: [
-            { id: "prices", name: "Стоимость жизни", pressure: 42, trend: .2 },
-            { id: "jobs", name: "Рабочие места", pressure: 34, trend: -.1 },
-            { id: "security", name: "Безопасность", pressure: 29, trend: .1 },
-            { id: "regions", name: "Запрос регионов", pressure: 38, trend: .15 },
-            { id: "foreign", name: "Внешнее давление", pressure: 27, trend: .05 }
-          ],
-          services: [
-            { id: "energy", name: "Энергосистема", level: 72, capacity: 68, stress: 28, ministry: "Энергетика" },
-            { id: "transport", name: "Транспорт", level: 64, capacity: 61, stress: 34, ministry: "Транспорт" },
-            { id: "health", name: "Медицина", level: 59, capacity: 57, stress: 41, ministry: "Здравоохранение" },
-            { id: "education", name: "Образование", level: 63, capacity: 60, stress: 32, ministry: "Образование" },
-            { id: "digital", name: "Цифровое государство", level: 56, capacity: 53, stress: 39, ministry: "Цифровизация" }
-          ],
-          sectors: [
-            { id: "industry", name: "Промышленность", output: 67, jobs: 22, export: 34, stateShare: 38 },
-            { id: "energy", name: "Энергетика", output: 73, jobs: 9, export: 46, stateShare: 57 },
-            { id: "agro", name: "Агросектор", output: 61, jobs: 11, export: 22, stateShare: 18 },
-            { id: "finance", name: "Финансы", output: 64, jobs: 8, export: 18, stateShare: 24 },
-            { id: "tech", name: "Технологии", output: 54, jobs: 7, export: 16, stateShare: 12 },
-            { id: "services", name: "Услуги", output: 69, jobs: 34, export: 12, stateShare: 9 }
-          ],
-          media: { trust: 52, freedom: 64, propaganda: 18, polarization: 34 },
-          intelligence: { counterIntel: 58, cyberThreat: 31, foreignNetworks: 42, domesticRisk: 24 },
-          crises: [
-            { id: uid("crisis"), type: "prices", title: "Давление цен", severity: 34, days: 24, region: "общенационально", desc: "Потребительская корзина дорожает быстрее ожиданий." }
-          ],
-          projects: [
-            { id: "industrial_corridor", name: "Индустриальный коридор", ministry: "Экономики", desc: "Связывает заводы, логистику и экспортные хабы.", budget: 5400, spent: 820, progress: 15, risk: 24, status: "active", effect: "growth" },
-            { id: "digital_state", name: "Цифровое государство", ministry: "Цифровизации", desc: "Единые госуслуги, реестры и ИИ-аудит закупок.", budget: 3600, spent: 540, progress: 18, risk: 18, status: "active", effect: "corruption" },
-            { id: "health_network", name: "Сеть клиник", ministry: "Здравоохранения", desc: "Больницы, телемедицина и маршрутизация пациентов.", budget: 4200, spent: 630, progress: 12, risk: 21, status: "active", effect: "life" },
-            { id: "energy_security", name: "Энергетическая безопасность", ministry: "Энергетики", desc: "Резервные мощности, сети и защита критической инфраструктуры.", budget: 4800, spent: 700, progress: 14, risk: 20, status: "active", effect: "inflation" },
-            { id: "housing_renovation", name: "Жилье и города", ministry: "Строительства", desc: "Реновация, транспортная доступность и коммунальная модернизация.", budget: 5100, spent: 760, progress: 13, risk: 26, status: "active", effect: "happiness" },
-            { id: "defense_shield", name: "Щит государства", ministry: "Обороны", desc: "ПВО, киберзащита и модернизация командных систем.", budget: 6200, spent: 930, progress: 16, risk: 19, status: "active", effect: "security" }
-          ]
-        };
-      }
-
       function emptyBuildings() {
         return { roads: 0, cities: 0, airports: 0, ports: 0, bases: 0, plants: 0, factories: 0, schools: 0, hospitals: 0, universities: 0, farms: 0, mines: 0, oil: 0, gas: 0 };
       }
@@ -1884,11 +1416,10 @@
           nationalHoliday: config.nationalHoliday || "День Республики",
           anthem: config.anthem || "Гимн свободных городов",
           coat: config.coat || "Серебряная звезда над волной",
-          coatImage: sanitizeImageData(config.coatImage || ""),
           flagName: config.flagName || "Три горизонта",
           continent: config.continent || "Евразия",
           neighbors: (config.neighbors || "Финляндия, Казахстан, Турция").split(",").map(s => s.trim()).filter(Boolean),
-          flag: { colors: [config.flagA || "#21c7a8", config.flagB || "#f8fafc", config.flagC || "#4fa3ff"], layout: config.flagLayout || "horizontal", image: sanitizeImageData(config.flagImage || "") },
+          flag: { colors: [config.flagA || "#21c7a8", config.flagB || "#f8fafc", config.flagC || "#4fa3ff"], layout: config.flagLayout || "horizontal" },
           president: {
             name: config.presidentName || "Александр Рей",
             gender: config.gender || "не указан",
@@ -1896,7 +1427,7 @@
             bio: config.bio || "Реформатор, бывший губернатор столичного региона и автор программы технологического суверенитета.",
             party: config.party || "Партия обновления",
             ideology: config.ideology || "центризм",
-            photo: sanitizeImageData(config.photo || "")
+            photo: config.photo || ""
           }
         };
         const economy = defaultEconomy();
@@ -1904,12 +1435,12 @@
         const population = defaultPopulation(populationTotal);
         const diplomacy = { countries: createWorldCountries(country.neighbors), organizations: defaultOrganizations() };
         const game = {
-          version: 5,
+          version: 4,
           createdAt: new Date().toISOString(),
           lastSaved: new Date().toISOString(),
           theme: "dark",
           speed: 0,
-          date: currentGameDate(),
+          date: { day: 1, month: 1, year: 2028 },
           country,
           regions,
           economy,
@@ -1917,7 +1448,6 @@
           diplomacy,
           military: defaultMilitary(),
           tech: createTech(),
-          governance: defaultGovernance(),
           population,
           news: [],
           history: emptyHistory()
@@ -1948,9 +1478,6 @@
         h.unemployment.push(Number(game.economy.unemployment.toFixed(2)));
         h.income.push(Number(income.toFixed(2)));
         h.expenses.push(Number(expenses.toFixed(2)));
-        h.risk.push(Number(calcNationalRisk(game).toFixed(2)));
-        h.governance.push(Number(calcGovernanceScore(game).toFixed(2)));
-        h.services.push(Number(calcServiceScore(game).toFixed(2)));
         for (const key of Object.keys(h)) h[key] = h[key].slice(-420);
       }
 
@@ -1976,76 +1503,6 @@
         return game.regions.reduce((sum, r) => sum + (r.buildings[key] || 0), 0);
       }
 
-      function avg(list, key) {
-        return list.length ? list.reduce((sum, item) => sum + num(item[key]), 0) / list.length : 0;
-      }
-
-      function calcCrisisPressure(game = state) {
-        return avg(game.governance?.crises || [], "severity");
-      }
-
-      function calcServiceScore(game = state) {
-        const services = game.governance?.services || [];
-        return clamp(avg(services, "level") - avg(services, "stress") * .18, 0, 100);
-      }
-
-      function calcNationalRisk(game = state) {
-        const e = game.economy;
-        const p = game.politics;
-        const g = game.governance;
-        const wars = game.military.wars.length * 12;
-        const intel = (g?.intelligence?.cyberThreat || 0) * .16 + (g?.intelligence?.domesticRisk || 0) * .18;
-        const media = (g?.media?.polarization || 0) * .12 + Math.max(0, 45 - (g?.media?.trust || 0)) * .18;
-        return clamp(e.inflation * 1.6 + e.unemployment * 1.9 + p.protests * .45 + p.corruption * .22 + calcCrisisPressure(game) * .38 + wars + intel + media, 0, 100);
-      }
-
-      function calcGovernanceScore(game = state) {
-        const p = game.politics;
-        const g = game.governance;
-        const projectBonus = avg((g?.projects || []).filter(x => x.status !== "paused"), "progress") * .08;
-        return clamp(p.popularity * .25 + p.coalition * .22 + (100 - p.corruption) * .18 + calcServiceScore(game) * .25 + projectBonus, 0, 100);
-      }
-
-      function topAgenda(game = state) {
-        return [...(game.governance?.agenda || [])].sort((a, b) => b.pressure - a.pressure)[0];
-      }
-
-      function flagStyle(flag = state.country.flag) {
-        const colors = flag.colors || ["#21c7a8", "#f8fafc", "#4fa3ff"];
-        if (flag.layout === "vertical") return `grid-template-columns: repeat(3, 1fr); grid-template-rows: 1fr;`;
-        return `grid-template-rows: repeat(3, 1fr); grid-template-columns: 1fr;`;
-      }
-
-      function renderFlag(flag = state.country.flag) {
-        const colors = flag.colors || ["#21c7a8", "#f8fafc", "#4fa3ff"];
-        if (flag.image) {
-          return `<div class="state-flag"><img src="${esc(flag.image)}" alt="Флаг"></div>`;
-        }
-        if (flag.layout === "diagonal") {
-          return `<div class="state-flag" style="background: linear-gradient(135deg, ${esc(colors[0])} 0 33%, ${esc(colors[1])} 33% 66%, ${esc(colors[2])} 66% 100%);"></div>`;
-        }
-        return `<div class="state-flag" style="${flagStyle(flag)}">${colors.map(c => `<span style="background:${esc(c)}"></span>`).join("")}</div>`;
-      }
-
-      function renderCoat(country = state.country) {
-        if (country.coatImage) return `<div class="coat-seal"><img src="${esc(country.coatImage)}" alt="Герб"></div>`;
-        const initial = (country.coat || country.name || "Г").slice(0, 1).toUpperCase();
-        return `<div class="coat-seal" title="${esc(country.coat || "Герб")}">${esc(initial)}</div>`;
-      }
-
-      function trendText(value) {
-        const n = num(value);
-        if (n > .05) return "растет";
-        if (n < -.05) return "снижается";
-        return "стабильно";
-      }
-
-      function riskClass(value) {
-        if (value >= 66) return "bad";
-        if (value >= 38) return "warn";
-        return "good";
-      }
-
       function init() {
         state = loadState();
         document.body.classList.toggle("light", state?.theme === "light");
@@ -2063,7 +1520,6 @@
         document.addEventListener("input", onInput);
         document.addEventListener("change", onChange);
         document.addEventListener("submit", onSubmit);
-        document.addEventListener("focusout", () => setTimeout(() => scheduleRender({ force: true }), 80));
         importFile.addEventListener("change", importSaveFile);
       }
 
@@ -2072,23 +1528,13 @@
         timer = setInterval(() => {
           if (!state || !state.speed) return;
           for (let i = 0; i < state.speed; i++) tickDay(state);
-          queueSave(5000);
+          saveState();
           scheduleRender();
         }, DAY_MS);
       }
 
-      function isEditingControl() {
-        const el = document.activeElement;
-        return !!(el?.matches && el.matches("input, textarea, select") && !el.matches("[data-action='metric-select'], [data-country-filter]"));
-      }
-
-      function scheduleRender(options = {}) {
+      function scheduleRender() {
         if (pendingRender) return;
-        if (!options.force && isEditingControl()) {
-          clearTimeout(deferredRenderTimer);
-          deferredRenderTimer = setTimeout(() => scheduleRender(), 350);
-          return;
-        }
         pendingRender = true;
         requestAnimationFrame(() => {
           pendingRender = false;
@@ -2173,16 +1619,9 @@
                         <option value="diagonal" ${defaults.flagLayout === "diagonal" ? "selected" : ""}>Диагональ</option>
                       </select>
                     </label>
-                    <label>Фото президента
+                    <label style="grid-column: 1 / -1;">Фото президента
                       <input name="photo" type="file" accept="image/*" />
                     </label>
-                    <label>Изображение флага
-                      <input name="flagImage" type="file" accept="image/*" />
-                    </label>
-                    <label>Изображение герба
-                      <input name="coatImage" type="file" accept="image/*" />
-                    </label>
-                    <p class="upload-note" style="grid-column: 1 / -1;">Если загрузить готовый флаг, он будет показываться вместо флага из цветных полос. Изображения автоматически сжимаются, чтобы не перегружать сохранение.</p>
                   </div>
                 </div>
                 <div class="actions">
@@ -2240,7 +1679,7 @@
         return `
           <aside class="sidebar">
             <div class="brand">
-              <div class="seal"><span>${state.country.coatImage ? `<img src="${esc(state.country.coatImage)}" alt="">` : esc(state.country.name.slice(0, 1).toUpperCase())}</span></div>
+              <div class="seal"><span>${esc(state.country.name.slice(0, 1).toUpperCase())}</span></div>
               <div>
                 <h1>${esc(state.country.name)}</h1>
                 <p>${esc(state.country.flagName)} · ${esc(state.country.currency)}</p>
@@ -2251,7 +1690,6 @@
             </nav>
             <div class="side-foot">
               <div class="mini-stat"><span>Популярность</span><strong>${pct(state.politics.popularity, 0)}</strong></div>
-              <div class="mini-stat"><span>Нацриск</span><strong>${pct(calcNationalRisk(), 0)}</strong></div>
               <div class="mini-stat"><span>Бюджет</span><strong>${money(state.economy.budget)}</strong></div>
             </div>
           </aside>
@@ -2260,8 +1698,6 @@
 
       function navBadge(id) {
         if (id === "news") return state.news.length;
-        if (id === "governance") return pct(calcNationalRisk(), 0);
-        if (id === "projects") return state.governance.projects.filter(p => p.status === "done").length + "/" + state.governance.projects.length;
         if (id === "diplomacy") return state.diplomacy.countries.filter(c => c.war).length ? "война" : state.diplomacy.countries.length;
         if (id === "tech") return state.tech.nodes.filter(n => n.done).length + "/" + state.tech.nodes.length;
         if (id === "map") return state.regions.length;
@@ -2270,14 +1706,12 @@
 
       function renderActiveTab() {
         if (activeTab === "dashboard") return renderDashboard();
-        if (activeTab === "governance") return renderGovernance();
         if (activeTab === "map") return renderMap();
         if (activeTab === "economy") return renderEconomy();
         if (activeTab === "politics") return renderPolitics();
         if (activeTab === "diplomacy") return renderDiplomacy();
         if (activeTab === "military") return renderMilitary();
         if (activeTab === "tech") return renderTech();
-        if (activeTab === "projects") return renderProjects();
         if (activeTab === "population") return renderPopulation();
         if (activeTab === "news") return renderNews();
         if (activeTab === "editor") return renderEditor();
@@ -2290,42 +1724,8 @@
         const p = state.politics;
         const pop = state.population;
         const balance = calcIncome() - calcExpenses();
-        const risk = calcNationalRisk();
-        const governance = calcGovernanceScore();
-        const agenda = topAgenda();
         return `
           <section class="grid">
-            <section class="command-center">
-              <div class="command-main">
-                <div class="pill">Ситуационная сводка · ${dateLabel(state.date)}</div>
-                <h3>${esc(state.country.name)}</h3>
-                <p>${esc(state.country.president.name)} управляет государством из столицы ${esc(state.country.capital)}. Главная общественная тема: ${esc(agenda?.name || "стабильность")} · давление ${pct(agenda?.pressure || 0, 0)}, тренд ${esc(trendText(agenda?.trend || 0))}.</p>
-                <div class="status-strip">
-                  ${statusChip("Нацриск", pct(risk, 0), riskClass(risk))}
-                  ${statusChip("Управляемость", pct(governance, 0), governance > 55 ? "good" : "warn")}
-                  ${statusChip("Госуслуги", pct(calcServiceScore(), 0), calcServiceScore() > 58 ? "good" : "warn")}
-                  ${statusChip("Активные кризисы", state.governance.crises.length, state.governance.crises.length ? "warn" : "good")}
-                </div>
-              </div>
-              <aside class="command-side">
-                <div class="visual-card">
-                  ${renderFlag(state.country.flag)}
-                  <div class="identity-stack">
-                    ${renderCoat(state.country)}
-                    <div>
-                      <strong>${esc(state.country.flagName)}</strong>
-                      <p class="upload-note">${esc(state.country.coat)} · ${esc(state.country.anthem)}</p>
-                    </div>
-                  </div>
-                </div>
-                <div class="kpi-strip">
-                  <div class="kpi"><span>Континент</span><strong>${esc(state.country.continent)}</strong></div>
-                  <div class="kpi"><span>Валюта</span><strong>${esc(state.country.currency)}</strong></div>
-                  <div class="kpi"><span>Проекты</span><strong>${state.governance.projects.filter(x => x.status === "done").length}/${state.governance.projects.length}</strong></div>
-                  <div class="kpi"><span>Союзы</span><strong>${state.diplomacy.countries.filter(c => c.alliance).length}</strong></div>
-                </div>
-              </aside>
-            </section>
             <div class="metric-grid">
               ${metric("ВВП", money(e.gdp), `Рост ${pct(e.growth)} · Биржа ${Math.round(e.stockIndex)}`, e.growth >= 0 ? "good" : "bad")}
               ${metric("Инфляция", pct(e.inflation), `Ключевая ставка ${pct(e.keyRate)}`, e.inflation < 7 ? "good" : "warn")}
@@ -2389,178 +1789,8 @@
         return `<div class="metric"><span class="label">${label}</span><span class="value">${value}</span><span class="delta ${cls || ""}">${delta}</span></div>`;
       }
 
-      function statusChip(label, value, cls = "") {
-        return `<div class="status-chip"><span>${esc(label)}</span><strong class="delta ${cls}">${esc(value)}</strong></div>`;
-      }
-
       function chartOptions() {
-        return [["gdp","ВВП"],["inflation","Инфляция"],["popularity","Популярность"],["army","Армия"],["population","Население"],["unemployment","Безработица"],["risk","Нацриск"],["governance","Управляемость"],["services","Госуслуги"],["income","Доходы"],["expenses","Расходы"]];
-      }
-
-      function renderGovernance() {
-        const g = state.governance;
-        const risk = calcNationalRisk();
-        const score = calcGovernanceScore();
-        return `
-          <section class="grid">
-            <div class="metric-grid">
-              ${metric("Национальный риск", pct(risk, 0), `${g.crises.length} активных кризисов`, riskClass(risk))}
-              ${metric("Управляемость", pct(score, 0), `Сервисы ${pct(calcServiceScore(), 0)}`, score > 55 ? "good" : "warn")}
-              ${metric("Медиа-доверие", pct(g.media.trust, 0), `Поляризация ${pct(g.media.polarization, 0)}`, g.media.trust > 50 ? "good" : "warn")}
-              ${metric("Разведконтур", pct(g.intelligence.counterIntel, 0), `Киберугроза ${pct(g.intelligence.cyberThreat, 0)}`, g.intelligence.cyberThreat < 40 ? "good" : "bad")}
-            </div>
-            <div class="grid split">
-              <section class="panel pad">
-                <h3 class="section-title">Повестка общества</h3>
-                <div class="agenda-list" style="margin-top: 12px;">
-                  ${g.agenda.map(a => `
-                    <div class="agenda-item">
-                      <span><strong>${esc(a.name)}</strong><br><small class="subtle">Тренд: ${esc(trendText(a.trend))}</small></span>
-                      <span class="pill">${pct(a.pressure, 0)}</span>
-                    </div>
-                    <div class="progress"><i style="--w:${clamp(a.pressure, 0, 100)}%"></i></div>
-                  `).join("")}
-                </div>
-              </section>
-              <aside class="grid">
-                <section class="panel pad">
-                  <h3 class="section-title">Оперативные решения</h3>
-                  <div class="actions" style="margin-top: 12px;">
-                    <button data-action="gov-action" data-gov="briefing">Большой брифинг</button>
-                    <button data-action="gov-action" data-gov="audit">Аудит министерств</button>
-                    <button data-action="gov-action" data-gov="counterintel">Контрразведка</button>
-                    <button data-action="gov-action" data-gov="media">Медиастратегия</button>
-                    <button data-action="gov-action" data-gov="emergency">Штаб реагирования</button>
-                  </div>
-                </section>
-                <section class="panel pad">
-                  <h3 class="section-title">Медиа и разведка</h3>
-                  <div class="mini-bars" style="margin-top: 12px;">
-                    ${miniBar("Доверие СМИ", g.media.trust)}
-                    ${miniBar("Свобода прессы", g.media.freedom)}
-                    ${miniBar("Поляризация", g.media.polarization)}
-                    ${miniBar("Контрразведка", g.intelligence.counterIntel)}
-                    ${miniBar("Внешние сети", g.intelligence.foreignNetworks)}
-                    ${miniBar("Внутренний риск", g.intelligence.domesticRisk)}
-                  </div>
-                </section>
-              </aside>
-            </div>
-            <div class="grid two">
-              <section class="panel pad">
-                <h3 class="section-title">Государственные сервисы</h3>
-                <div class="signal-grid" style="margin-top: 12px;">
-                  ${g.services.map(renderServiceCard).join("")}
-                </div>
-              </section>
-              <section class="panel pad">
-                <h3 class="section-title">Активные кризисы</h3>
-                <div class="list" style="margin-top: 12px;">
-                  ${g.crises.length ? g.crises.map(renderCrisisCard).join("") : `<div class="row"><span>Критических кризисов нет</span><span class="pill">стабильно</span></div>`}
-                </div>
-              </section>
-            </div>
-            <section class="panel pad">
-              <h3 class="section-title">Отрасли реальной экономики</h3>
-              <div class="signal-grid" style="margin-top: 12px;">
-                ${g.sectors.map(renderSectorCard).join("")}
-              </div>
-            </section>
-          </section>
-        `;
-      }
-
-      function renderProjects() {
-        const projects = state.governance.projects;
-        const active = projects.filter(p => p.status !== "done");
-        const done = projects.filter(p => p.status === "done");
-        return `
-          <section class="grid">
-            <div class="metric-grid">
-              ${metric("Нацпроекты", `${done.length}/${projects.length}`, `В работе ${active.length}`, done.length ? "good" : "warn")}
-              ${metric("Проектный риск", pct(avg(projects, "risk"), 0), `Бюджет ${money(projects.reduce((s, p) => s + p.budget, 0))}`, avg(projects, "risk") < 35 ? "good" : "warn")}
-              ${metric("Средний прогресс", pct(avg(projects, "progress"), 0), `Освоено ${money(projects.reduce((s, p) => s + p.spent, 0))}`, avg(projects, "progress") > 35 ? "good" : "warn")}
-              ${metric("Эффект на страну", pct(calcProjectEffect(), 0), "накопленный вклад", calcProjectEffect() > 8 ? "good" : "warn")}
-            </div>
-            <section class="panel pad">
-              <h3 class="section-title">Портфель национального развития</h3>
-              <div class="signal-grid" style="margin-top: 12px;">
-                ${projects.map(renderProjectCard).join("")}
-              </div>
-            </section>
-          </section>
-        `;
-      }
-
-      function renderServiceCard(service) {
-        return `
-          <article class="signal-card">
-            <header><strong>${esc(service.name)}</strong><span class="pill">${esc(service.ministry)}</span></header>
-            <div class="mini-bars">
-              ${miniBar("Качество", service.level)}
-              ${miniBar("Мощность", service.capacity)}
-              ${miniBar("Нагрузка", service.stress)}
-            </div>
-          </article>
-        `;
-      }
-
-      function renderSectorCard(sector) {
-        return `
-          <article class="sector-card">
-            <header><strong>${esc(sector.name)}</strong><span class="pill">госдоля ${pct(sector.stateShare,0)}</span></header>
-            <div class="mini-bars">
-              ${miniBar("Выпуск", sector.output)}
-              ${miniBar("Занятость", sector.jobs)}
-              ${miniBar("Экспорт", sector.export)}
-            </div>
-          </article>
-        `;
-      }
-
-      function renderCrisisCard(crisis) {
-        const cls = crisis.severity > 66 ? "high" : crisis.severity > 38 ? "medium" : "";
-        return `
-          <article class="crisis-card ${cls}">
-            <header><strong>${esc(crisis.title)}</strong><span class="pill">${pct(crisis.severity,0)}</span></header>
-            <p class="subtle" style="margin:0;">${esc(crisis.desc)} · ${esc(crisis.region)} · ${crisis.days} дн.</p>
-            <div class="progress"><i style="--w:${clamp(crisis.severity,0,100)}%"></i></div>
-          </article>
-        `;
-      }
-
-      function renderProjectCard(project) {
-        return `
-          <article class="project-card ${project.status}">
-            <header><strong>${esc(project.name)}</strong><span class="pill">${esc(projectStatus(project))}</span></header>
-            <p class="subtle" style="margin:0;">${esc(project.desc)}</p>
-            <div class="mini-bars">
-              ${miniBar("Прогресс", project.progress)}
-              ${miniBar("Риск", project.risk)}
-              ${miniBar("Освоено", project.budget ? project.spent / project.budget * 100 : 0)}
-            </div>
-            <div class="actions">
-              <button data-action="project-action" data-project="${project.id}" data-mode="fund" ${project.status === "done" ? "disabled" : ""}>Финансировать</button>
-              <button data-action="project-action" data-project="${project.id}" data-mode="accelerate" ${project.status === "done" ? "disabled" : ""}>Ускорить</button>
-              <button data-action="project-action" data-project="${project.id}" data-mode="pause" ${project.status === "done" ? "disabled" : ""}>${project.status === "paused" ? "Возобновить" : "Пауза"}</button>
-            </div>
-          </article>
-        `;
-      }
-
-      function miniBar(label, value) {
-        const n = clamp(num(value), 0, 100);
-        return `<div class="mini-bar"><span>${esc(label)}</span><div class="progress"><i style="--w:${n}%"></i></div><strong>${pct(n,0)}</strong></div>`;
-      }
-
-      function projectStatus(project) {
-        if (project.status === "done") return "завершен";
-        if (project.status === "paused") return "пауза";
-        return project.risk > 55 ? "риск" : "в работе";
-      }
-
-      function calcProjectEffect(game = state) {
-        return (game.governance?.projects || []).reduce((sum, p) => sum + clamp(p.progress, 0, 100) * (p.status === "done" ? .12 : .05), 0);
+        return [["gdp","ВВП"],["inflation","Инфляция"],["popularity","Популярность"],["army","Армия"],["population","Население"],["unemployment","Безработица"],["income","Доходы"],["expenses","Расходы"]];
       }
 
       function renderMap() {
@@ -2736,7 +1966,7 @@
       }
 
       function rangeInput(key, labelText, value, min, max, group, step = 1) {
-        return `<label>${labelText}: <strong data-live-value>${Number(value).toFixed(step < 1 ? 1 : 0)}</strong><input data-${group}-field="${key}" type="range" min="${min}" max="${max}" step="${step}" value="${esc(value)}"></label>`;
+        return `<label>${labelText}: <strong>${Number(value).toFixed(step < 1 ? 1 : 0)}</strong><input data-${group}-field="${key}" type="range" min="${min}" max="${max}" step="${step}" value="${esc(value)}"></label>`;
       }
 
       function numberInput(key, labelText, value, group) {
@@ -2753,15 +1983,6 @@
               ${metric("Коррупция", pct(p.corruption, 0), `Лоббизм ${pct(p.lobbyism, 0)}`, p.corruption < 35 ? "good" : "bad")}
               ${metric("Улица", `${pct(p.protests, 0)} / ${pct(p.strikes, 0)}`, `Риск импичмента ${pct(p.impeachmentRisk, 0)}`, p.protests < 20 ? "good" : "bad")}
             </div>
-            <section class="panel pad">
-              <h3 class="section-title">Как устроена политика</h3>
-              <div class="signal-grid" style="margin-top: 12px;">
-                <div class="signal-card"><strong>Рейтинг власти</strong><p class="subtle" style="margin:0;">Зависит от экономики, счастья, инфляции, протестов и кризисов. Низкий рейтинг повышает оппозицию и риск импичмента.</p></div>
-                <div class="signal-card"><strong>Коалиция</strong><p class="subtle" style="margin:0;">Это способность проводить законы через парламент. Для реформ, референдумов и досрочных выборов важны рейтинг и поддержка коалиции.</p></div>
-                <div class="signal-card"><strong>Коррупция и лоббизм</strong><p class="subtle" style="margin:0;">Съедают доверие, повышают протесты и риски проектов. Аудит, ИИ-администрирование и сильный суд постепенно снижают давление.</p></div>
-                <div class="signal-card"><strong>Улица</strong><p class="subtle" style="margin:0;">Протесты и забастовки растут при бедности, инфляции и безработице. Силовой ответ может снизить преступность, но ухудшить доверие.</p></div>
-              </div>
-            </section>
             <div class="grid two">
               <section class="panel pad">
                 <h3 class="section-title">Институты</h3>
@@ -2785,9 +2006,6 @@
                   <button data-action="politics-action" data-politics="election">Досрочные выборы</button>
                   <button data-action="politics-action" data-politics="amend">Поправка к Конституции</button>
                   <button data-action="politics-action" data-politics="coalition">Собрать коалицию</button>
-                  <button data-action="politics-action" data-politics="address">Обращение к нации</button>
-                  <button data-action="politics-action" data-politics="hearings">Парламентские слушания</button>
-                  <button data-action="politics-action" data-politics="judicial">Судебная реформа</button>
                 </div>
                 <h3 class="section-title" style="margin-top: 16px;">Партийная система</h3>
                 <div class="scroll" style="max-height: 300px; margin-top: 8px;">
@@ -3029,28 +2247,8 @@
                 ${editorInput("country.intelligenceName", "Спецслужба", state.country.intelligenceName)}
                 ${editorInput("country.policeName", "Полиция", state.country.policeName)}
                 ${editorInput("country.courtName", "Суд", state.country.courtName)}
-                ${editorInput("country.flagName", "Название флага", state.country.flagName)}
-                ${editorInput("country.coat", "Описание герба", state.country.coat)}
                 ${editorInput("country.president.name", "Президент", state.country.president.name)}
                 ${editorInput("country.president.age", "Возраст", state.country.president.age, "number")}
-              </div>
-            </section>
-            <section class="panel pad">
-              <h3 class="section-title">Символика и изображения</h3>
-              <div class="visual-card" style="margin-top: 12px;">
-                ${renderFlag(state.country.flag)}
-                <div class="identity-stack">
-                  ${renderCoat(state.country)}
-                  <div>
-                    <strong>${esc(state.country.flagName)}</strong>
-                    <p class="upload-note">${esc(state.country.coat)}. Загруженные изображения сохраняются локально в браузере.</p>
-                  </div>
-                </div>
-              </div>
-              <div class="form-grid" style="margin-top: 12px;">
-                <label>Фото президента<input data-image-upload="president" type="file" accept="image/*"></label>
-                <label>Флаг картинкой<input data-image-upload="flag" type="file" accept="image/*"></label>
-                <label>Герб картинкой<input data-image-upload="coat" type="file" accept="image/*"></label>
               </div>
             </section>
             <div class="grid two">
@@ -3105,8 +2303,6 @@
                 <button data-action="autosave">Ручное сохранение</button>
                 <button data-action="export-save">Экспорт JSON</button>
                 <button data-action="import-click">Импорт JSON</button>
-                <button data-action="compact-storage">Оптимизировать хранилище</button>
-                <button data-action="clear-slots">Очистить слоты</button>
                 <button data-action="new-game" class="danger">Новая игра</button>
               </div>
               <div class="list" style="margin-top: 12px;">
@@ -3115,10 +2311,9 @@
             </section>
             <section class="panel pad">
               <h3 class="section-title">JSON</h3>
-              <p class="upload-note">Для экспорта используйте кнопку выше или скопируйте JSON. Для импорта вставьте JSON в поле и нажмите загрузку.</p>
-              <textarea id="saveJson" placeholder="Вставьте JSON сохранения сюда"></textarea>
+              <textarea id="saveJson">${esc(JSON.stringify(state, null, 2))}</textarea>
               <div class="actions" style="margin-top: 8px;">
-                <button data-action="copy-json">Копировать текущий JSON</button>
+                <button data-action="copy-json">Копировать</button>
                 <button data-action="load-json-text">Загрузить из поля</button>
               </div>
             </section>
@@ -3132,14 +2327,7 @@
       }
 
       function saveSlots(slots) {
-        try {
-          localStorage.setItem(SLOTS_KEY, JSON.stringify(slots));
-          return true;
-        } catch (err) {
-          console.warn(err);
-          notifyStorageOnce("Слоты слишком большие. Нажмите «Оптимизировать хранилище» или экспортируйте JSON.");
-          return false;
-        }
+        localStorage.setItem(SLOTS_KEY, JSON.stringify(slots));
       }
 
       function renderModal() {
@@ -3151,27 +2339,6 @@
             </section>
           </div>
         `;
-      }
-
-      function showDecision(title, result, details = [], tone = "good") {
-        modal = {
-          title,
-          body: `
-            <div class="decision-brief">
-              <div class="decision-banner ${tone}">
-                <strong>${esc(result)}</strong>
-                <span class="subtle">${dateLabel(state.date)} · ${esc(state.country.capital)}</span>
-              </div>
-              ${details.length ? `<div class="decision-grid">${details.map(([label, value, cls]) => `<div class="kpi"><span>${esc(label)}</span><strong class="${cls ? `delta ${cls}` : ""}">${esc(value)}</strong></div>`).join("")}</div>` : ""}
-              <div class="actions"><button class="primary" data-action="close-modal">Принять доклад</button></div>
-            </div>
-          `
-        };
-        render();
-      }
-
-      function showBlockedDecision(title, result, details = []) {
-        showDecision(title, result, details, "bad");
       }
 
       function renderCharts() {
@@ -3272,15 +2439,13 @@
         if (action === "speed") state.speed = num(actionEl.dataset.speed);
         else if (action === "tick") tickManual();
         else if (action === "theme") toggleTheme();
-        else if (action === "autosave") { if (saveState({ force: true })) notify("Игра сохранена."); }
+        else if (action === "autosave") { saveState(); notify("Игра сохранена."); }
         else if (action === "select-region") selectedRegionId = actionEl.dataset.id;
         else if (action === "toggle-draw") { drawMode = !drawMode; drawingPoints = []; }
         else if (action === "finish-region") finishRegion();
         else if (action === "cancel-draw") drawingPoints = [];
         else if (action === "build") buildInRegion(actionEl.dataset.building);
         else if (action === "policy") policyAction(actionEl.dataset.policy);
-        else if (action === "gov-action") governanceAction(actionEl.dataset.gov);
-        else if (action === "project-action") projectAction(actionEl.dataset.project, actionEl.dataset.mode);
         else if (action === "econ-action") economyAction(actionEl.dataset.econ);
         else if (action === "politics-action") politicsAction(actionEl.dataset.politics);
         else if (action === "replace-minister") replaceMinister(num(actionEl.dataset.index));
@@ -3304,13 +2469,11 @@
         else if (action === "import-click") importFile.click();
         else if (action === "copy-json") copyJson();
         else if (action === "load-json-text") loadJsonText();
-        else if (action === "compact-storage") compactStorageAction();
-        else if (action === "clear-slots") confirmClearSlots();
         else if (action === "new-game") confirmNewGame();
         else if (action === "close-modal") modal = null;
         else return;
 
-        queueSave(300);
+        saveState();
         render();
       }
 
@@ -3341,27 +2504,13 @@
         else if (el.matches("[data-military-field]")) state.military[el.dataset.militaryField] = num(el.value);
         else if (el.matches("[data-editor-path]")) setEditorPath(el.dataset.editorPath, el.value, el.type === "number");
         else return;
-        syncLiveInputValue(el);
-        queueSave(900);
+        saveState();
         scheduleRender();
       }
 
-      function syncLiveInputValue(el) {
-        if (el.type !== "range") return;
-        const label = el.closest("label");
-        const live = label?.querySelector("[data-live-value]");
-        if (!live) return;
-        const step = Number(el.step || 1);
-        live.textContent = Number(el.value).toFixed(step < 1 ? 1 : 0);
-      }
-
       function onChange(event) {
-        const el = event.target;
-        if (state && el.matches("[data-image-upload]")) {
-          updateImageUpload(el);
-          return;
-        }
         if (!state) return;
+        const el = event.target;
         if (el.matches("[data-action='editor-region']")) {
           selectedRegionId = el.value;
           render();
@@ -3378,43 +2527,42 @@
         }
       }
 
-      async function startGameFromForm() {
+      function startGameFromForm() {
         const form = document.getElementById("setupForm");
         if (!form) return;
         captureSetupDraft();
         const data = Object.fromEntries(new FormData(form).entries());
-        const photo = form.elements.photo?.files?.[0];
-        const flagImage = form.elements.flagImage?.files?.[0];
-        const coatImage = form.elements.coatImage?.files?.[0];
-        const [photoUrl, flagUrl, coatUrl] = await Promise.all([
-          imageToDataUrl(photo, { max: 380, type: "image/jpeg", quality: .78 }),
-          imageToDataUrl(flagImage, { max: 560, type: "image/webp", quality: .82 }),
-          imageToDataUrl(coatImage, { max: 460, type: "image/webp", quality: .84 })
-        ]);
-        if (photoUrl) data.photo = photoUrl;
-        if (flagUrl) data.flagImage = flagUrl;
-        if (coatUrl) data.coatImage = coatUrl;
-        state = createGame(data);
-        activeTab = "dashboard";
-        saveState();
-        render();
+        const file = form.elements.photo?.files?.[0];
+        if (file) {
+          imageToDataUrl(file).then(url => {
+            data.photo = url;
+            state = createGame(data);
+            activeTab = "dashboard";
+            saveState();
+            render();
+          });
+        } else {
+          state = createGame(data);
+          activeTab = "dashboard";
+          saveState();
+          render();
+        }
       }
 
-      function imageToDataUrl(file, options = {}) {
-        if (!file) return Promise.resolve("");
+      function imageToDataUrl(file) {
         return new Promise(resolve => {
           const reader = new FileReader();
           reader.onload = () => {
             const img = new Image();
             img.onload = () => {
               const canvas = document.createElement("canvas");
-              const max = options.max || 720;
+              const max = 360;
               const scale = Math.min(1, max / Math.max(img.width, img.height));
               canvas.width = Math.max(1, Math.round(img.width * scale));
               canvas.height = Math.max(1, Math.round(img.height * scale));
               const ctx = canvas.getContext("2d");
               ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-              resolve(canvas.toDataURL(options.type || "image/png", options.quality ?? .9));
+              resolve(canvas.toDataURL("image/jpeg", .82));
             };
             img.onerror = () => resolve(String(reader.result || ""));
             img.src = String(reader.result || "");
@@ -3424,25 +2572,9 @@
         });
       }
 
-      async function updateImageUpload(input) {
-        const file = input.files?.[0];
-        if (!file) return;
-        const kind = input.dataset.imageUpload;
-        const options = kind === "president" ? { max: 380, type: "image/jpeg", quality: .78 } : { max: kind === "flag" ? 560 : 460, type: "image/webp", quality: kind === "flag" ? .82 : .84 };
-        const url = sanitizeImageData(await imageToDataUrl(file, options));
-        if (!url) return notify("Не удалось загрузить изображение.");
-        if (kind === "president") state.country.president.photo = url;
-        if (kind === "flag") state.country.flag.image = url;
-        if (kind === "coat") state.country.coatImage = url;
-        saveState();
-        notify("Изображение обновлено.");
-        render();
-      }
-
       function tickManual() {
         tickDay(state);
         saveState();
-        scheduleRender();
       }
 
       function toggleTheme() {
@@ -3459,7 +2591,6 @@
         simulateRegions(game);
         simulateDiplomacy(game);
         simulateMilitary(game);
-        simulateGovernance(game);
         if (Math.random() < .18) generateDailyNews(game);
         if (Math.random() < .018) triggerRandomEvent(game);
         if (game.date.day === 1 || game.history.date.length < 6) pushHistory(game);
@@ -3498,8 +2629,6 @@
         const targetAnnualGrowth = clamp(
           e.growth
           + infra * .035
-          + calcProjectEffect(game) * .015
-          + (calcServiceScore(game) - 55) * .018
           + (education - .55) * 1.8
           + (stability - .5) * 2.5
           - Math.max(0, taxLoad - .38) * 3.5
@@ -3665,87 +2794,6 @@
         }
       }
 
-      function simulateGovernance(game) {
-        const g = game.governance;
-        const e = game.economy;
-        const p = game.politics;
-        const pop = game.population;
-        const infra = totalBuildingValue(game, ["roads","ports","airports","plants"]);
-        for (const service of g.services) {
-          const spend = service.id === "health" ? e.spending.health
-            : service.id === "education" ? e.spending.education
-            : service.id === "digital" ? (e.spending.science + e.spending.security) / 2
-            : e.spending.infrastructure;
-          service.capacity = clamp(service.capacity + spend * .00035 + infra * .00005 - service.stress * .00018, 0, 100);
-          service.stress = clamp(service.stress + pop.discontent * .00016 + e.inflation * .00018 - spend * .00022 - service.capacity * .00008, 0, 100);
-          service.level = clamp(service.level + service.capacity * .00018 - service.stress * .00025 + rnd(-.015, .015), 0, 100);
-        }
-        for (const sector of g.sectors) {
-          const taxDrag = Math.max(0, e.taxes.corporate - 18) * .0003;
-          const techBonus = (game.tech.nodes.filter(n => n.done).length / Math.max(1, game.tech.nodes.length)) * .004;
-          const investment = e.investments / Math.max(1, e.gdp) * .012;
-          sector.output = clamp(sector.output + e.growth * .0007 + investment + techBonus - taxDrag + rnd(-.018, .018), 0, 100);
-          sector.export = clamp(sector.export + (e.exports > e.imports ? .004 : -.002) + sector.output * .00005, 0, 100);
-          sector.jobs = clamp(sector.jobs + (e.unemployment > 8 ? -.002 : .002) + sector.output * .00002, 0, 60);
-        }
-        for (const topic of g.agenda) {
-          const pressure = topic.id === "prices" ? e.inflation * 4.5
-            : topic.id === "jobs" ? e.unemployment * 5.2
-            : topic.id === "security" ? pop.crime * 1.1 + game.military.wars.length * 12
-            : topic.id === "regions" ? 100 - avg(game.regions, "loyalty")
-            : calcCrisisPressure(game) + game.diplomacy.countries.filter(c => c.sanctions || c.war).length * 2;
-          topic.trend = clamp((pressure - topic.pressure) * .02 + topic.trend * .8, -3, 3);
-          topic.pressure = clamp(topic.pressure * .985 + pressure * .015 + rnd(-.035, .035), 0, 100);
-        }
-        g.media.trust = clamp(g.media.trust + p.popularity * .00035 - p.corruption * .0003 - g.media.polarization * .00025 + rnd(-.018, .018), 0, 100);
-        g.media.polarization = clamp(g.media.polarization + pop.discontent * .00028 + p.opposition * .00018 - g.media.freedom * .00016, 0, 100);
-        g.media.freedom = clamp(g.media.freedom - p.corruption * .00008 - g.media.propaganda * .00012 + rnd(-.01, .01), 0, 100);
-        g.intelligence.cyberThreat = clamp(g.intelligence.cyberThreat + g.intelligence.foreignNetworks * .00018 - game.military.cyber * .00024 + rnd(-.02, .025), 0, 100);
-        g.intelligence.domesticRisk = clamp(g.intelligence.domesticRisk + pop.discontent * .00025 + p.protests * .00035 - g.intelligence.counterIntel * .0002, 0, 100);
-        g.intelligence.counterIntel = clamp(g.intelligence.counterIntel + e.spending.security * .00028 + game.military.cyber * .00016 - g.intelligence.foreignNetworks * .00008, 0, 100);
-        for (const project of g.projects) {
-          if (project.status === "paused" || project.status === "done") continue;
-          const funding = project.budget ? project.spent / project.budget : 0;
-          const daily = .035 + funding * .055 + calcServiceScore(game) * .00018 - project.risk * .00022;
-          project.progress = clamp(project.progress + Math.max(.006, daily), 0, 100);
-          project.risk = clamp(project.risk + p.corruption * .00025 + e.inflation * .0002 - p.coalition * .00012 - funding * .015, 0, 100);
-          if (project.progress >= 100) completeProject(game, project);
-        }
-        for (const crisis of g.crises) {
-          crisis.days++;
-          crisis.severity = clamp(crisis.severity + calcNationalRisk(game) * .00055 - calcGovernanceScore(game) * .00042 + rnd(-.05, .06), 0, 100);
-        }
-        g.crises = g.crises.filter(c => c.severity > 8 || c.days < 12).slice(0, 8);
-        if (calcNationalRisk(game) > 54 && g.crises.length < 5 && Math.random() < .006) spawnGovernanceCrisis(game);
-      }
-
-      function completeProject(game, project) {
-        project.status = "done";
-        project.progress = 100;
-        project.risk = clamp(project.risk - 12, 0, 100);
-        if (project.effect === "growth") game.economy.growth = clamp(game.economy.growth + .35, -12, 12);
-        if (project.effect === "corruption") game.politics.corruption = clamp(game.politics.corruption - 3.2, 0, 100);
-        if (project.effect === "life") game.population.life = clamp(game.population.life + 2.4, 0, 100);
-        if (project.effect === "inflation") game.economy.inflation = clamp(game.economy.inflation - .55, -2, 80);
-        if (project.effect === "happiness") game.population.happiness = clamp(game.population.happiness + 2.1, 0, 100);
-        if (project.effect === "security") game.military.readiness = clamp(game.military.readiness + 3.2, 0, 100);
-        pushNews(game, "Политика", "Национальный проект завершен", `${project.name}: проект принят правительством и начал давать системный эффект.`);
-      }
-
-      function spawnGovernanceCrisis(game) {
-        const region = pick(game.regions);
-        const templates = [
-          ["prices", "Ценовой шок", "Резкий рост цен усиливает давление на домохозяйства."],
-          ["logistics", "Логистический сбой", "Поставки между регионами идут с задержками, бизнес требует вмешательства."],
-          ["cyber", "Кибератака на инфраструктуру", "Цифровые сервисы и критические системы переведены в усиленный режим защиты."],
-          ["regional", "Региональный конфликт элит", "Губернатор и местные группы влияния спорят за бюджетные полномочия."],
-          ["media", "Информационный кризис", "Медиа раскручивают конфликт вокруг решений правительства."]
-        ];
-        const [type, title, desc] = pick(templates);
-        game.governance.crises.unshift({ id: uid("crisis"), type, title, severity: Math.round(rnd(32, 68)), days: 0, region: region.name, desc });
-        pushNews(game, "Безопасность", title, `${desc} Регион: ${region.name}.`);
-      }
-
       function generateDailyNews(game) {
         const category = pick(newsCategories);
         const region = pick(game.regions);
@@ -3870,175 +2918,55 @@
 
       function policyAction(policy) {
         const e = state.economy, p = state.politics, pop = state.population;
-        let report = null;
         const actions = {
-          stimulus: () => { e.budget -= 1800; e.growth += .7; e.unemployment -= .35; e.inflation += .25; report = ["Пакет стимулов принят", "Кабинет запускает инвестиции в занятость, инфраструктуру и спрос.", [["Бюджет", "-1.80 млрд", "bad"], ["Рост", "+0.7 п.п.", "good"], ["Инфляция", "+0.25 п.п.", "warn"]]]; pushNews(state, "Экономика", "Пакет стимулов", "Правительство запускает инвестиции в занятость, инфраструктуру и спрос."); },
-          anticorruption: () => { e.budget -= 420; p.corruption -= 5; p.popularity += 1.3; p.lobbyism -= 2; report = ["Антикоррупционный рейд проведен", "Проверки ударили по лоббистским группам, но потребовали политического ресурса.", [["Коррупция", "-5 п.п.", "good"], ["Рейтинг", "+1.3 п.п.", "good"], ["Бюджет", "-420 млн", "bad"]]]; pushNews(state, "Скандалы", "Антикоррупционный рейд", "Прокуратура и аудиторы проверяют крупные контракты."); },
-          health: () => { e.budget -= 900; pop.life += 2; pop.happiness += 1.5; pop.deathRate -= .12; report = ["Нацпроект медицины запущен", "Больницы получают оборудование, кадры и цифровую маршрутизацию пациентов.", [["Уровень жизни", "+2 п.п.", "good"], ["Счастье", "+1.5 п.п.", "good"], ["Бюджет", "-900 млн", "bad"]]]; pushNews(state, "Политика", "Нацпроект медицины", "Больницы получают оборудование, кадры и цифровую систему маршрутизации."); },
-          education: () => { e.budget -= 760; pop.education += 2.8; state.tech.points += 35; report = ["Образовательная реформа одобрена", "Школы и университеты получают новый стандарт финансирования и гранты.", [["Образование", "+2.8 п.п.", "good"], ["Наука", "+35 очков", "good"], ["Бюджет", "-760 млн", "bad"]]]; pushNews(state, "Открытия", "Образовательная реформа", "Школы и университеты получили новый стандарт финансирования."); },
-          security: () => { e.budget -= 520; pop.crime -= 2.6; p.protests += .6; state.military.cyber += 1.5; report = ["Безопасность усилена", "Полиция и спецслужбы получают ресурсы, общество внимательно следит за полномочиями силового блока.", [["Преступность", "-2.6 п.п.", "good"], ["Кибер", "+1.5 п.п.", "good"], ["Протесты", "+0.6 п.п.", "warn"]]]; pushNews(state, "Безопасность", "Усиление безопасности", "Полиция и спецслужбы получили дополнительные полномочия и ресурсы."); },
-          summit: () => { e.budget -= 280; state.diplomacy.countries.slice(0, 20).forEach(c => c.relations = clamp(c.relations + rnd(.2, 1.2), 0, 100)); report = ["Международный саммит проведен", "Дипломаты открыли переговорные треки с ключевыми партнерами.", [["Первые 20 стран", "+отношения", "good"], ["Бюджет", "-280 млн", "bad"], ["Имидж", "усилен", "good"]]]; pushNews(state, "Мир", "Международный саммит", "Президент принял лидеров, инвесторов и руководителей организаций."); }
+          stimulus: () => { e.budget -= 1800; e.growth += .7; e.unemployment -= .35; e.inflation += .25; pushNews(state, "Экономика", "Пакет стимулов", "Правительство запускает инвестиции в занятость, инфраструктуру и спрос."); },
+          anticorruption: () => { e.budget -= 420; p.corruption -= 5; p.popularity += 1.3; p.lobbyism -= 2; pushNews(state, "Скандалы", "Антикоррупционный рейд", "Прокуратура и аудиторы проверяют крупные контракты."); },
+          health: () => { e.budget -= 900; pop.life += 2; pop.happiness += 1.5; pop.deathRate -= .12; pushNews(state, "Политика", "Нацпроект медицины", "Больницы получают оборудование, кадры и цифровую систему маршрутизации."); },
+          education: () => { e.budget -= 760; pop.education += 2.8; state.tech.points += 35; pushNews(state, "Открытия", "Образовательная реформа", "Школы и университеты получили новый стандарт финансирования."); },
+          security: () => { e.budget -= 520; pop.crime -= 2.6; p.protests += .6; state.military.cyber += 1.5; pushNews(state, "Безопасность", "Усиление безопасности", "Полиция и спецслужбы получили дополнительные полномочия и ресурсы."); },
+          summit: () => { e.budget -= 280; state.diplomacy.countries.slice(0, 20).forEach(c => c.relations = clamp(c.relations + rnd(.2, 1.2), 0, 100)); pushNews(state, "Мир", "Международный саммит", "Президент принял лидеров, инвесторов и руководителей организаций."); }
         };
         actions[policy]?.();
         normalizeCore();
-        if (report) showDecision(report[0], report[1], report[2], "good");
-      }
-
-      function governanceAction(type) {
-        const g = state.governance, e = state.economy, p = state.politics, pop = state.population;
-        if (type === "briefing") {
-          e.budget -= 120;
-          g.media.trust += 2.4;
-          g.media.polarization -= 1.2;
-          g.agenda.forEach(a => a.pressure = clamp(a.pressure - .9, 0, 100));
-          pushNews(state, "Политика", "Большой президентский брифинг", "Кабинет публично объяснил решения, риски и календарь реформ.");
-        }
-        if (type === "audit") {
-          e.budget -= 260;
-          p.corruption -= 1.8;
-          p.lobbyism -= .9;
-          g.projects.forEach(project => project.risk = clamp(project.risk - 1.1, 0, 100));
-          pushNews(state, "Скандалы", "Аудит министерств", "Счетная палата и администрация проверяют закупки, сроки и KPI министров.");
-        }
-        if (type === "counterintel") {
-          e.budget -= 340;
-          g.intelligence.counterIntel += 4.5;
-          g.intelligence.cyberThreat -= 2.4;
-          g.intelligence.foreignNetworks -= 1.7;
-          state.military.cyber += .8;
-          pushNews(state, "Безопасность", "Контрразведывательная операция", `${state.country.intelligenceName} усиливает защиту критической инфраструктуры.`);
-        }
-        if (type === "media") {
-          e.budget -= 180;
-          g.media.trust += 1.8;
-          g.media.propaganda += .8;
-          g.media.freedom -= .5;
-          p.popularity += .4;
-          pushNews(state, "Политика", "Медиастратегия", "Правительство запускает единую коммуникацию реформ и кризисных решений.");
-        }
-        if (type === "emergency") {
-          e.budget -= 520;
-          pop.happiness += .5;
-          g.crises.forEach(c => c.severity = clamp(c.severity - rnd(5, 11), 0, 100));
-          g.services.forEach(s => s.stress = clamp(s.stress - 1.4, 0, 100));
-          pushNews(state, "Безопасность", "Штаб реагирования", "Кризисный штаб синхронизировал регионы, ведомства и инфраструктурные службы.");
-        }
-        normalizeGovernance();
-        normalizeCore();
-      }
-
-      function projectAction(projectId, mode) {
-        const project = state.governance.projects.find(p => p.id === projectId);
-        if (!project || project.status === "done") return;
-        const e = state.economy;
-        if (mode === "pause") {
-          project.status = project.status === "paused" ? "active" : "paused";
-          pushNews(state, "Политика", "Статус нацпроекта изменен", `${project.name}: ${project.status === "paused" ? "проект поставлен на паузу" : "проект возобновлен"}.`);
-          showDecision("Статус проекта изменен", `${project.name}: ${project.status === "paused" ? "проект поставлен на паузу для ревизии бюджета." : "проект возвращен в активную фазу."}`, [["Статус", projectStatus(project), "warn"], ["Прогресс", pct(project.progress,0), "good"], ["Риск", pct(project.risk,0), riskClass(project.risk)]], project.status === "paused" ? "warn" : "good");
-          return;
-        }
-        const cost = mode === "accelerate" ? 760 : 420;
-        if (e.budget < cost) return notify("Недостаточно бюджета на проект.");
-        e.budget -= cost;
-        project.spent = clamp(project.spent + cost, 0, project.budget * 1.25);
-        if (mode === "fund") {
-          project.progress = clamp(project.progress + rnd(1.2, 2.6), 0, 100);
-          project.risk = clamp(project.risk - rnd(.8, 1.9), 0, 100);
-        }
-        if (mode === "accelerate") {
-          project.progress = clamp(project.progress + rnd(2.4, 4.6), 0, 100);
-          project.risk = clamp(project.risk + rnd(.6, 1.8), 0, 100);
-          state.politics.lobbyism += .2;
-        }
-        if (project.progress >= 100) completeProject(state, project);
-        pushNews(state, "Экономика", "Нацпроект получил решение", `${project.name}: прогресс ${pct(project.progress,0)}, риск ${pct(project.risk,0)}.`);
-        normalizeGovernance();
-        normalizeCore();
-        showDecision(mode === "accelerate" ? "Проект ускорен" : "Проект профинансирован", `${project.name}: решение принято проектным офисом.`, [["Бюджет", `-${money(cost)}`, "bad"], ["Прогресс", pct(project.progress,0), "good"], ["Риск", pct(project.risk,0), riskClass(project.risk)]], mode === "accelerate" && project.risk > 45 ? "warn" : "good");
       }
 
       function economyAction(type) {
         const e = state.economy;
-        let report = null;
-        if (type === "emit") { e.emission += 1200; e.budget += 1200; e.inflation += .9; report = ["Эмиссия проведена", "Центробанк расширил денежное предложение. Бюджет получил быстрый ресурс, но инфляционное давление выросло.", [["Бюджет", "+1.20 млрд", "good"], ["Инфляция", "+0.9 п.п.", "bad"], ["Эмиссия", "+1.20 млрд", "warn"]], "warn"]; }
-        if (type === "bonds") { e.budget += 3500; e.debt += 3900; e.keyRate += .15; report = ["Облигации размещены", "Минфин привлек деньги на рынке. Долг вырос, но бюджет получил запас ликвидности.", [["Бюджет", "+3.50 млрд", "good"], ["Долг", "+3.90 млрд", "warn"], ["Ставка", "+0.15 п.п.", "warn"]], "good"]; }
-        if (type === "privatize") { e.budget += 2600; e.stateCompanies = Math.max(0, e.stateCompanies - 1); e.smallBusiness += 1.2; state.politics.lobbyism += .8; report = ["Приватизация проведена", "Часть актива продана рынку. Бизнес оживился, но лоббисты усилили влияние.", [["Бюджет", "+2.60 млрд", "good"], ["Госкомпании", "-1", "warn"], ["Лоббизм", "+0.8 п.п.", "warn"]], "warn"]; }
-        if (type === "nationalize") { e.budget -= 2200; e.stateCompanies += 1; e.corporations = Math.max(0, e.corporations - 1); state.politics.popularity += .8; report = ["Национализация проведена", "Государство берет контроль над стратегическим активом. Рейтинг растет, бюджет несет нагрузку.", [["Бюджет", "-2.20 млрд", "bad"], ["Госкомпании", "+1", "good"], ["Рейтинг", "+0.8 п.п.", "good"]], "warn"]; }
-        if (type === "supportSmall") { e.budget -= 700; e.smallBusiness += 3; e.unemployment -= .25; report = ["Малый бизнес поддержан", "Льготные кредиты и налоговые каникулы снижают напряжение на рынке труда.", [["Бюджет", "-700 млн", "bad"], ["Малый бизнес", "+3 п.п.", "good"], ["Безработица", "-0.25 п.п.", "good"]], "good"]; }
-        if (type === "bailout") { e.budget -= 1500; e.bankruptcies -= 1.2; e.stockIndex *= 1.018; state.politics.popularity -= .4; report = ["Системные компании спасены", "Государство предотвращает цепочку банкротств, но общество спорит о справедливости поддержки.", [["Бюджет", "-1.50 млрд", "bad"], ["Банкротства", "-1.2 п.п.", "good"], ["Рейтинг", "-0.4 п.п.", "warn"]], "warn"]; }
+        if (type === "emit") { e.emission += 1200; e.budget += 1200; e.inflation += .9; }
+        if (type === "bonds") { e.budget += 3500; e.debt += 3900; e.keyRate += .15; }
+        if (type === "privatize") { e.budget += 2600; e.stateCompanies = Math.max(0, e.stateCompanies - 1); e.smallBusiness += 1.2; state.politics.lobbyism += .8; }
+        if (type === "nationalize") { e.budget -= 2200; e.stateCompanies += 1; e.corporations = Math.max(0, e.corporations - 1); state.politics.popularity += .8; }
+        if (type === "supportSmall") { e.budget -= 700; e.smallBusiness += 3; e.unemployment -= .25; }
+        if (type === "bailout") { e.budget -= 1500; e.bankruptcies -= 1.2; e.stockIndex *= 1.018; state.politics.popularity -= .4; }
         normalizeCore();
         pushNews(state, "Экономика", "Решение экономического блока", "Параметры бюджета, рынка и бизнеса обновлены решением правительства.");
-        if (report) showDecision(report[0], report[1], report[2], report[3]);
       }
 
       function politicsAction(type) {
         const p = state.politics;
-        let report = null;
         if (type === "law") {
           const law = { name: pick(["Закон о промышленной политике","Закон о цифровом государстве","Закон о местном самоуправлении","Закон о прозрачных закупках"]), effect: pick(["ускоряет инвестиции","усиливает контроль расходов","повышает доверие граждан","меняет баланс центра и регионов"]), support: Math.round(rnd(43, 82)) };
           p.laws.unshift(law);
           p.coalition += law.support > 55 ? 1.3 : -1;
-          report = ["Закон внесен в парламент", `${law.name}: ${law.effect}. Комитеты оценили поддержку в ${pct(law.support,0)}.`, [["Поддержка", pct(law.support,0), law.support > 55 ? "good" : "warn"], ["Коалиция", law.support > 55 ? "+1.3 п.п." : "-1 п.п.", law.support > 55 ? "good" : "warn"]], law.support > 55 ? "good" : "warn"];
         }
         if (type === "decree") {
           p.decrees.unshift({ name: `Указ №${p.decrees.length + 1}`, date: formatDate(state.date), effect: "оперативное решение президента" });
           p.popularity += .7;
           p.opposition += .3;
-          report = ["Президентский указ подписан", "Решение вступает в силу немедленно, но оппозиция требует парламентского контроля.", [["Рейтинг", "+0.7 п.п.", "good"], ["Оппозиция", "+0.3 п.п.", "warn"]], "good"];
         }
         if (type === "referendum") {
-          if (p.referendumCooldown > 0) {
-            showBlockedDecision("Референдум недоступен", `До следующего референдума осталось ${p.referendumCooldown} дней.`, [["Ограничение", "365 дней", "warn"], ["Коалиция", pct(p.coalition,0), "warn"]]);
-            return;
-          }
+          if (p.referendumCooldown > 0) return notify("Референдум можно провести позже.");
           p.referendumCooldown = 365;
-          const score = p.popularity + rnd(-18, 18);
-          const win = score > 50;
+          const win = p.popularity + rnd(-18, 18) > 50;
           p.popularity += win ? 4 : -6;
           p.coalition += win ? 3 : -4;
-          report = [win ? "Референдум выигран" : "Референдум проигран", win ? "Большинство граждан поддержало инициативу президента." : "Избиратели отвергли инициативу, оппозиция усилилась.", [["Итог кампании", pct(score,0), win ? "good" : "bad"], ["Рейтинг", win ? "+4 п.п." : "-6 п.п.", win ? "good" : "bad"], ["Коалиция", win ? "+3 п.п." : "-4 п.п.", win ? "good" : "bad"]], win ? "good" : "bad"];
           pushNews(state, "Выборы", win ? "Референдум выигран" : "Референдум проигран", win ? "Большинство граждан поддержало инициативу президента." : "Избиратели отвергли инициативу, оппозиция усилилась.");
         }
-        if (type === "election") {
-          const result = runElection(state, true);
-          report = [result.won ? "Досрочные выборы выиграны" : "Досрочные выборы ударили по власти", `Кампания завершилась результатом ${pct(result.result,0)}.`, [["Результат", pct(result.result,0), result.won ? "good" : "bad"], ["Коалиция", pct(p.coalition,0), p.coalition > 50 ? "good" : "warn"], ["Оппозиция", pct(p.opposition,0), "warn"]], result.won ? "good" : "bad"];
-        }
-        if (type === "amend") {
-          p.constitution.rights = clamp(p.constitution.rights + rnd(-3, 5), 0, 100);
-          p.constitution.courtIndependence = clamp(p.constitution.courtIndependence + rnd(-2, 4), 0, 100);
-          p.coalition -= 2;
-          report = ["Конституционная поправка внесена", "Юристы и парламентские фракции начинают согласование новой редакции.", [["Права", pct(p.constitution.rights,0), "warn"], ["Независимость суда", pct(p.constitution.courtIndependence,0), "good"], ["Коалиция", "-2 п.п.", "warn"]], "warn"];
-        }
-        if (type === "coalition") {
-          const gain = rnd(3, 8);
-          p.coalition += gain;
-          p.lobbyism += 1.5;
-          p.popularity += .6;
-          report = ["Коалиционные переговоры состоялись", "Правительство получило дополнительные голоса, но усилило зависимость от групп влияния.", [["Коалиция", `+${gain.toFixed(1)} п.п.`, "good"], ["Лоббизм", "+1.5 п.п.", "warn"], ["Рейтинг", "+0.6 п.п.", "good"]], "good"];
-        }
-        if (type === "address") {
-          p.popularity += 1.1;
-          p.opposition -= .5;
-          state.governance.media.trust += 1.2;
-          report = ["Обращение к нации прошло", "Президент объяснил реформы и взял ответственность за риски текущего курса.", [["Рейтинг", "+1.1 п.п.", "good"], ["Оппозиция", "-0.5 п.п.", "good"], ["Доверие СМИ", "+1.2 п.п.", "good"]], "good"];
-        }
-        if (type === "hearings") {
-          p.coalition += .9;
-          p.corruption -= .7;
-          p.popularity += .3;
-          state.economy.budget -= 120;
-          report = ["Парламентские слушания проведены", "Министры публично отчитались, часть спорных расходов отправлена на проверку.", [["Коалиция", "+0.9 п.п.", "good"], ["Коррупция", "-0.7 п.п.", "good"], ["Бюджет", "-120 млн", "bad"]], "good"];
-        }
-        if (type === "judicial") {
-          p.constitution.courtIndependence = clamp(p.constitution.courtIndependence + 3.2, 0, 100);
-          p.corruption -= 1.4;
-          p.lobbyism -= .6;
-          p.coalition -= .7;
-          report = ["Судебная реформа запущена", "Суд получает больше автономии, что снижает коррупцию, но раздражает часть элит.", [["Суд", "+3.2 п.п.", "good"], ["Коррупция", "-1.4 п.п.", "good"], ["Коалиция", "-0.7 п.п.", "warn"]], "good"];
-        }
+        if (type === "election") runElection(state, true);
+        if (type === "amend") { p.constitution.rights = clamp(p.constitution.rights + rnd(-3, 5), 0, 100); p.constitution.courtIndependence = clamp(p.constitution.courtIndependence + rnd(-2, 4), 0, 100); p.coalition -= 2; }
+        if (type === "coalition") { p.coalition += rnd(3, 8); p.lobbyism += 1.5; p.popularity += .6; }
         normalizeCore();
         pushNews(state, "Политика", "Политическое решение", "Баланс партий, коалиции и общественной поддержки изменился.");
-        if (report) showDecision(report[0], report[1], report[2], report[3]);
       }
 
       function runElection(game, early = false) {
@@ -4052,7 +2980,6 @@
         p.parties[0].support = clamp(result, 5, 70);
         p.parties[0].seats = Math.round(p.parliamentSeats * p.parties[0].support / 100);
         pushNews(game, "Выборы", won ? "Президентская партия побеждает" : "Правящая партия теряет большинство", `${early ? "Досрочные выборы" : "Очередные выборы"} завершены с результатом ${pct(result,0)}.`);
-        return { result, won };
       }
 
       function replaceMinister(index) {
@@ -4070,64 +2997,21 @@
         const c = state.diplomacy.countries.find(x => x.id === selectedCountryId);
         if (!c) return;
         const e = state.economy;
-        let report = null;
-        if (type === "relations") {
-          const gain = rnd(4, 10);
-          e.budget -= 90; c.relations += gain; c.embassy = true;
-          report = ["Переговоры проведены", `Посольство и МИД открыли рабочий канал с ${c.name}.`, [["Отношения", `+${gain.toFixed(1)} п.п.`, "good"], ["Бюджет", "-90 млн", "bad"], ["Посольство", "открыто", "good"]], "good"];
-        }
-        if (type === "trade") {
-          const tradeGain = rnd(600, 2200);
-          e.budget -= 160; c.trade += tradeGain; c.treaties.push("торговый контракт"); c.relations += 3;
-          report = ["Торговый контракт подписан", `${c.name} расширяет закупки и логистические каналы.`, [["Торговля", `+${money(tradeGain)}`, "good"], ["Отношения", "+3 п.п.", "good"], ["Бюджет", "-160 млн", "bad"]], "good"];
-        }
-        if (type === "alliance") {
-          const chance = clamp(c.relations + c.stability * .2 - c.spy * .12 - (c.sanctions ? 25 : 0) - (c.embargo ? 18 : 0), 0, 100);
-          if (c.relations < 60 || chance < 58) {
-            showBlockedDecision("Союз не подписан", `${c.name} не готова к союзному договору. Нужны отношения выше 60%, стабильность и отсутствие жестких ограничений.`, [["Отношения", pct(c.relations,0), c.relations >= 60 ? "good" : "bad"], ["Шанс", pct(chance,0), "warn"], ["Статус", c.sanctions || c.embargo ? "ограничения" : "переговоры", "warn"]]);
-            return;
-          }
-          c.alliance = true; c.treaties.push("союз"); c.relations += 5;
-          report = ["Союз подписан", `${state.country.name} и ${c.name} создают политико-военный контур координации.`, [["Отношения", "+5 п.п.", "good"], ["Союз", "активен", "good"], ["Риск войны", "ниже", "good"]], "good"];
-        }
-        if (type === "sanctions") {
-          c.sanctions = !c.sanctions; c.relations += c.sanctions ? -12 : 6; e.exports -= c.sanctions ? c.trade * .04 : -c.trade * .02;
-          report = [c.sanctions ? "Санкции введены" : "Санкции сняты", c.sanctions ? `Ограничения ударят по отношениям с ${c.name}, но покажут жесткую позицию.` : `Дипломаты открывают окно для восстановления торговли с ${c.name}.`, [["Отношения", c.sanctions ? "-12 п.п." : "+6 п.п.", c.sanctions ? "bad" : "good"], ["Экспорт", c.sanctions ? "снижен" : "частично восстановлен", c.sanctions ? "bad" : "good"]], c.sanctions ? "warn" : "good"];
-        }
-        if (type === "embargo") {
-          c.embargo = !c.embargo; c.relations += c.embargo ? -16 : 5; c.trade *= c.embargo ? .62 : 1.18;
-          report = [c.embargo ? "Эмбарго введено" : "Эмбарго отменено", c.embargo ? "Торговля резко ограничена, бизнес готовит компенсационные маршруты." : "Торговля начинает восстанавливаться.", [["Торговля", c.embargo ? "-38%" : "+18%", c.embargo ? "bad" : "good"], ["Отношения", c.embargo ? "-16 п.п." : "+5 п.п.", c.embargo ? "bad" : "good"]], c.embargo ? "bad" : "good"];
-        }
-        if (type === "milAid") {
-          e.budget -= 540; c.relations += 8; c.military += 2; c.aid += 540;
-          report = ["Военная помощь отправлена", `${c.name} получает помощь, союзники воспринимают это как сигнал готовности к обязательствам.`, [["Бюджет", "-540 млн", "bad"], ["Отношения", "+8 п.п.", "good"], ["Армия партнера", "+2 п.п.", "good"]], "good"];
-        }
-        if (type === "humanAid") {
-          e.budget -= 220; c.relations += 6; c.stability += 3; c.aid += 220;
-          report = ["Гуманитарная помощь отправлена", "Поставка медикаментов и продовольствия улучшила гуманитарный фон переговоров.", [["Бюджет", "-220 млн", "bad"], ["Отношения", "+6 п.п.", "good"], ["Стабильность", "+3 п.п.", "good"]], "good"];
-        }
-        if (type === "spy") {
-          const gain = rnd(4, 10);
-          e.budget -= 120; c.spy += gain; c.relations -= rnd(0, 2); state.military.cyber += .4;
-          report = ["Разведоперация проведена", `${state.country.intelligenceName} расширяет сеть источников. Риск дипломатической утечки сохраняется.`, [["Разведка", `+${gain.toFixed(1)} п.п.`, "good"], ["Кибер", "+0.4 п.п.", "good"], ["Отношения", "слегка ниже", "warn"]], "warn"];
-        }
-        if (type === "visa") {
-          c.visa = c.visa === "свободный" ? "строгий" : c.visa === "строгий" ? "обычный" : "свободный"; c.relations += c.visa === "свободный" ? 3 : -2;
-          report = ["Визовый режим изменен", `Новый режим: ${c.visa}. Это влияет на туризм, бизнес и тон переговоров.`, [["Визы", c.visa, "warn"], ["Отношения", c.visa === "свободный" ? "+3 п.п." : "-2 п.п.", c.visa === "свободный" ? "good" : "warn"]], "warn"];
-        }
-        if (type === "war") {
-          declareWar(c);
-          report = ["Военный конфликт объявлен", `${state.country.armyName} переводятся в режим операции против ${c.name}. Экономика и рейтинг получают удар.`, [["Отношения", "2%", "bad"], ["Биржа", "-7%", "bad"], ["Рейтинг", "-4 п.п.", "bad"]], "bad"];
-        }
-        if (type === "peace") {
-          c.war = false; c.relations += 8; state.military.wars = state.military.wars.filter(w => w.enemy !== c.name);
-          report = ["Перемирие согласовано", `Стороны конфликта с ${c.name} открывают канал прекращения огня.`, [["Отношения", "+8 п.п.", "good"], ["Война", "остановлена", "good"], ["Риск", "ниже", "good"]], "good"];
-        }
+        if (type === "relations") { e.budget -= 90; c.relations += rnd(4, 10); c.embassy = true; }
+        if (type === "trade") { e.budget -= 160; c.trade += rnd(600, 2200); c.treaties.push("торговый контракт"); c.relations += 3; }
+        if (type === "alliance") { if (c.relations < 60) return notify("Для союза нужны отношения выше 60%."); c.alliance = true; c.treaties.push("союз"); c.relations += 5; }
+        if (type === "sanctions") { c.sanctions = !c.sanctions; c.relations += c.sanctions ? -12 : 6; e.exports -= c.sanctions ? c.trade * .04 : -c.trade * .02; }
+        if (type === "embargo") { c.embargo = !c.embargo; c.relations += c.embargo ? -16 : 5; c.trade *= c.embargo ? .62 : 1.18; }
+        if (type === "milAid") { e.budget -= 540; c.relations += 8; c.military += 2; c.aid += 540; }
+        if (type === "humanAid") { e.budget -= 220; c.relations += 6; c.stability += 3; c.aid += 220; }
+        if (type === "spy") { e.budget -= 120; c.spy += rnd(4, 10); c.relations -= rnd(0, 2); state.military.cyber += .4; }
+        if (type === "visa") { c.visa = c.visa === "свободный" ? "строгий" : c.visa === "строгий" ? "обычный" : "свободный"; c.relations += c.visa === "свободный" ? 3 : -2; }
+        if (type === "war") { declareWar(c); }
+        if (type === "peace") { c.war = false; c.relations += 8; state.military.wars = state.military.wars.filter(w => w.enemy !== c.name); }
         c.relations = clamp(c.relations, 0, 100);
         c.military = clamp(c.military, 0, 100);
         c.stability = clamp(c.stability, 0, 100);
         pushNews(state, "Мир", "Дипломатическое решение", `Отношения с ${c.name} теперь ${pct(c.relations,0)}. Статус: ${stripHtml(countryStatus(c))}.`);
-        if (report) showDecision(report[0], report[1], report[2], report[3]);
       }
 
       function stripHtml(html) {
@@ -4235,46 +3119,10 @@
           p.support = p.support / sum * 100;
           p.seats = Math.round(state.politics.parliamentSeats * p.support / 100);
         }
-        normalizeGovernance();
         normalizeCore();
       }
 
-      function normalizeGovernance() {
-        const g = state.governance;
-        if (!g) return;
-        g.agenda.forEach(a => {
-          a.pressure = clamp(a.pressure, 0, 100);
-          a.trend = clamp(a.trend, -5, 5);
-        });
-        g.services.forEach(s => {
-          s.level = clamp(s.level, 0, 100);
-          s.capacity = clamp(s.capacity, 0, 100);
-          s.stress = clamp(s.stress, 0, 100);
-        });
-        g.sectors.forEach(s => {
-          s.output = clamp(s.output, 0, 100);
-          s.jobs = clamp(s.jobs, 0, 60);
-          s.export = clamp(s.export, 0, 100);
-          s.stateShare = clamp(s.stateShare, 0, 100);
-        });
-        g.projects.forEach(p => {
-          p.progress = clamp(p.progress, 0, 100);
-          p.risk = clamp(p.risk, 0, 100);
-          p.spent = Math.max(0, num(p.spent));
-        });
-        g.crises.forEach(c => c.severity = clamp(c.severity, 0, 100));
-        g.media.trust = clamp(g.media.trust, 0, 100);
-        g.media.freedom = clamp(g.media.freedom, 0, 100);
-        g.media.propaganda = clamp(g.media.propaganda, 0, 100);
-        g.media.polarization = clamp(g.media.polarization, 0, 100);
-        g.intelligence.counterIntel = clamp(g.intelligence.counterIntel, 0, 100);
-        g.intelligence.cyberThreat = clamp(g.intelligence.cyberThreat, 0, 100);
-        g.intelligence.foreignNetworks = clamp(g.intelligence.foreignNetworks, 0, 100);
-        g.intelligence.domesticRisk = clamp(g.intelligence.domesticRisk, 0, 100);
-      }
-
       function normalizeCore() {
-        normalizeGovernance();
         const e = state.economy, p = state.politics, pop = state.population, m = state.military;
         e.inflation = clamp(e.inflation, -2, 80);
         e.unemployment = clamp(e.unemployment, 1, 45);
@@ -4322,8 +3170,9 @@
 
       function saveSlot(slot) {
         const slots = loadSlots();
-        slots[slot] = serializeStateForStorage(state, "normal");
-        if (saveSlots(slots)) notify(`Слот ${slot} сохранён.`);
+        slots[slot] = JSON.parse(JSON.stringify(state));
+        saveSlots(slots);
+        notify(`Слот ${slot} сохранён.`);
       }
 
       function loadSlot(slot) {
@@ -4367,7 +3216,6 @@
 
       function loadJsonText() {
         const text = document.getElementById("saveJson")?.value;
-        if (!text?.trim()) return notify("Вставьте JSON сохранения в поле.");
         try {
           state = migrateState(JSON.parse(text));
           saveState();
@@ -4375,19 +3223,6 @@
         } catch {
           notify("Ошибка JSON.");
         }
-      }
-
-      function compactStorageAction() {
-        const compacted = compactExistingSlots();
-        const saved = saveState({ force: true });
-        if (compacted || saved) notify("Хранилище оптимизировано.");
-      }
-
-      function confirmClearSlots() {
-        modal = {
-          title: "Очистить слоты",
-          body: `<p class="subtle">Будут удалены только ручные слоты 1-5. Текущее автосохранение останется.</p><div class="actions"><button class="danger" data-action="really-clear-slots">Очистить слоты</button><button data-action="close-modal">Отмена</button></div>`
-        };
       }
 
       function confirmNewGame() {
@@ -4411,12 +3246,6 @@
           localStorage.removeItem(STORAGE_KEY);
           state = null;
           modal = null;
-          render();
-        }
-        if (event.target.closest("[data-action='really-clear-slots']")) {
-          localStorage.removeItem(SLOTS_KEY);
-          modal = null;
-          notify("Слоты очищены.");
           render();
         }
       });
