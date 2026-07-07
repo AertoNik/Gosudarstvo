@@ -800,6 +800,105 @@
       align-items: center;
     }
 
+    .policy-action-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .policy-action-card {
+      position: relative;
+      overflow: hidden;
+      min-height: 250px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(145deg, color-mix(in oklab, var(--panel-2) 74%, transparent), var(--panel-3)),
+        var(--panel-3);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+    }
+
+    .policy-action-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 3px;
+      background: var(--accent-2);
+      opacity: .82;
+    }
+
+    .policy-action-card.good { border-color: color-mix(in oklab, var(--ok) 36%, var(--line)); }
+    .policy-action-card.warn { border-color: color-mix(in oklab, var(--warn) 34%, var(--line)); }
+    .policy-action-card.bad { border-color: color-mix(in oklab, var(--danger) 34%, var(--line)); }
+    .policy-action-card.civic { border-color: color-mix(in oklab, var(--accent-2) 38%, var(--line)); }
+    .policy-action-card.institution { border-color: color-mix(in oklab, var(--violet) 34%, var(--line)); }
+
+    .policy-action-card.good::before { background: var(--ok); }
+    .policy-action-card.warn::before { background: var(--warn); }
+    .policy-action-card.bad::before { background: var(--danger); }
+    .policy-action-card.civic::before { background: var(--accent-2); }
+    .policy-action-card.institution::before { background: var(--violet); }
+
+    .policy-action-card header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .policy-action-card h4 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+
+    .policy-action-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .policy-tags {
+      display: grid;
+      gap: 6px;
+      align-content: start;
+    }
+
+    .policy-tag {
+      display: grid;
+      grid-template-columns: 82px 1fr;
+      gap: 8px;
+      align-items: start;
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid rgba(148, 163, 184, .16);
+      border-radius: var(--radius);
+      background: rgba(15, 23, 42, .32);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .policy-tag strong {
+      color: var(--text);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+
+    .policy-action-card button {
+      width: 100%;
+      text-align: center;
+      font-weight: 800;
+    }
+
     .canvas-wrap {
       height: 260px;
       padding: 12px;
@@ -1088,16 +1187,46 @@
       z-index: 30;
       display: grid;
       gap: 8px;
-      max-width: 360px;
+      max-width: 420px;
     }
 
-    .toast div {
+    .toast-message {
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      background: var(--panel);
+      background:
+        linear-gradient(90deg, color-mix(in oklab, var(--accent) 18%, transparent), transparent 36%),
+        var(--panel);
       box-shadow: var(--shadow);
       padding: 12px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: start;
+      gap: 10px;
       animation: slideIn .24s ease both;
+    }
+
+    .toast-message strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 3px;
+    }
+
+    .toast-message span {
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .toast-message.good { border-color: color-mix(in oklab, var(--ok) 55%, transparent); }
+    .toast-message.warn { border-color: color-mix(in oklab, var(--warn) 55%, transparent); }
+    .toast-message.bad { border-color: color-mix(in oklab, var(--danger) 55%, transparent); }
+
+    .toast-close {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
     }
 
     .modal-backdrop {
@@ -1120,6 +1249,10 @@
       background: var(--panel);
       box-shadow: var(--shadow);
     }
+
+    .modal.good { border-color: color-mix(in oklab, var(--ok) 45%, var(--line)); }
+    .modal.warn { border-color: color-mix(in oklab, var(--warn) 45%, var(--line)); }
+    .modal.bad { border-color: color-mix(in oklab, var(--danger) 45%, var(--line)); }
 
     .modal-body {
       padding: 14px;
@@ -1160,6 +1293,75 @@
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       gap: 8px;
+    }
+
+    .offer-card,
+    .war-card,
+    .manual-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-3);
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .offer-card header,
+    .war-card header,
+    .manual-card header {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .war-map {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(90deg, rgba(77,163,255,.2), rgba(33,199,168,.14), rgba(255,92,122,.18));
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .front-meter {
+      height: 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: linear-gradient(90deg, var(--accent) var(--front), color-mix(in oklab, var(--danger) 65%, transparent) var(--front));
+      position: relative;
+      overflow: hidden;
+    }
+
+    .front-meter::after {
+      content: "";
+      position: absolute;
+      top: -3px;
+      bottom: -3px;
+      left: calc(var(--front) - 2px);
+      width: 4px;
+      background: var(--text);
+      box-shadow: 0 0 12px rgba(255,255,255,.45);
+    }
+
+    .crisis-actions,
+    .war-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .guide-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }
+
+    .manual-card ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.55;
     }
 
     .hidden { display: none !important; }
@@ -1261,6 +1463,7 @@
         ["projects", "Нацпроекты", "▦"],
         ["population", "Население", "◌"],
         ["news", "Новости", "▤"],
+        ["guide", "Учебник", "?"],
         ["editor", "Редактор", "✎"],
         ["saves", "Сохранения", "▣"]
       ];
@@ -1306,6 +1509,9 @@
       let saveTimer = null;
       let lastSaveAt = 0;
       let lastStorageWarningAt = 0;
+      let lastInteractionAt = 0;
+      let lastScrollAt = 0;
+      let toastSeq = 0;
       let modal = null;
       let setupDraft = defaultSetupDraft();
 
@@ -1411,13 +1617,19 @@
         return { day: now.getDate(), month: now.getMonth() + 1, year: now.getFullYear() };
       }
 
-      function notify(text) {
+      function notify(text, tone = "info", title = "Уведомление") {
         if (!document.createElement || !toastBox?.appendChild) {
           console.log(text);
           return;
         }
+        const id = "toast_" + (++toastSeq);
         const item = document.createElement("div");
-        item.textContent = text;
+        item.className = `toast-message ${tone}`;
+        item.dataset.toastId = id;
+        item.innerHTML = `
+          <div><strong>${esc(title)}</strong><span>${esc(text)}</span></div>
+          <button class="toast-close" data-action="dismiss-toast" data-toast-id="${id}" title="Закрыть">×</button>
+        `;
         toastBox.appendChild(item);
         setTimeout(() => item.remove(), 3600);
       }
@@ -1438,6 +1650,7 @@
         const historyLimit = level === "tiny" || level === "safe" ? 60 : 180;
         const newsLimit = level === "tiny" || level === "safe" ? 24 : 90;
         copy.news = (copy.news || []).slice(0, newsLimit);
+        if (copy.diplomacy?.inbox) copy.diplomacy.inbox = copy.diplomacy.inbox.slice(0, level === "normal" ? 10 : 4);
         if (copy.history) {
           for (const key of Object.keys(copy.history)) copy.history[key] = (copy.history[key] || []).slice(-historyLimit);
         }
@@ -1530,10 +1743,14 @@
         loaded.news ||= [];
         loaded.history = Object.assign(emptyHistory(), loaded.history || {});
         loaded.diplomacy ||= { countries: createWorldCountries([]), organizations: defaultOrganizations() };
+        loaded.diplomacy.countries = (loaded.diplomacy.countries || createWorldCountries([])).map(applyCountryProfile);
         loaded.diplomacy.organizations ||= defaultOrganizations();
+        loaded.diplomacy.inbox ||= [];
+        loaded.diplomacy.inbox = loaded.diplomacy.inbox.slice(0, 8);
         loaded.tech ||= createTech();
         loaded.population ||= defaultPopulation(14500000);
-        loaded.military ||= defaultMilitary();
+        loaded.military = migrateMilitary(loaded.military);
+        loaded.military.wars = (loaded.military.wars || []).map(normalizeWar);
         loaded.politics ||= defaultPolitics({});
         loaded.economy ||= defaultEconomy();
         loaded.governance = migrateGovernance(loaded.governance);
@@ -1570,6 +1787,29 @@
       function mergeById(base, incoming) {
         const map = new Map((Array.isArray(incoming) ? incoming : []).map(item => [item.id, item]));
         return base.map(item => Object.assign({}, item, map.get(item.id) || {}));
+      }
+
+      function migrateMilitary(value) {
+        const base = defaultMilitary();
+        const m = Object.assign(base, value || {});
+        m.doctrine ||= base.doctrine;
+        m.logistics = num(m.logistics, base.logistics);
+        m.training = num(m.training, base.training);
+        m.recon = num(m.recon, base.recon);
+        m.drones = num(m.drones, base.drones);
+        m.artillery = num(m.artillery, base.artillery);
+        m.armor = num(m.armor, base.armor);
+        m.airSuperiority = num(m.airSuperiority, base.airSuperiority);
+        m.navalPower = num(m.navalPower, base.navalPower);
+        m.medical = num(m.medical, base.medical);
+        m.command = num(m.command, base.command);
+        m.warExhaustion = num(m.warExhaustion, base.warExhaustion);
+        m.veterans = num(m.veterans, base.veterans);
+        m.lastWarOutcome ||= base.lastWarOutcome;
+        m.warTreaties ||= [];
+        m.operations ||= [];
+        m.wars ||= [];
+        return m;
       }
 
       function emptyHistory() {
@@ -1677,6 +1917,21 @@
           budget: 14,
           industry: 55,
           research: 43,
+          doctrine: "маневренная оборона",
+          logistics: 54,
+          training: 58,
+          recon: 50,
+          drones: 32,
+          artillery: 48,
+          armor: 46,
+          airSuperiority: 52,
+          navalPower: 44,
+          medical: 47,
+          command: 55,
+          warExhaustion: 0,
+          veterans: 0,
+          lastWarOutcome: "нет",
+          warTreaties: [],
           operations: [],
           wars: []
         };
@@ -1838,7 +2093,7 @@
 
       function createWorldCountries(neighbors) {
         const neighborSet = new Set((neighbors || []).map(x => x.trim()).filter(Boolean));
-        return worldNames.map((name, i) => ({
+        return worldNames.map((name, i) => applyCountryProfile({
           id: uid("country"),
           name,
           continent: continents[i % continents.length],
@@ -1861,6 +2116,32 @@
           aiMood: pick(["торговый","осторожный","силовой","изоляционный","реформистский"]),
           aid: 0
         }));
+      }
+
+      function applyCountryProfile(country) {
+        const profiles = {
+          "США": { gdp: 28780000, population: 335000000, military: 99, intelligence: 97, stability: 78, trade: 720000, aiMood: "силовой", visa: "строгий" },
+          "Китай": { gdp: 18530000, population: 1410000000, military: 96, intelligence: 92, stability: 82, trade: 910000, aiMood: "силовой", visa: "строгий" },
+          "Россия": { gdp: 2240000, population: 146000000, military: 94, intelligence: 88, stability: 72, trade: 310000, aiMood: "силовой", visa: "обычный" },
+          "Индия": { gdp: 4100000, population: 1430000000, military: 88, intelligence: 76, stability: 68, trade: 260000, aiMood: "реформистский" },
+          "Великобритания": { gdp: 3600000, population: 69000000, military: 82, intelligence: 91, stability: 76, trade: 190000, aiMood: "осторожный" },
+          "Франция": { gdp: 3200000, population: 68000000, military: 83, intelligence: 86, stability: 73, trade: 210000, aiMood: "осторожный" },
+          "Германия": { gdp: 4600000, population: 84000000, military: 74, intelligence: 78, stability: 79, trade: 430000, aiMood: "торговый" },
+          "Япония": { gdp: 4200000, population: 123000000, military: 76, intelligence: 82, stability: 84, trade: 360000, aiMood: "торговый" },
+          "Южная Корея": { gdp: 1800000, population: 52000000, military: 79, intelligence: 80, stability: 78, trade: 220000, aiMood: "реформистский" },
+          "Турция": { gdp: 1150000, population: 86000000, military: 78, intelligence: 74, stability: 62, trade: 140000, aiMood: "силовой" },
+          "Иран": { gdp: 410000, population: 89000000, military: 76, intelligence: 78, stability: 55, trade: 65000, aiMood: "силовой" },
+          "Израиль": { gdp: 550000, population: 9800000, military: 80, intelligence: 92, stability: 70, trade: 85000, aiMood: "силовой" },
+          "Саудовская Аравия": { gdp: 1100000, population: 37000000, military: 72, intelligence: 68, stability: 70, trade: 180000, aiMood: "торговый" },
+          "Бразилия": { gdp: 2300000, population: 216000000, military: 68, intelligence: 62, stability: 60, trade: 170000, aiMood: "торговый" },
+          "Канада": { gdp: 2200000, population: 41000000, military: 62, intelligence: 76, stability: 86, trade: 210000, aiMood: "торговый" },
+          "Австралия": { gdp: 1750000, population: 27000000, military: 66, intelligence: 78, stability: 84, trade: 160000, aiMood: "осторожный" },
+          "Украина": { gdp: 190000, population: 37000000, military: 74, intelligence: 70, stability: 48, trade: 45000, aiMood: "силовой" },
+          "Польша": { gdp: 850000, population: 38000000, military: 70, intelligence: 68, stability: 75, trade: 120000, aiMood: "осторожный" }
+        };
+        const profile = profiles[country.name];
+        if (!profile) return country;
+        return Object.assign(country, profile, { greatPower: profile.military >= 82 || profile.gdp >= 3000000 });
       }
 
       function createGame(config) {
@@ -1902,7 +2183,7 @@
         const economy = defaultEconomy();
         const politics = defaultPolitics({ party: country.president.party, ideology: country.president.ideology, opposition: "Гражданская платформа" });
         const population = defaultPopulation(populationTotal);
-        const diplomacy = { countries: createWorldCountries(country.neighbors), organizations: defaultOrganizations() };
+        const diplomacy = { countries: createWorldCountries(country.neighbors), organizations: defaultOrganizations(), inbox: [] };
         const game = {
           version: 5,
           createdAt: new Date().toISOString(),
@@ -1969,7 +2250,67 @@
 
       function calcArmyPower(game = state) {
         const m = game.military;
-        return (m.land / 10000) + m.air * .13 + m.navy * .42 + m.airDefense * .22 + m.strategic * 1.8 + m.cyber * .8 + m.special / 2600 + m.readiness * .75 + m.morale * .55;
+        const parts = calcArmyComponents(game);
+        return parts.total;
+      }
+
+      function calcArmyComponents(game = state) {
+        const m = game.military;
+        const manpower = Math.log10(Math.max(10000, m.land + m.mobilized * .55 + m.manpower * .12)) * 12;
+        const equipment = m.air * .07 + m.navy * .22 + m.airDefense * .12 + m.strategic * 1.0 + m.special / 5000 + m.artillery * .22 + m.armor * .2 + m.drones * .18;
+        const quality = m.readiness * .32 + m.morale * .22 + m.training * .25 + m.command * .27 + m.contractShare * .08 + m.veterans * .14;
+        const support = m.logistics * .32 + m.recon * .23 + m.cyber * .2 + m.airSuperiority * .18 + m.navalPower * .09 + m.medical * .12;
+        const industry = m.industry * .16 + m.research * .08 + game.economy.spending.defense * .18;
+        const exhaustion = m.warExhaustion * .55 + game.military.wars.length * 5;
+        const total = clamp(manpower + equipment + quality + support + industry - exhaustion, 40, 420);
+        return { manpower, equipment, quality, support, industry, exhaustion, total };
+      }
+
+      function calcEnemyWarPower(country, war = null, game = state) {
+        if (!country) return 120;
+        const economicDepth = Math.sqrt(Math.max(1000, country.gdp)) / 10;
+        const populationDepth = Math.sqrt(Math.max(200000, country.population)) / 120;
+        const force = country.military * 3.05;
+        const intel = country.intelligence * .55;
+        const stability = country.stability * .32;
+        const greatPowerBonus = country.greatPower ? 95 : country.gdp > 1200000 ? 35 : 0;
+        const homelandBonus = country.population > 100000000 ? 32 : country.population > 50000000 ? 16 : 0;
+        const alliancePenalty = country.alliance ? -18 : 0;
+        const sanctionsPenalty = country.sanctions || country.embargo ? 28 : 0;
+        const fatiguePenalty = war ? war.fatigue * .32 + Math.max(0, war.control - 55) * .25 : 0;
+        return clamp(force + economicDepth + populationDepth + intel + stability + greatPowerBonus + homelandBonus + alliancePenalty - sanctionsPenalty - fatiguePenalty, 35, 1200);
+      }
+
+      function calcWarBalance(game, rawWar) {
+        const war = normalizeWar(rawWar);
+        const enemy = game.diplomacy.countries.find(x => x.id === war.enemyId || x.name === war.enemy);
+        const own = calcArmyComponents(game);
+        const enemyPower = calcEnemyWarPower(enemy, war, game);
+        const ownOperational = own.total + war.supply * .6 + game.military.recon * .32 + game.military.command * .36 + game.military.drones * .2 + game.military.airSuperiority * .22 - war.fatigue * .42 - game.military.warExhaustion * .36;
+        const enemyOperational = enemyPower + war.intensity * .52 + Math.max(0, 50 - war.control) * .24;
+        const balance = ownOperational - enemyOperational;
+        const initiative = clamp(50 + balance * .23 + (war.control - 50) * .22 + rnd(-2.5, 2.5), 0, 100);
+        const status = initiative >= 62 ? "инициатива у нас" : initiative <= 38 ? "инициатива у противника" : "равновесие фронта";
+        return { ownPower: own.total, enemyPower, ownOperational, enemyOperational, balance, initiative, status, enemy };
+      }
+
+      function calcPreWarAssessment(country, game = state) {
+        const own = calcArmyComponents(game);
+        const enemyPower = calcEnemyWarPower(country, null, game);
+        const ratio = own.total / Math.max(1, enemyPower);
+        const initiative = clamp(50 + (own.total - enemyPower) * .075 + game.military.recon * .05 + game.military.logistics * .04 - (country?.intelligence || 50) * .035, 1, 99);
+        const victoryChance = clamp(8 + ratio * 42 + (game.military.readiness - 55) * .18 + (game.military.morale - 55) * .12 - (country?.stability || 50) * .08, 3, 92);
+        const risk = ratio >= 1.25 ? "advantage" : ratio >= .82 ? "parity" : ratio >= .48 ? "danger" : "catastrophic";
+        const label = risk === "advantage" ? "перевес у нас"
+          : risk === "parity" ? "примерный паритет"
+          : risk === "danger" ? "перевес противника"
+          : "критическое превосходство противника";
+        const tone = risk === "advantage" ? "good" : risk === "parity" ? "warn" : "bad";
+        return { ownPower: own.total, enemyPower, ratio, initiative, victoryChance, risk, label, tone };
+      }
+
+      function powerIndex(value) {
+        return Math.round(value).toLocaleString("ru-RU");
       }
 
       function totalBuildings(key, game = state) {
@@ -2063,7 +2404,17 @@
         document.addEventListener("input", onInput);
         document.addEventListener("change", onChange);
         document.addEventListener("submit", onSubmit);
-        document.addEventListener("focusout", () => setTimeout(() => scheduleRender({ force: true }), 80));
+        document.addEventListener("pointermove", markInteraction, { passive: true });
+        document.addEventListener("pointerdown", markInteraction, true);
+        document.addEventListener("scroll", markScroll, true);
+        document.addEventListener("focusout", () => setTimeout(() => scheduleRender({ force: true, preserveScroll: true }), 80));
+        document.addEventListener("keydown", event => {
+          markInteraction();
+          if (event.key === "Escape" && modal) {
+            modal = null;
+            render({ force: true, preserveScroll: true });
+          }
+        });
         importFile.addEventListener("change", importSaveFile);
       }
 
@@ -2073,8 +2424,17 @@
           if (!state || !state.speed) return;
           for (let i = 0; i < state.speed; i++) tickDay(state);
           queueSave(5000);
-          scheduleRender();
+          scheduleRender({ passive: true });
         }, DAY_MS);
+      }
+
+      function markInteraction() {
+        lastInteractionAt = Date.now();
+      }
+
+      function markScroll() {
+        lastScrollAt = Date.now();
+        markInteraction();
       }
 
       function isEditingControl() {
@@ -2084,26 +2444,85 @@
 
       function scheduleRender(options = {}) {
         if (pendingRender) return;
-        if (!options.force && isEditingControl()) {
+        if (!options.force && shouldHoldRender()) {
           clearTimeout(deferredRenderTimer);
-          deferredRenderTimer = setTimeout(() => scheduleRender(), 350);
+          if (!modal) deferredRenderTimer = setTimeout(() => scheduleRender(options), renderIdleDelay());
           return;
         }
         pendingRender = true;
         requestAnimationFrame(() => {
           pendingRender = false;
-          render();
+          render({ preserveScroll: options.preserveScroll !== false && !options.resetScroll, resetScroll: options.resetScroll });
         });
       }
 
-      function render() {
+      function shouldHoldRender() {
+        if (!state) return false;
+        if (modal) return true;
+        if (isEditingControl()) return true;
+        const now = Date.now();
+        if (now - lastScrollAt < 1300) return true;
+        if (now - lastInteractionAt < 650 && hasHoveredInteractive()) return true;
+        return hasHoveredInteractive();
+      }
+
+      function hasHoveredInteractive() {
+        try {
+          return !!document.querySelector("button:hover, input:hover, textarea:hover, select:hover, [data-action]:hover, [data-tab]:hover, .modal:hover, .scroll:hover, .news-feed:hover");
+        } catch {
+          return false;
+        }
+      }
+
+      function renderIdleDelay() {
+        const now = Date.now();
+        const waitScroll = Math.max(0, 1300 - (now - lastScrollAt));
+        const waitInput = isEditingControl() ? 800 : 0;
+        const waitHover = hasHoveredInteractive() ? 650 : 0;
+        return Math.max(250, waitScroll, waitInput, waitHover);
+      }
+
+      function captureScrollState() {
+        const scrollables = Array.from(document.querySelectorAll(".nav, .scroll, .news-feed, textarea"));
+        return {
+          x: window.scrollX || 0,
+          y: window.scrollY || 0,
+          nodes: scrollables.map((el, index) => ({
+            key: el.id || el.dataset.scrollKey || `${el.tagName || "node"}:${el.className || ""}:${index}`,
+            top: el.scrollTop || 0,
+            left: el.scrollLeft || 0
+          }))
+        };
+      }
+
+      function restoreScrollState(saved) {
+        if (!saved) return;
+        requestAnimationFrame(() => {
+          window.scrollTo?.(saved.x, saved.y);
+          const map = new Map(saved.nodes.map(item => [item.key, item]));
+          Array.from(document.querySelectorAll(".nav, .scroll, .news-feed, textarea")).forEach((el, index) => {
+            const key = el.id || el.dataset.scrollKey || `${el.tagName || "node"}:${el.className || ""}:${index}`;
+            const item = map.get(key);
+            if (item) {
+              el.scrollTop = item.top;
+              el.scrollLeft = item.left;
+            }
+          });
+        });
+      }
+
+      function render(options = {}) {
+        const scrollState = options.preserveScroll && state ? captureScrollState() : null;
         document.body.classList.toggle("light", state?.theme === "light");
         if (!state) {
           app.innerHTML = renderSetup();
+          if (options.resetScroll) requestAnimationFrame(() => window.scrollTo?.(0, 0));
           return;
         }
         app.innerHTML = renderGame();
         renderCharts();
+        if (options.resetScroll) requestAnimationFrame(() => window.scrollTo?.(0, 0));
+        else restoreScrollState(scrollState);
       }
 
       function renderSetup() {
@@ -2280,6 +2699,7 @@
         if (activeTab === "projects") return renderProjects();
         if (activeTab === "population") return renderPopulation();
         if (activeTab === "news") return renderNews();
+        if (activeTab === "guide") return renderGuide();
         if (activeTab === "editor") return renderEditor();
         if (activeTab === "saves") return renderSaves();
         return renderDashboard();
@@ -2409,6 +2829,14 @@
               ${metric("Медиа-доверие", pct(g.media.trust, 0), `Поляризация ${pct(g.media.polarization, 0)}`, g.media.trust > 50 ? "good" : "warn")}
               ${metric("Разведконтур", pct(g.intelligence.counterIntel, 0), `Киберугроза ${pct(g.intelligence.cyberThreat, 0)}`, g.intelligence.cyberThreat < 40 ? "good" : "bad")}
             </div>
+            <section class="panel pad">
+              <h3 class="section-title">Кризисный штаб</h3>
+              <div class="signal-grid" style="margin-top: 12px;">
+                <article class="signal-card"><header><strong>Почему растет риск</strong><span class="pill">${pct(risk,0)}</span></header><p class="subtle" style="margin:0;">Инфляция, протесты, коррупция, войны, киберугрозы и слабые госуслуги поднимают национальный риск.</p></article>
+                <article class="signal-card"><header><strong>Почему кризис гаснет</strong><span class="pill">${pct(score,0)}</span></header><p class="subtle" style="margin:0;">Управляемость, финансирование, коммуникация, безопасность и региональная помощь снижают severity кризиса.</p></article>
+                <article class="signal-card"><header><strong>Порог закрытия</strong><span class="pill">8%</span></header><p class="subtle" style="margin:0;">Когда severity падает ниже 8%, кризис считается почти решенным и уходит из оперативной сводки.</p></article>
+              </div>
+            </section>
             <div class="grid split">
               <section class="panel pad">
                 <h3 class="section-title">Повестка общества</h3>
@@ -2525,6 +2953,12 @@
             <header><strong>${esc(crisis.title)}</strong><span class="pill">${pct(crisis.severity,0)}</span></header>
             <p class="subtle" style="margin:0;">${esc(crisis.desc)} · ${esc(crisis.region)} · ${crisis.days} дн.</p>
             <div class="progress"><i style="--w:${clamp(crisis.severity,0,100)}%"></i></div>
+            <div class="crisis-actions">
+              <button data-action="crisis-action" data-crisis="${crisis.id}" data-mode="funding">Финансировать</button>
+              <button data-action="crisis-action" data-crisis="${crisis.id}" data-mode="communication">Коммуникация</button>
+              <button data-action="crisis-action" data-crisis="${crisis.id}" data-mode="security">Штаб безопасности</button>
+              <button data-action="crisis-action" data-crisis="${crisis.id}" data-mode="regional">Помощь региону</button>
+            </div>
           </article>
         `;
       }
@@ -2745,6 +3179,7 @@
 
       function renderPolitics() {
         const p = state.politics;
+        const actionIds = ["law", "decree", "referendum", "election", "amend", "coalition", "address", "hearings", "judicial", "cabinet", "confidence", "budgetDeal", "oppositionDialogue", "civilService", "partyMobilize"];
         return `
           <section class="grid">
             <div class="metric-grid">
@@ -2760,6 +3195,23 @@
                 <div class="signal-card"><strong>Коалиция</strong><p class="subtle" style="margin:0;">Это способность проводить законы через парламент. Для реформ, референдумов и досрочных выборов важны рейтинг и поддержка коалиции.</p></div>
                 <div class="signal-card"><strong>Коррупция и лоббизм</strong><p class="subtle" style="margin:0;">Съедают доверие, повышают протесты и риски проектов. Аудит, ИИ-администрирование и сильный суд постепенно снижают давление.</p></div>
                 <div class="signal-card"><strong>Улица</strong><p class="subtle" style="margin:0;">Протесты и забастовки растут при бедности, инфляции и безработице. Силовой ответ может снизить преступность, но ухудшить доверие.</p></div>
+              </div>
+            </section>
+            <section class="panel pad">
+              <h3 class="section-title">Что улучшать сейчас</h3>
+              <div class="signal-grid" style="margin-top: 12px;">
+                ${politicalAdviceCards().join("")}
+              </div>
+            </section>
+            <section class="panel pad">
+              <h3 class="section-title">Законодательные пакеты</h3>
+              <div class="signal-grid" style="margin-top: 12px;">
+                ${lawPackageCard("economy", "Промышленный рост", "Инвестиции, закупки и льготы для производств. Улучшает рост и занятость, стоит бюджету.")}
+                ${lawPackageCard("anticorruption", "Чистые закупки", "Аудит контрактов, открытые реестры, защита суда. Снижает коррупцию, раздражает элиты.")}
+                ${lawPackageCard("social", "Доходы граждан", "Индексация пенсий, адресная помощь, рынок труда. Снижает протесты, увеличивает расходы.")}
+                ${lawPackageCard("security", "Безопасность и полиция", "Контртеррор, киберзащита, защита инфраструктуры. Снижает риски, может повысить напряжение.")}
+                ${lawPackageCard("regions", "Региональный баланс", "Субсидии регионам, полномочия губернаторов, инфраструктурные KPI. Повышает лояльность регионов.")}
+                ${lawPackageCard("freedoms", "Права и медиа", "Судебные гарантии, свобода прессы, парламентский контроль. Повышает доверие, сложнее для коалиции.")}
               </div>
             </section>
             <div class="grid two">
@@ -2778,16 +3230,9 @@
               </section>
               <section class="panel pad">
                 <h3 class="section-title">Законы, выборы и кризисы</h3>
-                <div class="actions" style="margin-top: 12px;">
-                  <button data-action="politics-action" data-politics="law">Внести закон</button>
-                  <button data-action="politics-action" data-politics="decree">Подписать указ</button>
-                  <button data-action="politics-action" data-politics="referendum">Референдум</button>
-                  <button data-action="politics-action" data-politics="election">Досрочные выборы</button>
-                  <button data-action="politics-action" data-politics="amend">Поправка к Конституции</button>
-                  <button data-action="politics-action" data-politics="coalition">Собрать коалицию</button>
-                  <button data-action="politics-action" data-politics="address">Обращение к нации</button>
-                  <button data-action="politics-action" data-politics="hearings">Парламентские слушания</button>
-                  <button data-action="politics-action" data-politics="judicial">Судебная реформа</button>
+                <p class="subtle" style="margin: 8px 0 0;">Каждое действие меняет политический баланс: коалицию, рейтинг, улицу, коррупцию или устойчивость кабинета. Смотрите строку "Сейчас" перед решением: она показывает, насколько инструмент уместен в текущей ситуации.</p>
+                <div class="policy-action-grid" style="margin-top: 12px;">
+                  ${actionIds.map(politicsActionCard).join("")}
                 </div>
                 <h3 class="section-title" style="margin-top: 16px;">Партийная система</h3>
                 <div class="scroll" style="max-height: 300px; margin-top: 8px;">
@@ -2804,9 +3249,246 @@
         `;
       }
 
+      function politicalAdviceCards() {
+        const p = state.politics, e = state.economy, pop = state.population;
+        const items = [];
+        if (e.inflation > 7) items.push(["Инфляция", "Снижайте ценовое давление: бюджетная дисциплина, ставка, адресная помощь вместо широкой эмиссии.", "warn"]);
+        if (p.corruption > 38) items.push(["Коррупция", "Запускайте чистые закупки, аудит министерств и судебную реформу.", "bad"]);
+        if (p.coalition < 50) items.push(["Коалиция", "Перед крупными законами соберите коалицию или проведите слушания.", "warn"]);
+        if (p.protests > 25 || pop.discontent > 35) items.push(["Улица", "Снижайте протесты социальным пакетом, коммуникацией и адресной региональной помощью.", "bad"]);
+        if (p.popularity < 45) items.push(["Рейтинг", "Нужны быстрые понятные победы: обращение к нации, антикризисный штаб, стабилизация цен.", "warn"]);
+        if (!items.length) items.push(["Стабильность", "Окно возможностей: можно проводить структурные реформы без высокого риска улицы.", "good"]);
+        return items.slice(0, 4).map(([title, text, tone]) => `<article class="signal-card"><header><strong>${esc(title)}</strong><span class="pill">${tone === "good" ? "окно" : tone === "bad" ? "срочно" : "важно"}</span></header><p class="subtle" style="margin:0;">${esc(text)}</p></article>`);
+      }
+
+      function lawPackageCard(kind, title, desc) {
+        const p = state.politics;
+        const chance = calcLawChance(kind);
+        return `
+          <article class="signal-card">
+            <header><strong>${esc(title)}</strong><span class="pill">${pct(chance,0)} шанс</span></header>
+            <p class="subtle" style="margin:0;">${esc(desc)}</p>
+            <div class="progress"><i style="--w:${chance}%"></i></div>
+            <small class="subtle">Коалиция ${pct(p.coalition,0)} · рейтинг ${pct(p.popularity,0)} · лоббизм ${pct(p.lobbyism,0)}</small>
+            <button data-action="law-package" data-law="${kind}">Внести пакет</button>
+          </article>
+        `;
+      }
+
+      function politicsActionCard(id) {
+        const meta = politicsActionMeta(id);
+        return `
+          <article class="policy-action-card ${esc(meta.tone)}">
+            <header>
+              <h4>${esc(meta.title)}</h4>
+              <span class="pill">${esc(meta.category)}</span>
+            </header>
+            <p>${esc(meta.desc)}</p>
+            <div class="policy-tags">
+              <div class="policy-tag"><strong>Сейчас</strong><span>${esc(politicsActionSignal(id))}</span></div>
+              <div class="policy-tag"><strong>Когда</strong><span>${esc(meta.when)}</span></div>
+              <div class="policy-tag"><strong>Эффект</strong><span>${esc(meta.effect)}</span></div>
+              <div class="policy-tag"><strong>Риск</strong><span>${esc(meta.risk)}</span></div>
+            </div>
+            <button data-action="politics-action" data-politics="${esc(id)}">${esc(meta.cta)}</button>
+          </article>
+        `;
+      }
+
+      function politicsActionMeta(id) {
+        const data = {
+          law: {
+            title: "Внести закон",
+            category: "закон",
+            tone: "civic",
+            desc: "Быстрый законопроект из текущей повестки. Для точного выбора темы используйте блок законодательных пакетов выше.",
+            when: "Когда нужен парламентский эффект без ручного подбора пакета.",
+            effect: "Запускает один из законов: экономика, социальный пакет, безопасность, регионы, права или антикоррупция.",
+            risk: "Провал голосования бьет по рейтингу и усиливает оппозицию.",
+            cta: "Внести закон"
+          },
+          decree: {
+            title: "Подписать указ",
+            category: "срочно",
+            tone: "warn",
+            desc: "Исполнительное решение без долгого парламентского цикла. Хорошо для точечных кризисов и быстрых сигналов рынку.",
+            when: "Когда нужно быстро показать управляемость, а ждать голосования опасно.",
+            effect: "Немного повышает рейтинг и добавляет запись в указы президента.",
+            risk: "Оппозиция получает повод говорить об обходе парламента.",
+            cta: "Подписать указ"
+          },
+          referendum: {
+            title: "Референдум",
+            category: "народный мандат",
+            tone: "bad",
+            desc: "Общенациональное голосование по крупной реформе. Победа дает сильный мандат, поражение превращается в политический кризис.",
+            when: "Когда рейтинг выше 50% и нужна поддержка общества против сопротивления элит.",
+            effect: "При победе растут рейтинг и коалиция; появляется окно для сложных реформ.",
+            risk: "Есть пауза 365 дней. При поражении падают рейтинг и парламентская поддержка.",
+            cta: "Назначить референдум"
+          },
+          election: {
+            title: "Досрочные выборы",
+            category: "перезапуск",
+            tone: "bad",
+            desc: "Попытка обновить мандат власти и расклад в парламенте. Это мощный, но опасный инструмент.",
+            when: "Когда рейтинг, экономика и коалиция сильнее оппозиции.",
+            effect: "Может резко укрепить парламентскую базу и снизить давление оппозиции.",
+            risk: "При слабом рейтинге власть теряет места, а риск импичмента растет.",
+            cta: "Запустить выборы"
+          },
+          amend: {
+            title: "Поправка к Конституции",
+            category: "конституция",
+            tone: "institution",
+            desc: "Глубокое изменение правил системы: права, суд, баланс полномочий и сроки власти.",
+            when: "Когда коалиция крепкая, улица спокойна, а государству нужны долгие институциональные изменения.",
+            effect: "Меняет права и независимость суда, создавая основу для реформ.",
+            risk: "Часть коалиции сопротивляется, а спорная поправка может расколоть общество.",
+            cta: "Внести поправку"
+          },
+          coalition: {
+            title: "Собрать коалицию",
+            category: "парламент",
+            tone: "good",
+            desc: "Переговоры с партиями и фракциями ради большинства. Это главный инструмент перед законами и вотумами.",
+            when: "Когда коалиция ниже 50% или впереди сложное голосование.",
+            effect: "Повышает поддержку правительства в парламенте и немного рейтинг.",
+            risk: "Растет лоббизм: союзники требуют уступок, комитетов и бюджетных поправок.",
+            cta: "Собрать коалицию"
+          },
+          address: {
+            title: "Обращение к нации",
+            category: "коммуникация",
+            tone: "good",
+            desc: "Публичное объяснение курса правительства. Работает как политическая стабилизация перед реформами.",
+            when: "Когда рейтинг проседает, СМИ сомневаются или население не понимает реформу.",
+            effect: "Повышает рейтинг, снижает оппозиционное давление и укрепляет доверие к медиа.",
+            risk: "Без реальных дел эффект быстро растворится в следующих кризисах.",
+            cta: "Выступить"
+          },
+          hearings: {
+            title: "Парламентские слушания",
+            category: "контроль",
+            tone: "civic",
+            desc: "Публичный разбор министерств, расходов и спорных решений. Помогает вернуть доверие к процедурам.",
+            when: "Когда коррупция растет, закон буксует или обществу нужен прозрачный ответ.",
+            effect: "Немного укрепляет коалицию, снижает коррупцию и показывает парламентский контроль.",
+            risk: "Требует времени и бюджета; слабые министры могут выглядеть еще хуже.",
+            cta: "Провести слушания"
+          },
+          judicial: {
+            title: "Судебная реформа",
+            category: "институты",
+            tone: "institution",
+            desc: "Усиление независимости суда, защиты контрактов и контроля над силовыми решениями.",
+            when: "Когда коррупция, лоббизм или недоверие к институтам мешают экономике и реформам.",
+            effect: "Снижает коррупцию и лоббизм, повышает качество правового государства.",
+            risk: "Элиты и часть коалиции сопротивляются потере неформального влияния.",
+            cta: "Начать реформу"
+          },
+          cabinet: {
+            title: "Переформатировать кабинет",
+            category: "кадры",
+            tone: "warn",
+            desc: "Замена слабых министров и перенастройка правительства. Полезно, когда ведомства не тянут кризисы.",
+            when: "Когда компетентность министров низкая или реформы застревают в исполнении.",
+            effect: "Улучшает компетентность слабых министерств и немного рейтинг.",
+            risk: "Кадровые перестановки раздражают фракции и стоят бюджету.",
+            cta: "Обновить кабинет"
+          },
+          confidence: {
+            title: "Вотум доверия",
+            category: "мандат",
+            tone: "bad",
+            desc: "Проверка поддержки правительства парламентом. Победа открывает окно реформ, поражение может запустить кризис власти.",
+            when: "Когда коалиция и рейтинг сильны, а нужно сбить разговоры об импичменте.",
+            effect: "При успехе укрепляет коалицию и снижает риск импичмента.",
+            risk: "При провале резко падает доверие и оппозиция требует досрочных выборов.",
+            cta: "Поставить вопрос"
+          },
+          budgetDeal: {
+            title: "Бюджетный компромисс",
+            category: "бюджет",
+            tone: "warn",
+            desc: "Сделка с фракциями через региональные, отраслевые и социальные поправки к бюджету.",
+            when: "Когда срочно нужны голоса для закона или стабилизации правительства.",
+            effect: "Укрепляет коалицию, добавляет инвестиции и немного снижает протесты.",
+            risk: "Стоит денег и увеличивает лоббизм: уступки придется обслуживать.",
+            cta: "Заключить сделку"
+          },
+          oppositionDialogue: {
+            title: "Диалог с оппозицией",
+            category: "деэскалация",
+            tone: "good",
+            desc: "Площадка переговоров с оппозицией и гражданскими группами без капитуляции курса.",
+            when: "Когда протесты и оппозиция растут быстрее, чем рейтинг власти.",
+            effect: "Снижает протесты и оппозиционное давление, повышает доверие к медиа.",
+            risk: "Жесткое ядро коалиции может считать диалог слабостью.",
+            cta: "Открыть диалог"
+          },
+          civilService: {
+            title: "Реформа госслужбы",
+            category: "администрация",
+            tone: "institution",
+            desc: "Конкурсные назначения, KPI ведомств и цифровой контроль исполнения решений.",
+            when: "Когда госуслуги проседают, коррупция высока или кризисы повторяются из-за слабого исполнения.",
+            effect: "Снижает коррупцию и нагрузку служб, повышает качество госуслуг.",
+            risk: "Дает не мгновенный эффект и требует бюджетной поддержки.",
+            cta: "Реформировать"
+          },
+          partyMobilize: {
+            title: "Мобилизация партии",
+            category: "партия",
+            tone: "civic",
+            desc: "Работа региональных штабов, сторонников и парламентских спикеров в поддержку курса.",
+            when: "Перед выборами, сложным законом или падением поддержки ядра.",
+            effect: "Поднимает рейтинг, коалицию и поддержку ведущей партии.",
+            risk: "Оппозиция отвечает контркампанией, поэтому напряжение слегка растет.",
+            cta: "Мобилизовать"
+          }
+        };
+        return data[id] || data.law;
+      }
+
+      function politicsActionSignal(id) {
+        const p = state.politics;
+        const e = state.economy;
+        const firstParty = p.parties && p.parties[0];
+        if (id === "law") {
+          const kinds = ["economy", "anticorruption", "social", "security", "regions", "freedoms"];
+          const avgChance = kinds.reduce((sum, kind) => sum + calcLawChance(kind), 0) / kinds.length;
+          return `средний шанс пакетов ${pct(avgChance, 0)}, коалиция ${pct(p.coalition, 0)}`;
+        }
+        if (id === "decree") return `рейтинг ${pct(p.popularity, 0)}, оппозиция ${pct(p.opposition, 0)}`;
+        if (id === "referendum") return p.referendumCooldown > 0 ? `пауза еще ${Math.round(p.referendumCooldown)} дн., рейтинг ${pct(p.popularity, 0)}` : `можно назначить, рейтинг ${pct(p.popularity, 0)}`;
+        if (id === "election") return `рейтинг ${pct(p.popularity, 0)}, коалиция ${pct(p.coalition, 0)}, оппозиция ${pct(p.opposition, 0)}`;
+        if (id === "amend") return `суд ${pct(p.constitution.courtIndependence, 0)}, права ${pct(p.constitution.rights, 0)}`;
+        if (id === "coalition") return `коалиция ${pct(p.coalition, 0)}, лоббизм ${pct(p.lobbyism, 0)}`;
+        if (id === "address") return `рейтинг ${pct(p.popularity, 0)}, доверие СМИ ${pct(state.governance.media.trust, 0)}`;
+        if (id === "hearings") return `коррупция ${pct(p.corruption, 0)}, коалиция ${pct(p.coalition, 0)}`;
+        if (id === "judicial") return `суд ${pct(p.constitution.courtIndependence, 0)}, коррупция ${pct(p.corruption, 0)}`;
+        if (id === "cabinet") return `средняя компетентность министров ${pct(avg(p.ministers, "skill"), 0)}`;
+        if (id === "confidence") return `коалиция ${pct(p.coalition, 0)}, риск импичмента ${pct(p.impeachmentRisk, 0)}`;
+        if (id === "budgetDeal") return `бюджет ${money(e.budget)}, коалиция ${pct(p.coalition, 0)}`;
+        if (id === "oppositionDialogue") return `оппозиция ${pct(p.opposition, 0)}, протесты ${pct(p.protests, 0)}`;
+        if (id === "civilService") return `качество услуг ${pct(calcServiceScore(), 0)}, коррупция ${pct(p.corruption, 0)}`;
+        if (id === "partyMobilize") return `${firstParty ? firstParty.name + " " + pct(firstParty.support, 0) : "партия власти"}, рейтинг ${pct(p.popularity, 0)}`;
+        return "данные обновляются после каждого политического решения";
+      }
+
+      function calcLawChance(kind) {
+        const p = state.politics;
+        const base = p.coalition * .58 + p.popularity * .22 - p.lobbyism * .12 - p.protests * .1;
+        const modifier = ({ economy: 4, anticorruption: -3, social: 6, security: 2, regions: 1, freedoms: -6 })[kind] || 0;
+        return clamp(base + modifier, 12, 92);
+      }
+
       function renderDiplomacy() {
         const list = state.diplomacy.countries;
         const selected = list.find(c => c.id === selectedCountryId) || list[0];
+        const inbox = state.diplomacy.inbox || [];
+        const assessment = selected ? calcPreWarAssessment(selected) : null;
         return `
           <section class="grid split">
             <section class="panel">
@@ -2835,6 +3517,12 @@
                   <div class="kpi"><span>Разведка</span><strong>${pct(selected.intelligence,0)}</strong></div>
                   <div class="kpi"><span>Визовый режим</span><strong>${esc(selected.visa)}</strong></div>
                 </div>
+                <div class="decision-grid" style="margin-top: 12px;">
+                  <div class="kpi"><span>Наша военная мощь</span><strong>${powerIndex(assessment.ownPower)}</strong></div>
+                  <div class="kpi"><span>Мощь противника</span><strong>${powerIndex(assessment.enemyPower)}</strong></div>
+                  <div class="kpi"><span>Соотношение</span><strong class="delta ${assessment.tone}">${assessment.ratio.toFixed(2)} : 1</strong></div>
+                  <div class="kpi"><span>Прогноз</span><strong class="delta ${assessment.tone}">${esc(assessment.label)}</strong></div>
+                </div>
                 <div class="actions" style="margin-top: 12px;">
                   <button data-action="diplo" data-diplo="relations">Переговоры</button>
                   <button data-action="diplo" data-diplo="trade">Торговый контракт</button>
@@ -2849,6 +3537,15 @@
                   <button data-action="diplo" data-diplo="peace">Перемирие</button>
                 </div>
               </section>` : ""}
+              <section class="panel pad">
+                <div class="panel-head">
+                  <h3>Инициативы других стран</h3>
+                  <button data-action="foreign-pulse">Сводка МИД</button>
+                </div>
+                <div class="list" style="margin-top: 12px;">
+                  ${inbox.length ? inbox.map(renderForeignOffer).join("") : `<div class="row"><span>Новых инициатив нет</span><span class="pill">ожидание</span></div>`}
+                </div>
+              </section>
               <section class="panel pad">
                 <h3 class="section-title">Международные организации</h3>
                 <div class="list" style="margin-top: 12px;">
@@ -2865,6 +3562,22 @@
         `;
       }
 
+      function renderForeignOffer(offer) {
+        return `
+          <article class="offer-card">
+            <header>
+              <strong>${esc(offer.title)}</strong>
+              <span class="pill">${esc(offer.countryName)} · ${offer.daysLeft} дн.</span>
+            </header>
+            <p class="subtle" style="margin:0;">${esc(offer.text)}</p>
+            <div class="actions">
+              <button data-action="foreign-offer" data-offer="${offer.id}" data-choice="accept">Принять</button>
+              <button data-action="foreign-offer" data-offer="${offer.id}" data-choice="decline">Отклонить</button>
+            </div>
+          </article>
+        `;
+      }
+
       function countryStatus(c) {
         const bits = [];
         if (c.war) bits.push("война");
@@ -2873,6 +3586,56 @@
         if (c.embargo) bits.push("эмбарго");
         if (!bits.length) bits.push(c.embassy ? "посольство" : "нет посольства");
         return bits.map(b => `<span class="pill">${b}</span>`).join(" ");
+      }
+
+      function createWar(country, initiator = "player", game = state) {
+        const fronts = ["северное направление", "приграничный коридор", "горный участок", "южный фронт", "воздушно-морская зона"];
+        const assessment = calcPreWarAssessment(country, game);
+        const controlBase = initiator === "foreign" ? 44 : 52;
+        const initialControl = clamp(controlBase + (assessment.ratio - 1) * 18 + rnd(-3, 3), 8, 72);
+        const initialInitiative = clamp(assessment.initiative + (initiator === "foreign" ? -8 : 0) + rnd(-4, 4), 1, 99);
+        return normalizeWar({
+          id: uid("war"),
+          enemy: country.name,
+          enemyId: country.id,
+          intensity: Math.round(rnd(32, 72)),
+          fatigue: 0,
+          control: Math.round(initialControl),
+          supply: Math.round(rnd(58, 74)),
+          front: pick(fronts),
+          phase: initialInitiative >= 55 ? "инициатива" : initialInitiative <= 35 ? "кризис обороны" : initiator === "foreign" ? "оборона" : "маневренная фаза",
+          goal: initiator === "foreign" ? "сдерживание угрозы" : pick(["принуждение к переговорам", "демилитаризация угрозы", "защита союзника", "контроль спорного коридора"]),
+          initiative: Math.round(initialInitiative),
+          warScore: 0,
+          civilianPressure: 0,
+          peaceTerms: [],
+          days: 0,
+          ourLosses: 0,
+          enemyLosses: 0
+        });
+      }
+
+      function normalizeWar(w) {
+        const war = w || {};
+        return {
+          id: war.id || uid("war"),
+          enemy: war.enemy || "неизвестный противник",
+          enemyId: war.enemyId || "",
+          intensity: clamp(num(war.intensity, 45), 0, 100),
+          fatigue: clamp(num(war.fatigue, 0), 0, 100),
+          control: clamp(num(war.control, 50), 0, 100),
+          supply: clamp(num(war.supply, 62), 0, 100),
+          front: war.front || "основное направление",
+          phase: war.phase || "маневренная фаза",
+          goal: war.goal || "политическое урегулирование",
+          initiative: clamp(num(war.initiative, 50), 0, 100),
+          warScore: clamp(num(war.warScore, 0), -100, 100),
+          civilianPressure: clamp(num(war.civilianPressure, 0), 0, 100),
+          peaceTerms: Array.isArray(war.peaceTerms) ? war.peaceTerms : [],
+          days: Math.max(0, Math.round(num(war.days, 0))),
+          ourLosses: Math.max(0, Math.round(num(war.ourLosses, 0))),
+          enemyLosses: Math.max(0, Math.round(num(war.enemyLosses, 0)))
+        };
       }
 
       function renderMilitary() {
@@ -2884,6 +3647,8 @@
               ${metric("Сухопутные войска", compact(m.land), `Мобрезерв ${compact(m.manpower)}`, "good")}
               ${metric("Авиация / флот", `${m.air} / ${m.navy}`, `ПВО ${m.airDefense}`, "good")}
               ${metric("Кибер и РВСН", `${pct(m.cyber,0)} / ${m.strategic}`, `Спецназ ${compact(m.special)}`, "warn")}
+              ${metric("Активные войны", m.wars.length, `Потери ${compact(m.wars.reduce((s, w) => s + (w.ourLosses || 0), 0))}`, m.wars.length ? "bad" : "good")}
+              ${metric("Качество армии", pct((m.training + m.logistics + m.command + m.recon) / 4,0), `Усталость ${pct(m.warExhaustion,0)}`, m.warExhaustion < 35 ? "good" : "warn")}
             </div>
             <div class="grid two">
               <section class="panel pad">
@@ -2895,6 +3660,10 @@
                   ${rangeInput("industry", "Военная промышленность", m.industry, 0, 100, "military")}
                   ${rangeInput("research", "Разработка техники", m.research, 0, 100, "military")}
                   ${rangeInput("contractShare", "Контрактная армия", m.contractShare, 0, 100, "military")}
+                  ${rangeInput("training", "Подготовка войск", m.training, 0, 100, "military")}
+                  ${rangeInput("logistics", "Логистика армии", m.logistics, 0, 100, "military")}
+                  ${rangeInput("command", "Командование и штаб", m.command, 0, 100, "military")}
+                  ${rangeInput("recon", "Разведка и целеуказание", m.recon, 0, 100, "military")}
                 </div>
                 <div class="actions" style="margin-top: 12px;">
                   <button data-action="military-action" data-military="mobilize">Мобилизация</button>
@@ -2906,14 +3675,79 @@
                 </div>
               </section>
               <section class="panel pad">
+                <h3 class="section-title">Модернизация армии</h3>
+                <div class="signal-grid" style="margin-top: 12px;">
+                  ${armyUpgradeCard("drones", "БПЛА и РЭБ", "Разведка, точные удары, снижение потерь при наступлении.")}
+                  ${armyUpgradeCard("artillery", "Артиллерия", "Огневая мощь и давление на фронте, повышает интенсивность победных операций.")}
+                  ${armyUpgradeCard("armor", "Бронетехника", "Прорывы и защита личного состава, влияет на контроль фронта.")}
+                  ${armyUpgradeCard("airSuperiority", "Авиация", "Господство в воздухе, снижает потери и повышает инициативу.")}
+                  ${armyUpgradeCard("medical", "Военная медицина", "Эвакуация, выживаемость и мораль после тяжелых боев.")}
+                  ${armyUpgradeCard("navalPower", "Флот", "Морские коммуникации, блокада и защита побережья.")}
+                </div>
+              </section>
+              <section class="panel pad">
                 <h3 class="section-title">Операции и войны</h3>
                 <div class="list" style="margin-top: 12px;">
-                  ${m.wars.length ? m.wars.map(w => `<div class="row"><span><strong>Конфликт: ${esc(w.enemy)}</strong><br><small class="subtle">Интенсивность ${pct(w.intensity,0)} · усталость ${pct(w.fatigue,0)}</small></span><button data-action="war-step" data-id="${w.id}">Операция</button></div>`).join("") : `<div class="row"><span>Активных войн нет</span><span class="pill">мир</span></div>`}
+                  ${m.wars.length ? m.wars.map(renderWarCard).join("") : `<div class="row"><span>Активных войн нет</span><span class="pill">мир</span></div>`}
                   ${m.operations.map(o => `<div class="row"><span><strong>${esc(o.name)}</strong><br><small class="subtle">${esc(o.date)} · результат ${pct(o.result,0)}</small></span><span class="pill">${esc(o.type)}</span></div>`).join("")}
+                </div>
+                <h3 class="section-title" style="margin-top: 16px;">Итоги войн и мирные условия</h3>
+                <div class="list" style="margin-top: 8px;">
+                  ${(m.warTreaties || []).length ? m.warTreaties.slice(0, 5).map(t => `<div class="row"><span><strong>${esc(t.enemy)} · ${esc(t.date)}</strong><br><small class="subtle">${esc((t.terms || []).join(", "))}</small></span><span class="pill">${esc(t.outcome)}</span></div>`).join("") : `<div class="row"><span>Истории мирных договоров пока нет</span><span class="pill">архив</span></div>`}
                 </div>
               </section>
             </div>
           </section>
+        `;
+      }
+
+      function armyUpgradeCard(key, title, desc) {
+        const value = clamp(state.military[key] || 0, 0, 100);
+        return `
+          <article class="signal-card">
+            <header><strong>${esc(title)}</strong><span class="pill">${pct(value,0)}</span></header>
+            <p class="subtle" style="margin:0;">${esc(desc)}</p>
+            <div class="progress"><i style="--w:${value}%"></i></div>
+            <button data-action="military-upgrade" data-upgrade="${key}">Инвестировать</button>
+          </article>
+        `;
+      }
+
+      function renderWarCard(rawWar) {
+        const w = normalizeWar(rawWar);
+        const balance = calcWarBalance(state, w);
+        const initiativeClass = balance.initiative >= 62 ? "good" : balance.initiative <= 38 ? "bad" : "warn";
+        return `
+          <article class="war-card">
+            <header>
+              <div>
+                <strong>Фронт: ${esc(w.enemy)}</strong>
+                <p class="subtle" style="margin:4px 0 0;">${esc(w.front)} · цель: ${esc(w.goal)} · ${w.days} дн.</p>
+              </div>
+              <span class="pill">${esc(balance.status)}</span>
+            </header>
+            <div class="war-map">
+              <div class="row"><span>${esc(state.country.name)}</span><span>${esc(w.enemy)}</span></div>
+              <div class="front-meter" style="--front:${clamp(w.control, 0, 100)}%"></div>
+            </div>
+            <div class="kpi-strip">
+              <div class="kpi"><span>Силы сторон</span><strong>${Math.round(balance.ownPower)} / ${Math.round(balance.enemyPower)}</strong></div>
+              <div class="kpi"><span>Инициатива</span><strong class="delta ${initiativeClass}">${pct(balance.initiative,0)}</strong></div>
+              <div class="kpi"><span>Интенсивность</span><strong>${pct(w.intensity,0)}</strong></div>
+              <div class="kpi"><span>Снабжение</span><strong>${pct(w.supply,0)}</strong></div>
+              <div class="kpi"><span>Усталость</span><strong>${pct(w.fatigue,0)}</strong></div>
+              <div class="kpi"><span>Военный счет</span><strong class="delta ${w.warScore >= 0 ? "good" : "bad"}">${w.warScore.toFixed(1)}</strong></div>
+              <div class="kpi"><span>Потери</span><strong>${compact(w.ourLosses)} / ${compact(w.enemyLosses)}</strong></div>
+            </div>
+            <p class="subtle" style="margin:0;">Честный баланс учитывает численность, технику, подготовку, снабжение, разведку, мораль, промышленность, экономическую глубину и усталость сторон.</p>
+            <div class="war-actions">
+              <button data-action="war-plan" data-id="${w.id}" data-mode="offensive">Наступление</button>
+              <button data-action="war-plan" data-id="${w.id}" data-mode="defense">Оборона</button>
+              <button data-action="war-plan" data-id="${w.id}" data-mode="logistics">Логистика</button>
+              <button data-action="war-plan" data-id="${w.id}" data-mode="precision">Точный удар</button>
+              <button data-action="war-plan" data-id="${w.id}" data-mode="talks">Переговоры</button>
+            </div>
+          </article>
         `;
       }
 
@@ -3010,6 +3844,66 @@
               </div>
             </aside>
           </section>
+        `;
+      }
+
+      function renderGuide() {
+        return `
+          <section class="grid">
+            <section class="panel pad">
+              <h3 class="section-title">Учебник президента</h3>
+              <p class="subtle" style="margin: 8px 0 0;">Симулятор считает страну ежедневно. На 1x проходит один день за ${DAY_MS / 1000} сек.; показатели меняются плавно, а крупные решения дают не мгновенную магию, а политические, бюджетные и социальные последствия.</p>
+            </section>
+            <div class="guide-grid">
+              ${manualCard("Экономика", [
+                "ВВП растет от инфраструктуры, образования, инвестиций, госуслуг и стабильности.",
+                "Высокие налоги, инфляция, войны и коррупция тормозят рост.",
+                "Бюджет считается ежедневно: доходы минус расходы. Дефицит может уйти в долг."
+              ])}
+              ${manualCard("Политика", [
+                "Рейтинг зависит от роста, цен, протестов, коррупции, кризисов и исхода войн.",
+                "Коалиция помогает проводить законы, но сделки могут усиливать лоббизм.",
+                "Суды, слушания и антикоррупция снижают риск, но могут раздражать элиты."
+              ])}
+              ${manualCard("Кризисы", [
+                "Кризис усиливается, если национальный риск выше управляемости.",
+                "Штаб реагирования гасит все кризисы сразу, а кнопки в карточке кризиса решают конкретную проблему.",
+                "Severity ниже 8% означает, что кризис почти закрыт и исчезнет из сводки."
+              ])}
+              ${manualCard("Дипломатия", [
+                "Другие государства теперь сами отправляют предложения и угрозы в блок инициатив.",
+                "Отношения, стабильность партнера, санкции и разведка влияют на шанс союза.",
+                "Торговля поддерживает экспорт, но санкции, эмбарго и война разрывают связи."
+              ])}
+              ${manualCard("Война", [
+                "Фронт показывает контроль, а инициатива считается из силы сторон, снабжения, разведки, морали, штаба и усталости.",
+                "Перед объявлением войны Генштаб показывает индекс нашей армии, индекс противника, соотношение сил и шанс успеха кампании.",
+                "Сверхдержавы имеют стратегическую глубину: ВВП, население, разведка, стабильность и статус великой державы резко увеличивают их мощь.",
+                "Победа дает репарации, престиж, ветеранов и снижение угрозы противника.",
+                "Поражение дает долг, падение рейтинга, протесты, потери морали и кризис доверия к командованию.",
+                "Наступление двигает фронт быстрее, оборона снижает интенсивность, логистика лечит снабжение, точный удар зависит от разведки и БПЛА."
+              ])}
+              ${manualCard("Политические реформы", [
+                "Законодательные пакеты имеют шанс прохождения: он зависит от коалиции, рейтинга, лоббизма и протестов.",
+                "Социальные законы гасят улицу, антикоррупция снижает риски, экономика ускоряет рост, права повышают доверие.",
+                "Провал закона бьет по коалиции и усиливает оппозицию, поэтому перед трудной реформой полезны слушания и переговоры."
+              ])}
+              ${manualCard("Сохранения", [
+                "Автосохранение сжимает историю и новости, чтобы LocalStorage не переполнялся.",
+                "Изображения автоматически ограничиваются по размеру.",
+                "В разделе сохранений можно оптимизировать хранилище или очистить ручные слоты."
+              ])}
+            </div>
+          </section>
+        `;
+      }
+
+      function manualCard(title, items) {
+        return `
+          <article class="manual-card">
+            <header><strong>${esc(title)}</strong><span class="pill">система</span></header>
+            <ul>${items.map(item => `<li>${esc(item)}</li>`).join("")}</ul>
+          </article>
         `;
       }
 
@@ -3143,10 +4037,11 @@
       }
 
       function renderModal() {
+        const tone = modal.tone || "good";
         return `
-          <div class="modal-backdrop" data-action="close-modal">
-            <section class="modal" onclick="event.stopPropagation()">
-              <div class="panel-head"><h3>${esc(modal.title)}</h3><button class="icon" data-action="close-modal">×</button></div>
+          <div class="modal-backdrop" data-modal-backdrop>
+            <section class="modal ${tone}" role="dialog" aria-modal="true">
+              <div class="panel-head"><h3>${esc(modal.title)}</h3><button class="icon" data-action="close-modal" title="Закрыть">×</button></div>
               <div class="modal-body">${modal.body}</div>
             </section>
           </div>
@@ -3156,6 +4051,7 @@
       function showDecision(title, result, details = [], tone = "good") {
         modal = {
           title,
+          tone,
           body: `
             <div class="decision-brief">
               <div class="decision-banner ${tone}">
@@ -3167,7 +4063,7 @@
             </div>
           `
         };
-        render();
+        render({ force: true, preserveScroll: true });
       }
 
       function showBlockedDecision(title, result, details = []) {
@@ -3233,24 +4129,41 @@
       }
 
       function onClick(event) {
+        markInteraction();
+        if (event.target.matches?.("[data-modal-backdrop]")) {
+          modal = null;
+          render({ force: true, preserveScroll: true });
+          return;
+        }
+
         const setupTab = event.target.closest("[data-setup-tab]");
         if (setupTab) {
           captureSetupDraft();
           setupPage = setupTab.dataset.setupTab;
-          render();
+          render({ force: true, preserveScroll: true });
           return;
         }
 
         const tabButton = event.target.closest("[data-tab]");
         if (tabButton) {
           activeTab = tabButton.dataset.tab;
-          render();
+          render({ force: true, resetScroll: true });
           return;
         }
 
         const actionEl = event.target.closest("[data-action]");
         if (!actionEl) return;
         const action = actionEl.dataset.action;
+
+        if (action === "dismiss-toast") {
+          actionEl.closest(".toast-message")?.remove();
+          return;
+        }
+        if (action === "close-modal") {
+          modal = null;
+          render({ force: true, preserveScroll: true });
+          return;
+        }
 
         if (action === "start-game") {
           event.preventDefault();
@@ -3260,7 +4173,7 @@
         if (action === "load-autosave") {
           state = loadState();
           if (state) notify("Автосохранение загружено.");
-          render();
+          render({ force: true, resetScroll: true });
           return;
         }
         if (action === "toggle-theme-setup") {
@@ -3280,15 +4193,22 @@
         else if (action === "build") buildInRegion(actionEl.dataset.building);
         else if (action === "policy") policyAction(actionEl.dataset.policy);
         else if (action === "gov-action") governanceAction(actionEl.dataset.gov);
+        else if (action === "crisis-action") crisisAction(actionEl.dataset.crisis, actionEl.dataset.mode);
         else if (action === "project-action") projectAction(actionEl.dataset.project, actionEl.dataset.mode);
         else if (action === "econ-action") economyAction(actionEl.dataset.econ);
         else if (action === "politics-action") politicsAction(actionEl.dataset.politics);
+        else if (action === "law-package") lawPackageAction(actionEl.dataset.law);
         else if (action === "replace-minister") replaceMinister(num(actionEl.dataset.index));
         else if (action === "select-country") selectedCountryId = actionEl.dataset.id;
         else if (action === "diplo") diplomacyAction(actionEl.dataset.diplo);
+        else if (action === "confirm-war") confirmWar(actionEl.dataset.country);
+        else if (action === "foreign-offer") foreignOfferAction(actionEl.dataset.offer, actionEl.dataset.choice);
+        else if (action === "foreign-pulse") spawnForeignInitiative(state, true);
         else if (action === "create-org") createOrganization();
         else if (action === "military-action") militaryAction(actionEl.dataset.military);
+        else if (action === "military-upgrade") militaryUpgrade(actionEl.dataset.upgrade);
         else if (action === "war-step") warOperation(actionEl.dataset.id);
+        else if (action === "war-plan") warOperation(actionEl.dataset.id, actionEl.dataset.mode);
         else if (action === "tech-lab") techLab();
         else if (action === "tech-fund") techFund();
         else if (action === "set-tech") state.tech.focus = actionEl.dataset.id;
@@ -3307,11 +4227,20 @@
         else if (action === "compact-storage") compactStorageAction();
         else if (action === "clear-slots") confirmClearSlots();
         else if (action === "new-game") confirmNewGame();
-        else if (action === "close-modal") modal = null;
+        else if (action === "really-new-game") {
+          startFreshGame();
+          render({ force: true, resetScroll: true });
+          return;
+        }
+        else if (action === "really-clear-slots") {
+          clearSaveSlots();
+          render({ force: true, preserveScroll: true });
+          return;
+        }
         else return;
 
         queueSave(300);
-        render();
+        render({ force: true, preserveScroll: true });
       }
 
       function onInput(event) {
@@ -3630,6 +4559,9 @@
 
       function simulateDiplomacy(game) {
         const e = game.economy;
+        game.diplomacy.inbox ||= [];
+        for (const offer of game.diplomacy.inbox) offer.daysLeft = Math.max(0, (offer.daysLeft || 0) - 1);
+        game.diplomacy.inbox = game.diplomacy.inbox.filter(offer => offer.daysLeft > 0).slice(0, 8);
         for (const c of game.diplomacy.countries) {
           const ai = c.aiMood;
           if (ai === "торговый") c.trade *= 1 + rnd(-.0002, .0009);
@@ -3639,30 +4571,105 @@
           c.gdp = Math.max(100, c.gdp * (1 + rnd(-.00008, .00016)));
           if (!c.war && c.relations < 8 && c.military > 70 && Math.random() < .0005) {
             c.war = true;
-            game.military.wars.push({ id: uid("war"), enemy: c.name, intensity: Math.round(rnd(24, 58)), fatigue: 0 });
+            game.military.wars.push(createWar(c, "foreign", game));
             pushNews(game, "Мир", "Военный конфликт", `${c.name} начала вооружённую фазу конфликта. Генштаб переводит силы в режим высокой готовности.`);
           }
         }
+        if (game.diplomacy.inbox.length < 6 && Math.random() < .045) spawnForeignInitiative(game);
         const tradeBonus = game.diplomacy.countries.reduce((sum, c) => sum + (c.relations > 60 && !c.sanctions && !c.embargo ? c.trade : 0), 0) * .000001;
         e.exports *= 1 + tradeBonus / 365;
       }
 
       function simulateMilitary(game) {
         const m = game.military;
-        m.readiness = clamp(m.readiness + m.budget * .00025 + m.industry * .00016 - m.wars.length * .009, 0, 100);
-        m.morale = clamp(m.morale + (game.politics.popularity - 50) * .00035 - m.wars.length * .018 - m.mobilized * .0000004, 0, 100);
+        m.readiness = clamp(m.readiness + m.budget * .00025 + m.industry * .00016 + m.training * .00008 - m.wars.length * .009, 0, 100);
+        m.morale = clamp(m.morale + (game.politics.popularity - 50) * .00035 - m.wars.length * .018 - m.mobilized * .0000004 - m.warExhaustion * .00018, 0, 100);
         m.industry = clamp(m.industry + game.economy.spending.defense * .00025 + totalBuildings("factories", game) * .00018, 0, 100);
-        for (const w of m.wars) {
-          w.fatigue = clamp(w.fatigue + w.intensity * .002, 0, 100);
-          game.economy.budget -= w.intensity * .9;
-          game.politics.protests = clamp(game.politics.protests + w.fatigue * .0009, 0, 100);
-          if (w.fatigue > 85 && Math.random() < .004) {
-            pushNews(game, "Армия", "Перемирие", `Стороны конфликта с ${w.enemy} согласовали режим прекращения огня.`);
-            const c = game.diplomacy.countries.find(x => x.name === w.enemy);
-            if (c) c.war = false;
-            m.wars = m.wars.filter(x => x.id !== w.id);
-          }
+        m.training = clamp(m.training + m.contractShare * .00008 + m.budget * .00014 - m.wars.length * .004, 0, 100);
+        m.logistics = clamp(m.logistics + m.industry * .00012 + game.economy.spending.infrastructure * .00008 - m.wars.length * .006, 0, 100);
+        m.command = clamp(m.command + m.veterans * .00008 + m.research * .00008, 0, 100);
+        m.warExhaustion = clamp(m.warExhaustion + m.wars.length * .018 - m.medical * .00008 - game.politics.popularity * .00004, 0, 100);
+        m.wars = (m.wars || []).map(normalizeWar);
+        for (const w of [...m.wars]) {
+          const enemy = game.diplomacy.countries.find(x => x.id === w.enemyId || x.name === w.enemy);
+          const balance = calcWarBalance(game, w);
+          w.days++;
+          w.initiative = clamp(w.initiative * .86 + balance.initiative * .14, 0, 100);
+          w.supply = clamp(w.supply + m.logistics * .00055 + m.industry * .00025 + m.budget * .00016 - w.intensity * .006 - (100 - m.readiness) * .00035, 0, 100);
+          const doctrineBonus = m.doctrine === "глубокая операция" ? .035 : m.doctrine === "сетецентрическая война" ? .045 : m.doctrine === "территориальная оборона" ? -.01 : .015;
+          const frontDelta = clamp((balance.balance * .0032) + (w.initiative - 50) * .006 + doctrineBonus + rnd(-.08, .08), -.34, .34);
+          w.control = clamp(w.control + frontDelta, 0, 100);
+          w.warScore = clamp(w.warScore + frontDelta * 2.8 + (w.initiative - 50) * .006, -100, 100);
+          w.civilianPressure = clamp(w.civilianPressure + w.intensity * .0012 + Math.max(0, 45 - w.supply) * .001, 0, 100);
+          w.fatigue = clamp(w.fatigue + w.intensity * .0024 + (100 - w.supply) * .0011 - m.medical * .00016, 0, 100);
+          w.intensity = clamp(w.intensity + rnd(-.04, .05) + (w.phase === "наступление" ? .025 : w.phase === "оборона" ? -.015 : 0), 0, 100);
+          const lossBase = Math.max(0, w.intensity * rnd(.35, 1.15));
+          w.ourLosses += Math.round(lossBase * clamp(1.26 - w.supply / 150 - m.medical / 260 - frontDelta, .28, 1.85));
+          w.enemyLosses += Math.round(lossBase * clamp(.62 + frontDelta + m.artillery / 190 + m.drones / 240 + m.airSuperiority / 260, .25, 1.95));
+          game.economy.budget -= w.intensity * 1.05 + (100 - w.supply) * .35;
+          game.politics.protests = clamp(game.politics.protests + w.fatigue * .0011 + w.ourLosses * .000002 + m.warExhaustion * .00035, 0, 100);
+          if (enemy) enemy.relations = clamp(enemy.relations - .035, 0, 100);
+          if (w.control >= 88 || w.warScore >= 72) finishWar(game, w, "victory", "Военная победа", `${w.enemy} принимает условия прекращения боевых действий после потери инициативы.`);
+          else if (w.control <= 12 || w.warScore <= -72) finishWar(game, w, "defeat", "Невыгодное перемирие", `Кабинет соглашается на тяжелое перемирие с ${w.enemy}, чтобы остановить потери.`);
+          else if ((w.fatigue > 92 || m.warExhaustion > 82) && Math.random() < .006) finishWar(game, w, "ceasefire", "Перемирие", `Стороны конфликта с ${w.enemy} согласовали прекращение огня из-за истощения.`);
         }
+      }
+
+      function finishWar(game, war, outcome, title, text) {
+        const c = game.diplomacy.countries.find(x => x.id === war.enemyId || x.name === war.enemy);
+        const scale = clamp((war.intensity + Math.abs(war.warScore) + war.days * .12) / 100, .35, 2.4);
+        const reparations = Math.round((c?.gdp || game.economy.gdp * .12) * .0009 * scale);
+        const ourCasualtyPressure = clamp(war.ourLosses / 85000, 0, 8);
+        const veteranGain = Math.round(Math.max(0, war.enemyLosses + war.ourLosses * .4) / 9000);
+        const treaty = { enemy: war.enemy, outcome, date: formatDate(game.date), reparations, control: Math.round(war.control), score: Math.round(war.warScore) };
+        if (c) {
+          c.war = false;
+          c.relations = clamp(outcome === "victory" ? c.relations + 8 : outcome === "defeat" ? c.relations - 8 : c.relations + 2, 0, 100);
+        }
+        if (outcome === "victory") {
+          game.economy.budget += reparations;
+          game.economy.reserves += reparations * .22;
+          game.politics.popularity = clamp(game.politics.popularity + 3.8 - ourCasualtyPressure, 0, 100);
+          game.politics.coalition = clamp(game.politics.coalition + 2.2, 0, 100);
+          game.military.morale = clamp(game.military.morale + 5.5, 0, 100);
+          game.military.veterans = clamp(game.military.veterans + veteranGain, 0, 100);
+          game.military.warExhaustion = clamp(game.military.warExhaustion - 8, 0, 100);
+          game.diplomacy.organizations.forEach(o => o.influence = clamp(o.influence + .15, 0, 100));
+          if (c) {
+            c.military = clamp(c.military - 8 * scale, 0, 100);
+            c.treaties.push("мирный договор: репарации и ограничения вооружений");
+          }
+          treaty.terms = ["репарации", "ограничение вооружений противника", "рост международного престижа", "ветеранский опыт"];
+        } else if (outcome === "defeat") {
+          game.economy.budget -= reparations * 1.25;
+          game.economy.debt += reparations * 1.45;
+          game.economy.stockIndex *= .94;
+          game.politics.popularity = clamp(game.politics.popularity - 7.5 - ourCasualtyPressure, 0, 100);
+          game.politics.coalition = clamp(game.politics.coalition - 5.5, 0, 100);
+          game.politics.opposition = clamp(game.politics.opposition + 5.5, 0, 100);
+          game.politics.protests = clamp(game.politics.protests + 5 + ourCasualtyPressure, 0, 100);
+          game.military.morale = clamp(game.military.morale - 8, 0, 100);
+          game.military.readiness = clamp(game.military.readiness - 4.5, 0, 100);
+          game.military.warExhaustion = clamp(game.military.warExhaustion + 14, 0, 100);
+          if (c) {
+            c.relations = clamp(c.relations - 5, 0, 100);
+            c.military = clamp(c.military + 3, 0, 100);
+          }
+          treaty.terms = ["репарации противнику", "падение рейтинга", "рост долга", "кризис доверия к командованию"];
+        } else {
+          game.economy.budget -= reparations * .28;
+          game.politics.popularity = clamp(game.politics.popularity - 1.6 - ourCasualtyPressure * .35, 0, 100);
+          game.politics.protests = clamp(game.politics.protests + 1.4, 0, 100);
+          game.military.morale = clamp(game.military.morale - 1.8, 0, 100);
+          game.military.warExhaustion = clamp(game.military.warExhaustion - 3, 0, 100);
+          if (c) c.treaties.push("перемирие под наблюдением");
+          treaty.terms = ["заморозка фронта", "ограниченная политическая цена", "частичное восстановление торговли"];
+        }
+        game.military.lastWarOutcome = title;
+        game.military.warTreaties.unshift(treaty);
+        game.military.operations.unshift({ id: uid("op"), name: title, type: "итог войны", date: formatDate(game.date), result: Math.round(war.control), terms: treaty.terms.join(", ") });
+        game.military.wars = game.military.wars.filter(x => x.id !== war.id);
+        pushNews(game, "Армия", title, `${text} Условия: ${treaty.terms.join(", ")}.`);
       }
 
       function simulateGovernance(game) {
@@ -3886,11 +4893,13 @@
 
       function governanceAction(type) {
         const g = state.governance, e = state.economy, p = state.politics, pop = state.population;
+        let report = null;
         if (type === "briefing") {
           e.budget -= 120;
           g.media.trust += 2.4;
           g.media.polarization -= 1.2;
           g.agenda.forEach(a => a.pressure = clamp(a.pressure - .9, 0, 100));
+          report = ["Большой брифинг проведен", "Кабинет публично объяснил решения, риски и календарь реформ.", [["Бюджет", "-120 млн", "bad"], ["Доверие СМИ", "+2.4 п.п.", "good"], ["Давление повестки", "ниже", "good"]], "good"];
           pushNews(state, "Политика", "Большой президентский брифинг", "Кабинет публично объяснил решения, риски и календарь реформ.");
         }
         if (type === "audit") {
@@ -3898,6 +4907,7 @@
           p.corruption -= 1.8;
           p.lobbyism -= .9;
           g.projects.forEach(project => project.risk = clamp(project.risk - 1.1, 0, 100));
+          report = ["Аудит министерств запущен", "Проверяются закупки, сроки и KPI министров.", [["Бюджет", "-260 млн", "bad"], ["Коррупция", "-1.8 п.п.", "good"], ["Риск проектов", "ниже", "good"]], "good"];
           pushNews(state, "Скандалы", "Аудит министерств", "Счетная палата и администрация проверяют закупки, сроки и KPI министров.");
         }
         if (type === "counterintel") {
@@ -3906,6 +4916,7 @@
           g.intelligence.cyberThreat -= 2.4;
           g.intelligence.foreignNetworks -= 1.7;
           state.military.cyber += .8;
+          report = ["Контрразведка усилена", "Спецслужбы закрывают уязвимости критической инфраструктуры.", [["Бюджет", "-340 млн", "bad"], ["Контрразведка", "+4.5 п.п.", "good"], ["Киберугроза", "-2.4 п.п.", "good"]], "good"];
           pushNews(state, "Безопасность", "Контрразведывательная операция", `${state.country.intelligenceName} усиливает защиту критической инфраструктуры.`);
         }
         if (type === "media") {
@@ -3914,6 +4925,7 @@
           g.media.propaganda += .8;
           g.media.freedom -= .5;
           p.popularity += .4;
+          report = ["Медиастратегия принята", "Правительство синхронизирует коммуникацию реформ и кризисных решений.", [["Бюджет", "-180 млн", "bad"], ["Доверие", "+1.8 п.п.", "good"], ["Свобода прессы", "-0.5 п.п.", "warn"]], "warn"];
           pushNews(state, "Политика", "Медиастратегия", "Правительство запускает единую коммуникацию реформ и кризисных решений.");
         }
         if (type === "emergency") {
@@ -3921,10 +4933,71 @@
           pop.happiness += .5;
           g.crises.forEach(c => c.severity = clamp(c.severity - rnd(5, 11), 0, 100));
           g.services.forEach(s => s.stress = clamp(s.stress - 1.4, 0, 100));
+          report = ["Штаб реагирования развернут", "Кризисные службы получили единый координационный контур.", [["Бюджет", "-520 млн", "bad"], ["Кризисы", "severity ниже", "good"], ["Нагрузка служб", "-1.4 п.п.", "good"]], "good"];
           pushNews(state, "Безопасность", "Штаб реагирования", "Кризисный штаб синхронизировал регионы, ведомства и инфраструктурные службы.");
         }
         normalizeGovernance();
         normalizeCore();
+        if (report) showDecision(report[0], report[1], report[2], report[3]);
+      }
+
+      function crisisAction(id, mode) {
+        const crisis = state.governance.crises.find(c => c.id === id);
+        if (!crisis) return notify("Кризис уже закрыт.", "good", "Кризисный штаб");
+        const region = state.regions.find(r => r.name === crisis.region);
+        const costs = { funding: 480 + crisis.severity * 6, communication: 130, security: 300, regional: 360 };
+        const cost = costs[mode] || 260;
+        if (state.economy.budget < cost) return showBlockedDecision("Недостаточно бюджета", "Кризисный штаб не может провести решение без финансирования.", [["Нужно", money(cost), "bad"], ["Бюджет", money(state.economy.budget), "bad"]]);
+        const before = crisis.severity;
+        state.economy.budget -= cost;
+        let title = "Кризисное решение принято";
+        let result = "";
+        let tone = "good";
+        if (mode === "funding") {
+          crisis.severity = clamp(crisis.severity - rnd(8, 16), 0, 100);
+          state.governance.services.forEach(s => s.stress = clamp(s.stress - .8, 0, 100));
+          result = "Целевое финансирование закрывает самые дорогие узкие места кризиса.";
+          title = "Финансирование кризиса выделено";
+        }
+        if (mode === "communication") {
+          crisis.severity = clamp(crisis.severity - rnd(4, 9), 0, 100);
+          state.governance.media.trust += 1.8;
+          state.governance.media.polarization -= .7;
+          state.politics.popularity += .3;
+          result = "Публичная коммуникация снижает панику и слухи.";
+          title = "Кризисная коммуникация проведена";
+        }
+        if (mode === "security") {
+          const cyberBonus = crisis.type === "cyber" ? 4 : 0;
+          crisis.severity = clamp(crisis.severity - rnd(6 + cyberBonus, 13 + cyberBonus), 0, 100);
+          state.governance.intelligence.domesticRisk -= 1.6;
+          state.governance.intelligence.cyberThreat -= crisis.type === "cyber" ? 3.2 : .8;
+          state.military.readiness += .5;
+          result = "Безопасностный штаб локализует угрозу и защищает критические службы.";
+          title = "Штаб безопасности сработал";
+        }
+        if (mode === "regional") {
+          crisis.severity = clamp(crisis.severity - rnd(7, 14), 0, 100);
+          if (region) {
+            region.loyalty = clamp(region.loyalty + 2.2, 0, 100);
+            region.budget += 160;
+          }
+          state.population.happiness += .4;
+          result = "Регион получает управленческую группу, деньги и политический канал связи.";
+          title = "Региональная помощь отправлена";
+        }
+        const closed = crisis.severity <= 8;
+        if (closed) {
+          state.governance.crises = state.governance.crises.filter(c => c.id !== id);
+          result += " Кризис снят с оперативного контроля.";
+          tone = "good";
+        } else if (crisis.severity > before - 6) {
+          tone = "warn";
+        }
+        normalizeGovernance();
+        normalizeCore();
+        pushNews(state, "Безопасность", closed ? "Кризис закрыт" : title, `${crisis.title}: severity ${pct(before,0)} → ${pct(crisis.severity,0)}.`);
+        showDecision(title, result, [["Severity", `${pct(before,0)} → ${pct(crisis.severity,0)}`, crisis.severity < before ? "good" : "warn"], ["Стоимость", `-${money(cost)}`, "bad"], ["Статус", closed ? "закрыт" : "под контролем", closed ? "good" : "warn"]], tone);
       }
 
       function projectAction(projectId, mode) {
@@ -3975,10 +5048,8 @@
         const p = state.politics;
         let report = null;
         if (type === "law") {
-          const law = { name: pick(["Закон о промышленной политике","Закон о цифровом государстве","Закон о местном самоуправлении","Закон о прозрачных закупках"]), effect: pick(["ускоряет инвестиции","усиливает контроль расходов","повышает доверие граждан","меняет баланс центра и регионов"]), support: Math.round(rnd(43, 82)) };
-          p.laws.unshift(law);
-          p.coalition += law.support > 55 ? 1.3 : -1;
-          report = ["Закон внесен в парламент", `${law.name}: ${law.effect}. Комитеты оценили поддержку в ${pct(law.support,0)}.`, [["Поддержка", pct(law.support,0), law.support > 55 ? "good" : "warn"], ["Коалиция", law.support > 55 ? "+1.3 п.п." : "-1 п.п.", law.support > 55 ? "good" : "warn"]], law.support > 55 ? "good" : "warn"];
+          lawPackageAction(pick(["economy","anticorruption","social","security","regions","freedoms"]));
+          return;
         }
         if (type === "decree") {
           p.decrees.unshift({ name: `Указ №${p.decrees.length + 1}`, date: formatDate(state.date), effect: "оперативное решение президента" });
@@ -4036,9 +5107,111 @@
           p.coalition -= .7;
           report = ["Судебная реформа запущена", "Суд получает больше автономии, что снижает коррупцию, но раздражает часть элит.", [["Суд", "+3.2 п.п.", "good"], ["Коррупция", "-1.4 п.п.", "good"], ["Коалиция", "-0.7 п.п.", "warn"]], "good"];
         }
+        if (type === "cabinet") {
+          const weak = p.ministers.slice().sort((a, b) => (a.skill + a.loyalty) - (b.skill + b.loyalty)).slice(0, 2);
+          weak.forEach(m => {
+            m.skill = Math.round(clamp(m.skill + rnd(6, 14), 0, 96));
+            m.loyalty = Math.round(clamp(m.loyalty + rnd(-4, 8), 0, 96));
+          });
+          state.economy.budget -= 180;
+          p.popularity += .6;
+          p.coalition -= .8;
+          report = ["Кабинет переформатирован", "Слабые министерства получили новых управленцев. Эффективность растет, но часть коалиции недовольна кадровыми перестановками.", [["Компетентность", "+6-14", "good"], ["Бюджет", "-180 млн", "bad"], ["Коалиция", "-0.8 п.п.", "warn"], ["Рейтинг", "+0.6 п.п.", "good"]], "good"];
+        }
+        if (type === "confidence") {
+          const score = clamp(p.popularity * .45 + p.coalition * .5 - p.opposition * .18 - p.protests * .12 + rnd(-10, 10), 0, 100);
+          const won = score >= 50;
+          p.coalition += won ? 4.2 : -5.5;
+          p.popularity += won ? 1.5 : -3.2;
+          p.impeachmentRisk = clamp(num(p.impeachmentRisk) + (won ? -4 : 7), 0, 100);
+          report = [won ? "Вотум доверия выигран" : "Вотум доверия провален", won ? "Парламент подтверждает мандат кабинета, у правительства появляется окно реформ." : "Кабинет теряет политический темп, оппозиция требует досрочных выборов.", [["Голосование", pct(score,0), won ? "good" : "bad"], ["Коалиция", won ? "+4.2 п.п." : "-5.5 п.п.", won ? "good" : "bad"], ["Риск импичмента", won ? "-4 п.п." : "+7 п.п.", won ? "good" : "bad"]], won ? "good" : "bad"];
+        }
+        if (type === "budgetDeal") {
+          state.economy.budget -= 420;
+          p.coalition += 3.6;
+          p.lobbyism += 1.1;
+          p.protests -= .7;
+          state.economy.investments += 180;
+          report = ["Бюджетный компромисс заключен", "Фракции получают региональные и отраслевые поправки к бюджету. Коалиция крепнет, но цена сделки видна по лоббизму.", [["Коалиция", "+3.6 п.п.", "good"], ["Лоббизм", "+1.1 п.п.", "warn"], ["Бюджет", "-420 млн", "bad"], ["Инвестиции", "+180 млн", "good"]], "warn"];
+        }
+        if (type === "oppositionDialogue") {
+          state.economy.budget -= 120;
+          p.opposition -= 3.4;
+          p.protests -= 1.8;
+          p.coalition -= .6;
+          state.governance.media.trust += 1.1;
+          report = ["Диалог с оппозицией начат", "Администрация открывает парламентскую площадку для спорных вопросов. Улица успокаивается, но жесткое ядро коалиции ворчит.", [["Оппозиция", "-3.4 п.п.", "good"], ["Протесты", "-1.8 п.п.", "good"], ["Коалиция", "-0.6 п.п.", "warn"], ["Доверие СМИ", "+1.1 п.п.", "good"]], "good"];
+        }
+        if (type === "civilService") {
+          state.economy.budget -= 260;
+          p.corruption -= 1.2;
+          p.lobbyism -= .8;
+          state.governance.services.forEach(s => {
+            s.level = clamp(s.level + .8, 0, 100);
+            s.stress = clamp(s.stress - .6, 0, 100);
+          });
+          report = ["Реформа госслужбы запущена", "Ведомства переходят на KPI, конкурсные назначения и цифровой контроль исполнения.", [["Коррупция", "-1.2 п.п.", "good"], ["Госуслуги", "+0.8 п.п.", "good"], ["Нагрузка служб", "-0.6 п.п.", "good"], ["Бюджет", "-260 млн", "bad"]], "good"];
+        }
+        if (type === "partyMobilize") {
+          state.economy.budget -= 150;
+          p.popularity += 1.2;
+          p.coalition += 1.4;
+          p.opposition += .6;
+          if (p.parties[0]) {
+            p.parties[0].support = clamp(p.parties[0].support + 1.8, 0, 100);
+            p.parties[0].seats = Math.round(p.parliamentSeats * p.parties[0].support / 100);
+          }
+          report = ["Партия мобилизована", "Региональные штабы запускают кампанию поддержки реформ. Ядро сторонников активнее, оппозиция отвечает контркампанией.", [["Рейтинг", "+1.2 п.п.", "good"], ["Коалиция", "+1.4 п.п.", "good"], ["Оппозиция", "+0.6 п.п.", "warn"], ["Бюджет", "-150 млн", "bad"]], "good"];
+        }
         normalizeCore();
         pushNews(state, "Политика", "Политическое решение", "Баланс партий, коалиции и общественной поддержки изменился.");
         if (report) showDecision(report[0], report[1], report[2], report[3]);
+      }
+
+      function lawPackageAction(kind) {
+        const p = state.politics, e = state.economy, pop = state.population, g = state.governance;
+        const packages = {
+          economy: { name: "Закон о промышленном росте", effect: "льготы для производств, быстрые закупки, экспортные гарантии", cost: 720 },
+          anticorruption: { name: "Закон о чистых закупках", effect: "открытые реестры, аудит контрактов, защита суда", cost: 360 },
+          social: { name: "Закон о доходах граждан", effect: "адресная помощь, индексация пенсий, программы занятости", cost: 840 },
+          security: { name: "Закон о безопасности инфраструктуры", effect: "контртеррор, киберзащита, защита транспорта и энергетики", cost: 520 },
+          regions: { name: "Закон о региональном балансе", effect: "субсидии регионам, полномочия губернаторов, инфраструктурные KPI", cost: 640 },
+          freedoms: { name: "Закон о правах и парламентском контроле", effect: "судебные гарантии, свобода прессы, контроль силовых полномочий", cost: 280 }
+        };
+        const pack = packages[kind] || packages.economy;
+        if (e.budget < pack.cost) return showBlockedDecision("Недостаточно бюджета", `${pack.name} требует ${money(pack.cost)} на внедрение.`, [["Бюджет", money(e.budget), "bad"], ["Нужно", money(pack.cost), "bad"]]);
+        const chance = calcLawChance(kind);
+        const roll = rnd(0, 100);
+        const passed = roll <= chance;
+        e.budget -= pack.cost;
+        const support = Math.round(clamp(chance + rnd(-8, 8), 20, 95));
+        const law = { name: pack.name, effect: pack.effect, support, passed, date: formatDate(state.date) };
+        p.laws.unshift(law);
+        let details = [["Шанс", pct(chance,0), chance >= 55 ? "good" : "warn"], ["Голосование", pct(roll,0), passed ? "good" : "bad"], ["Бюджет", `-${money(pack.cost)}`, "bad"]];
+        let result = "";
+        let tone = passed ? "good" : "bad";
+        if (passed) {
+          p.coalition = clamp(p.coalition + (kind === "social" ? 1.2 : kind === "security" ? .6 : .9), 0, 100);
+          p.popularity = clamp(p.popularity + (kind === "social" ? 1.8 : kind === "economy" ? .8 : kind === "freedoms" ? 1.1 : .5), 0, 100);
+          if (kind === "economy") { e.growth += .28; e.investments += 420; e.unemployment -= .18; }
+          if (kind === "anticorruption") { p.corruption -= 2.2; p.lobbyism -= 1.4; g.projects.forEach(x => x.risk = clamp(x.risk - .8, 0, 100)); }
+          if (kind === "social") { pop.happiness += 1.4; pop.poverty -= .9; p.protests -= 1.2; }
+          if (kind === "security") { pop.crime -= 1.4; g.intelligence.cyberThreat -= 1.6; state.military.readiness += .7; p.protests += .3; }
+          if (kind === "regions") { state.regions.forEach(r => { r.loyalty = clamp(r.loyalty + 1.3, 0, 100); r.budget += 90; }); p.coalition += .8; }
+          if (kind === "freedoms") { p.constitution.rights += 2.2; p.constitution.courtIndependence += 1.3; g.media.trust += 1.5; g.media.freedom += 1.2; p.coalition -= .8; }
+          result = `${pack.name} принят. ${pack.effect}.`;
+          details.push(["Коалиция", pct(p.coalition,0), p.coalition >= 50 ? "good" : "warn"]);
+        } else {
+          p.coalition = clamp(p.coalition - 2.4, 0, 100);
+          p.opposition = clamp(p.opposition + 1.8, 0, 100);
+          p.lobbyism = clamp(p.lobbyism + (kind === "anticorruption" ? 1.4 : .5), 0, 100);
+          p.popularity = clamp(p.popularity - .9, 0, 100);
+          result = `${pack.name} не прошел комитеты. Оппозиция получила повод атаковать кабинет, а коалиции нужен новый раунд переговоров.`;
+          details.push(["Коалиция", "-2.4 п.п.", "bad"], ["Оппозиция", "+1.8 п.п.", "bad"]);
+        }
+        normalizeCore();
+        pushNews(state, "Политика", passed ? "Закон принят" : "Закон провален", result);
+        showDecision(passed ? "Закон принят" : "Закон не прошел", result, details, tone);
       }
 
       function runElection(game, early = false) {
@@ -4116,8 +5289,8 @@
           report = ["Визовый режим изменен", `Новый режим: ${c.visa}. Это влияет на туризм, бизнес и тон переговоров.`, [["Визы", c.visa, "warn"], ["Отношения", c.visa === "свободный" ? "+3 п.п." : "-2 п.п.", c.visa === "свободный" ? "good" : "warn"]], "warn"];
         }
         if (type === "war") {
-          declareWar(c);
-          report = ["Военный конфликт объявлен", `${state.country.armyName} переводятся в режим операции против ${c.name}. Экономика и рейтинг получают удар.`, [["Отношения", "2%", "bad"], ["Биржа", "-7%", "bad"], ["Рейтинг", "-4 п.п.", "bad"]], "bad"];
+          showWarAssessment(c);
+          return;
         }
         if (type === "peace") {
           c.war = false; c.relations += 8; state.military.wars = state.military.wars.filter(w => w.enemy !== c.name);
@@ -4130,6 +5303,119 @@
         if (report) showDecision(report[0], report[1], report[2], report[3]);
       }
 
+      function showWarAssessment(country) {
+        const a = calcPreWarAssessment(country);
+        const warning = a.risk === "catastrophic"
+          ? "Разведка считает войну крайне невыгодной: противник имеет стратегическую глубину, экономику и военную мощь, которые нельзя компенсировать одним фронтовым решением."
+          : a.risk === "danger"
+            ? "Противник сильнее. Нужны союзники, санкционное давление, модернизация армии, логистика и экономика военного времени."
+            : a.risk === "parity"
+              ? "Силы близки. Исход решат снабжение, инициатива, разведка, мораль и политическая устойчивость."
+              : "Разведка видит наш перевес, но война все равно ударит по бюджету, рынкам и обществу.";
+        modal = {
+          title: `Предвоенная оценка: ${country.name}`,
+          tone: a.tone,
+          body: `
+            <div class="decision-brief">
+              <div class="decision-banner ${a.tone}">
+                <strong>${esc(warning)}</strong>
+                <span class="subtle">${dateLabel(state.date)} · ${esc(state.country.capital)} · Генштаб и МИД</span>
+              </div>
+              <div class="decision-grid">
+                <div class="kpi"><span>Наша мощь</span><strong>${powerIndex(a.ownPower)}</strong></div>
+                <div class="kpi"><span>Мощь противника</span><strong>${powerIndex(a.enemyPower)}</strong></div>
+                <div class="kpi"><span>Соотношение</span><strong class="delta ${a.tone}">${a.ratio.toFixed(2)} : 1</strong></div>
+                <div class="kpi"><span>Инициатива в начале</span><strong class="delta ${a.tone}">${pct(a.initiative,0)}</strong></div>
+                <div class="kpi"><span>Шанс успеха кампании</span><strong class="delta ${a.tone}">${pct(a.victoryChance,0)}</strong></div>
+                <div class="kpi"><span>Прогноз</span><strong class="delta ${a.tone}">${esc(a.label)}</strong></div>
+              </div>
+              <p class="subtle" style="margin:0;">Перед войной лучше проверить: союзников, санкции против цели, модернизацию армии, БПЛА/разведку, логистику, мобрезерв, бюджет и устойчивость политики.</p>
+              <div class="actions">
+                <button class="danger" data-action="confirm-war" data-country="${country.id}">${a.risk === "catastrophic" ? "Начать войну вопреки оценке" : "Подтвердить войну"}</button>
+                <button data-action="close-modal">Отмена</button>
+              </div>
+            </div>
+          `
+        };
+        render({ force: true, preserveScroll: true });
+      }
+
+      function confirmWar(countryId) {
+        const c = state.diplomacy.countries.find(x => x.id === countryId);
+        if (!c) return;
+        const a = calcPreWarAssessment(c);
+        declareWar(c);
+        showDecision("Военный конфликт объявлен", `${state.country.armyName} переводятся в режим операции против ${c.name}. Разведка оценивает стартовое соотношение как ${a.ratio.toFixed(2)} : 1 (${a.label}).`, [["Наша мощь", powerIndex(a.ownPower), a.ratio >= 1 ? "good" : "warn"], ["Противник", powerIndex(a.enemyPower), a.ratio >= 1 ? "warn" : "bad"], ["Инициатива", pct(a.initiative,0), a.initiative >= 50 ? "good" : "bad"], ["Биржа", "-7%", "bad"], ["Рейтинг", "-4 п.п.", "bad"]], a.tone);
+      }
+
+      function spawnForeignInitiative(game = state, manual = false) {
+        game.diplomacy.inbox ||= [];
+        const candidates = game.diplomacy.countries.filter(c => !c.war);
+        if (!candidates.length) return false;
+        const c = pick(candidates);
+        const possible = [];
+        possible.push(["trade", "Предложение о торговле", `${c.name} предлагает расширить поставки и открыть быстрый таможенный коридор.`]);
+        possible.push(["summit", "Запрос на саммит", `${c.name} хочет провести встречу лидеров по безопасности и инвестициям.`]);
+        possible.push(["aid", "Просьба о помощи", `${c.name} просит гуманитарный пакет для стабилизации внутренней ситуации.`]);
+        if (c.relations > 58) possible.push(["pact", "Пакт о безопасности", `${c.name} предлагает формат консультаций и совместных штабных учений.`]);
+        if (c.relations < 35) possible.push(["pressure", "Дипломатическое давление", `${c.name} требует уступок и угрожает ограничениями.`]);
+        if (c.relations < 22 && c.military > 62) possible.push(["border", "Пограничная напряженность", `${c.name} стягивает силы и предлагает срочные переговоры.`]);
+        const [type, title, text] = pick(possible);
+        const offer = { id: uid("offer"), countryId: c.id, countryName: c.name, type, title, text, daysLeft: Math.round(rnd(35, 110)) };
+        game.diplomacy.inbox.unshift(offer);
+        game.diplomacy.inbox = game.diplomacy.inbox.slice(0, 8);
+        pushNews(game, "Мир", title, text);
+        if (manual) showDecision("Сводка МИД", `${c.name}: ${text}`, [["Тип", title, "warn"], ["Срок ответа", `${offer.daysLeft} дней`, "good"], ["Отношения", pct(c.relations,0), c.relations > 50 ? "good" : "warn"]], "good");
+        return true;
+      }
+
+      function foreignOfferAction(id, choice) {
+        const inbox = state.diplomacy.inbox || [];
+        const offer = inbox.find(x => x.id === id);
+        if (!offer) return notify("Инициатива уже устарела.", "warn", "МИД");
+        const c = state.diplomacy.countries.find(x => x.id === offer.countryId);
+        if (!c) {
+          state.diplomacy.inbox = inbox.filter(x => x.id !== id);
+          return;
+        }
+        const accept = choice === "accept";
+        let title = accept ? "Инициатива принята" : "Инициатива отклонена";
+        let result = "";
+        let details = [];
+        let tone = accept ? "good" : "warn";
+        if (offer.type === "trade") {
+          if (accept) { state.economy.budget -= 140; c.trade += rnd(600, 1800); c.relations += 4.5; result = `${c.name} получает расширенный торговый коридор.`; details = [["Бюджет", "-140 млн", "bad"], ["Торговля", "выше", "good"], ["Отношения", "+4.5 п.п.", "good"]]; }
+          else { c.relations -= 1.6; result = "МИД оставил предложение без развития."; details = [["Отношения", "-1.6 п.п.", "warn"], ["Торговля", "без изменений", "warn"]]; }
+        }
+        if (offer.type === "summit") {
+          if (accept) { state.economy.budget -= 180; c.relations += 6; state.governance.media.trust += .7; result = `Саммит с ${c.name} создает окно для новых договоренностей.`; details = [["Бюджет", "-180 млн", "bad"], ["Отношения", "+6 п.п.", "good"], ["Медиа", "+0.7 п.п.", "good"]]; }
+          else { c.relations -= 2; result = `${c.name} воспринимает отказ как холодный сигнал.`; details = [["Отношения", "-2 п.п.", "warn"]]; }
+        }
+        if (offer.type === "aid") {
+          if (accept) { state.economy.budget -= 320; c.relations += 7; c.stability += 3.5; c.aid += 320; result = "Гуманитарный пакет укрепил доверие и стабилизировал партнера."; details = [["Бюджет", "-320 млн", "bad"], ["Отношения", "+7 п.п.", "good"], ["Стабильность", "+3.5 п.п.", "good"]]; }
+          else { c.relations -= 3.2; c.stability -= 1.4; result = "Партнер начинает искать помощь у конкурентов."; details = [["Отношения", "-3.2 п.п.", "warn"], ["Стабильность", "-1.4 п.п.", "bad"]]; }
+        }
+        if (offer.type === "pact") {
+          if (accept) { state.economy.budget -= 260; c.relations += 5; c.treaties.push("пакт безопасности"); state.military.readiness += 1.2; result = "Пакт о безопасности повышает координацию штабов."; details = [["Бюджет", "-260 млн", "bad"], ["Боеготовность", "+1.2 п.п.", "good"], ["Отношения", "+5 п.п.", "good"]]; }
+          else { c.relations -= 2.4; result = "Партнер откладывает военное сотрудничество."; details = [["Отношения", "-2.4 п.п.", "warn"]]; }
+        }
+        if (offer.type === "pressure") {
+          if (accept) { c.relations += 4; state.politics.popularity -= .8; state.economy.exports *= .995; result = "Кабинет делает ограниченные уступки, снижая риск санкций."; details = [["Отношения", "+4 п.п.", "good"], ["Рейтинг", "-0.8 п.п.", "warn"], ["Экспорт", "слегка ниже", "warn"]]; tone = "warn"; }
+          else { c.sanctions = true; c.relations -= 7; state.economy.exports *= .99; result = `${c.name} вводит ограничительные меры.`; details = [["Санкции", "введены", "bad"], ["Отношения", "-7 п.п.", "bad"], ["Экспорт", "ниже", "bad"]]; tone = "bad"; }
+        }
+        if (offer.type === "border") {
+          if (accept) { state.economy.budget -= 240; c.relations += 2.5; state.military.readiness += 1.4; result = "Срочные переговоры и демонстрация готовности снижают риск эскалации."; details = [["Бюджет", "-240 млн", "bad"], ["Боеготовность", "+1.4 п.п.", "good"], ["Отношения", "+2.5 п.п.", "good"]]; tone = "warn"; }
+          else { c.relations -= 8; state.military.readiness += 2.4; result = "Отказ усиливает пограничный кризис."; details = [["Отношения", "-8 п.п.", "bad"], ["Боеготовность", "+2.4 п.п.", "warn"]]; tone = "bad"; if (c.relations < 12 && Math.random() < .35) { c.war = true; state.military.wars.push(createWar(c, "foreign")); result += " Конфликт переходит в вооруженную фазу."; } }
+        }
+        c.relations = clamp(c.relations, 0, 100);
+        c.stability = clamp(c.stability, 0, 100);
+        state.diplomacy.inbox = inbox.filter(x => x.id !== id);
+        normalizeGovernance();
+        normalizeCore();
+        pushNews(state, "Мир", title, `${offer.countryName}: ${result}`);
+        showDecision(title, result, details, tone);
+      }
+
       function stripHtml(html) {
         const div = document.createElement("div");
         div.innerHTML = html;
@@ -4140,7 +5426,7 @@
         if (c.war) return;
         c.war = true;
         c.relations = Math.min(c.relations, 2);
-        state.military.wars.push({ id: uid("war"), enemy: c.name, intensity: Math.round(rnd(32, 72)), fatigue: 0 });
+        state.military.wars.push(createWar(c, "player"));
         state.politics.popularity = clamp(state.politics.popularity - 4, 0, 100);
         state.economy.stockIndex *= .93;
       }
@@ -4155,38 +5441,130 @@
 
       function militaryAction(type) {
         const m = state.military, e = state.economy;
-        if (type === "mobilize") { m.mobilized += 45000; m.land += 18000; m.readiness += 3; m.morale -= 2; e.budget -= 900; state.politics.protests += 1.5; }
-        if (type === "contract") { m.land += 6500; m.special += 700; m.contractShare += 1.2; e.budget -= 620; }
-        if (type === "draft") { m.conscription = !m.conscription; m.manpower += m.conscription ? 45000 : -30000; state.politics.popularity += m.conscription ? -1.5 : 1.2; }
-        if (type === "industry") { m.industry += 4; m.air += 8; m.airDefense += 3; e.budget -= 1100; }
-        if (type === "cyber") { m.cyber += 4; e.budget -= 260; }
-        if (type === "operation") { m.operations.unshift({ id: uid("op"), name: pick(["Щит столицы","Северный дозор","Киберпериметр","Морской рубеж"]), type: pick(["учения","разведка","контртеррор","операция"]), date: formatDate(state.date), result: Math.round(rnd(48, 92)) }); m.readiness += 1.4; e.budget -= 180; }
+        let report = null;
+        if (type === "mobilize") { const cost = 900; if (e.budget < cost) return showBlockedDecision("Недостаточно бюджета", "Мобилизация требует финансирования резервов и снабжения.", [["Нужно", money(cost), "bad"]]); m.mobilized += 45000; m.land += 18000; m.readiness += 3; m.morale -= 2; m.warExhaustion += 1.8; e.budget -= cost; state.politics.protests += 1.5; report = ["Мобилизация объявлена", "Резервисты усиливают сухопутные войска, но общество чувствует нагрузку войны.", [["Личный состав", "+18 тыс.", "good"], ["Боеготовность", "+3 п.п.", "good"], ["Протесты", "+1.5 п.п.", "warn"], ["Бюджет", "-900 млн", "bad"]], "warn"]; }
+        if (type === "contract") { const cost = 620; if (e.budget < cost) return showBlockedDecision("Недостаточно бюджета", "Контрактная армия требует постоянных выплат.", [["Нужно", money(cost), "bad"]]); m.land += 6500; m.special += 700; m.contractShare += 1.2; m.training += .9; e.budget -= cost; report = ["Контрактники набраны", "Профессиональная доля армии растет, повышая качество подразделений.", [["Личный состав", "+6.5 тыс.", "good"], ["Спецназ", "+700", "good"], ["Подготовка", "+0.9 п.п.", "good"], ["Бюджет", "-620 млн", "bad"]], "good"]; }
+        if (type === "draft") { m.conscription = !m.conscription; m.manpower += m.conscription ? 45000 : -30000; state.politics.popularity += m.conscription ? -1.5 : 1.2; m.training += m.conscription ? -.4 : .3; report = [m.conscription ? "Призыв усилен" : "Призыв смягчен", m.conscription ? "Мобилизационный ресурс растет, но рейтинг получает удар." : "Общество воспринимает смягчение призыва позитивно, но резерв сокращается.", [["Мобрезерв", m.conscription ? "+45 тыс." : "-30 тыс.", m.conscription ? "good" : "warn"], ["Рейтинг", m.conscription ? "-1.5 п.п." : "+1.2 п.п.", m.conscription ? "bad" : "good"]], m.conscription ? "warn" : "good"]; }
+        if (type === "industry") { const cost = 1100; if (e.budget < cost) return showBlockedDecision("Недостаточно бюджета", "Заказ ВПК требует авансов промышленности.", [["Нужно", money(cost), "bad"]]); m.industry += 4; m.air += 8; m.airDefense += 3; m.artillery += 1.4; e.budget -= cost; report = ["Заказ ВПК размещен", "Промышленность ускоряет поставки авиации, ПВО и артиллерийских систем.", [["ВПК", "+4 п.п.", "good"], ["Авиация", "+8", "good"], ["ПВО", "+3", "good"], ["Бюджет", "-1.10 млрд", "bad"]], "good"]; }
+        if (type === "cyber") { const cost = 260; if (e.budget < cost) return showBlockedDecision("Недостаточно бюджета", "Киберучения требуют финансирования инфраструктуры.", [["Нужно", money(cost), "bad"]]); m.cyber += 4; m.recon += 1.2; e.budget -= cost; report = ["Киберучения проведены", "Штабы отрабатывают защиту связи, разведку и точные операции.", [["Кибер", "+4 п.п.", "good"], ["Разведка", "+1.2 п.п.", "good"], ["Бюджет", "-260 млн", "bad"]], "good"]; }
+        if (type === "operation") { const cost = 180; if (e.budget < cost) return showBlockedDecision("Недостаточно бюджета", "Учения требуют топлива, боеприпасов и командной подготовки.", [["Нужно", money(cost), "bad"]]); const result = Math.round(rnd(48, 92)); m.operations.unshift({ id: uid("op"), name: pick(["Щит столицы","Северный дозор","Киберпериметр","Морской рубеж"]), type: pick(["учения","разведка","контртеррор","операция"]), date: formatDate(state.date), result }); m.readiness += 1.4; m.command += .7; e.budget -= cost; report = ["Учения проведены", `Результат штабной оценки: ${pct(result,0)}.`, [["Боеготовность", "+1.4 п.п.", "good"], ["Командование", "+0.7 п.п.", "good"], ["Бюджет", "-180 млн", "bad"]], "good"]; }
         normalizeCore();
         pushNews(state, "Армия", "Решение Генштаба", "Военные показатели, бюджет и общественная реакция обновлены.");
+        if (report) showDecision(report[0], report[1], report[2], report[3]);
       }
 
-      function warOperation(id) {
-        const w = state.military.wars.find(x => x.id === id);
+      function militaryUpgrade(key) {
+        const meta = {
+          drones: ["БПЛА и РЭБ", 540, "Дроны повышают разведку, точные удары и снижают потери."],
+          artillery: ["Артиллерия", 680, "Огневая мощь повышает шансы наступления и давление на фронте."],
+          armor: ["Бронетехника", 760, "Бронетехника помогает прорывам и защите личного состава."],
+          airSuperiority: ["Авиация", 920, "Господство в воздухе улучшает инициативу и снижает потери."],
+          medical: ["Военная медицина", 360, "Эвакуация и медицина снижают усталость и политическую цену потерь."],
+          navalPower: ["Флот", 700, "Флот защищает морские коммуникации и побережье."]
+        }[key];
+        if (!meta) return;
+        const [title, baseCost, desc] = meta;
+        const current = clamp(state.military[key] || 0, 0, 100);
+        const cost = Math.round(baseCost * (1 + current / 140));
+        if (state.economy.budget < cost) return showBlockedDecision("Недостаточно бюджета", `${title}: модернизация требует ${money(cost)}.`, [["Бюджет", money(state.economy.budget), "bad"], ["Нужно", money(cost), "bad"]]);
+        const gain = rnd(2.4, 5.2) * clamp(1 - current / 135, .35, 1);
+        state.economy.budget -= cost;
+        state.military[key] = clamp(current + gain, 0, 100);
+        state.military.research = clamp(state.military.research + .35, 0, 100);
+        state.military.industry = clamp(state.military.industry + .25, 0, 100);
+        normalizeCore();
+        pushNews(state, "Армия", `Модернизация: ${title}`, desc);
+        showDecision(`Модернизация: ${title}`, desc, [["Прирост", `+${gain.toFixed(1)} п.п.`, "good"], ["Новый уровень", pct(state.military[key],0), "good"], ["Бюджет", `-${money(cost)}`, "bad"], ["НИОКР", "+0.35 п.п.", "good"]], "good");
+      }
+
+      function warOperation(id, mode = "offensive") {
+        let w = state.military.wars.find(x => x.id === id);
         if (!w) return;
-        const power = calcArmyPower();
-        const success = clamp(power / 3 + state.military.readiness + rnd(-35, 35) - w.intensity, 0, 100);
-        w.fatigue += 5;
-        state.economy.budget -= 700;
-        if (success > 62) {
-          w.intensity = clamp(w.intensity - rnd(5, 14), 0, 100);
-          state.military.morale += 2;
-        } else {
-          w.intensity = clamp(w.intensity + rnd(2, 8), 0, 100);
-          state.military.morale -= 2;
-          state.politics.popularity -= 1;
+        w = Object.assign(w, normalizeWar(w));
+        const c = state.diplomacy.countries.find(x => x.id === w.enemyId || x.name === w.enemy);
+        let balance = calcWarBalance(state, w);
+        const plannedCost = ({ offensive: 980, defense: 430, logistics: 560, precision: 720, talks: 180 })[mode] || 980;
+        if (state.economy.budget < plannedCost) return showBlockedDecision("Недостаточно бюджета", "Генштаб не может провести решение без финансирования.", [["Нужно", money(plannedCost), "bad"], ["Бюджет", money(state.economy.budget), state.economy.budget > plannedCost ? "good" : "bad"]]);
+        let cost = plannedCost;
+        let success = 0;
+        let title = "";
+        let result = "";
+        let tone = "good";
+        state.economy.budget -= cost;
+        if (mode === "offensive") {
+          success = clamp(balance.initiative + state.military.training * .12 + state.military.armor * .08 + state.military.artillery * .08 + rnd(-18, 16) - w.intensity * .16, 0, 100);
+          w.phase = "наступление";
+          w.fatigue = clamp(w.fatigue + 5.5, 0, 100);
+          w.supply = clamp(w.supply - rnd(4, 9), 0, 100);
+          w.control = clamp(w.control + (success > 58 ? rnd(2.2, 5.8) : -rnd(.8, 2.6)), 0, 100);
+          w.warScore = clamp(w.warScore + (success > 58 ? rnd(3.5, 8) : -rnd(2, 5)), -100, 100);
+          w.intensity = clamp(w.intensity + rnd(1.2, 4.5), 0, 100);
+          w.ourLosses += Math.round(w.intensity * rnd(14, 38) * clamp(1.1 - state.military.medical / 180 - state.military.airSuperiority / 260, .38, 1.35));
+          w.enemyLosses += Math.round(w.intensity * rnd(success > 58 ? 26 : 12, success > 58 ? 58 : 30) * clamp(1 + state.military.drones / 220 + state.military.artillery / 260, 1, 1.7));
+          title = success > 58 ? "Наступление продвинуло фронт" : "Наступление встретило сопротивление";
+          result = success > 58 ? "Штаб сообщает о продвижении, давлении на коммуникации противника и росте военного счета." : "Противник удержал часть рубежей, потери и усталость выросли.";
+          tone = success > 58 ? "good" : "bad";
         }
-        pushNews(state, "Армия", success > 62 ? "Успешная операция" : "Сложная операция", `На направлении ${w.enemy} результат операции оценивается в ${pct(success,0)}.`);
-        if (w.intensity < 8) {
-          const c = state.diplomacy.countries.find(x => x.name === w.enemy);
-          if (c) c.war = false;
-          state.military.wars = state.military.wars.filter(x => x.id !== id);
-          pushNews(state, "Армия", "Капитуляция противника", `${w.enemy} принимает условия прекращения боевых действий.`);
+        if (mode === "defense") {
+          success = clamp(balance.initiative * .65 + state.military.logistics * .24 + state.military.command * .22 + state.military.airDefense * .08 + rnd(-14, 20), 0, 100);
+          w.phase = "оборона";
+          w.fatigue = clamp(w.fatigue + 1.7, 0, 100);
+          w.supply = clamp(w.supply + rnd(1, 4), 0, 100);
+          w.intensity = clamp(w.intensity - (success > 55 ? rnd(2.2, 5.2) : rnd(.2, 1.4)), 0, 100);
+          w.control = clamp(w.control + (success > 65 ? rnd(.4, 1.4) : -rnd(.3, 1.2)), 0, 100);
+          w.warScore = clamp(w.warScore + (success > 55 ? rnd(.8, 2.6) : -rnd(.6, 1.8)), -100, 100);
+          w.ourLosses += Math.round(w.intensity * rnd(6, 18));
+          w.enemyLosses += Math.round(w.intensity * rnd(8, 22));
+          title = "Оборонительная операция";
+          result = success > 55 ? "Линия фронта стабилизирована, интенсивность боя снижена." : "Оборона удержала рубежи частично, давление остается высоким.";
+          tone = success > 55 ? "good" : "warn";
         }
+        if (mode === "logistics") {
+          success = clamp(state.military.industry * .45 + state.military.logistics * .75 + state.military.command * .28 + rnd(-12, 20) - w.intensity * .18, 0, 100);
+          w.phase = "перегруппировка";
+          w.supply = clamp(w.supply + rnd(7, 15), 0, 100);
+          w.fatigue = clamp(w.fatigue - rnd(3, 8), 0, 100);
+          w.intensity = clamp(w.intensity - rnd(.8, 2.4), 0, 100);
+          state.military.morale = clamp(state.military.morale + .8, 0, 100);
+          title = "Логистика усилена";
+          result = "Снабжение, ремонт и ротация войск снизили истощение фронта.";
+          tone = "good";
+        }
+        if (mode === "precision") {
+          success = clamp(balance.initiative * .72 + state.military.recon * .28 + state.military.drones * .32 + state.military.cyber * .16 + rnd(-20, 18) - w.supply * .05, 0, 100);
+          w.phase = "точечные удары";
+          w.supply = clamp(w.supply - rnd(1, 3), 0, 100);
+          w.intensity = clamp(w.intensity + rnd(.2, 1.2), 0, 100);
+          w.warScore = clamp(w.warScore + (success > 60 ? rnd(2.2, 5.5) : -rnd(.7, 2.2)), -100, 100);
+          w.control = clamp(w.control + (success > 60 ? rnd(.8, 2.3) : -rnd(.2, 1.1)), 0, 100);
+          w.enemyLosses += Math.round(w.intensity * rnd(success > 60 ? 18 : 6, success > 60 ? 42 : 16));
+          w.ourLosses += Math.round(w.intensity * rnd(3, 12) * clamp(1.2 - state.military.drones / 140, .35, 1.1));
+          title = success > 60 ? "Точный удар нарушил управление" : "Точный удар дал ограниченный эффект";
+          result = success > 60 ? "Разведка, БПЛА и киберсредства вывели из строя узел управления противника." : "Цель частично ушла из-под удара, эффект ограничен.";
+          tone = success > 60 ? "good" : "warn";
+        }
+        if (mode === "talks") {
+          success = clamp((100 - w.fatigue) * .16 + w.control * .26 + w.warScore * .22 + (c?.relations || 20) * .2 + state.diplomacy.organizations.reduce((s, o) => s + o.influence, 0) * .002 + rnd(-18, 28), 0, 100);
+          title = success > 58 ? "Переговоры дали перемирие" : "Переговоры сорвались";
+          if (success > 58) {
+            result = `${w.enemy} соглашается на прекращение огня под международные гарантии.`;
+            finishWar(state, w, w.control >= 54 ? "victory" : "ceasefire", title, result);
+          } else {
+            result = "Стороны не согласовали условия, фронт остается активным.";
+            w.fatigue = clamp(w.fatigue + 1.5, 0, 100);
+            if (c) c.relations = clamp(c.relations - 2.5, 0, 100);
+            tone = "warn";
+          }
+        }
+        balance = calcWarBalance(state, w);
+        if (mode !== "talks" || success <= 58) {
+          state.military.morale = clamp(state.military.morale + (success > 58 ? 1.5 : -1.8), 0, 100);
+          state.politics.popularity = clamp(state.politics.popularity + (success > 58 ? .4 : -1.1), 0, 100);
+          pushNews(state, "Армия", title, `На направлении ${w.enemy}: ${result}`);
+          if (w.control >= 88 || w.warScore >= 72) finishWar(state, w, "victory", "Военная победа", `${w.enemy} принимает условия прекращения боевых действий.`);
+          else if (w.control <= 12 || w.warScore <= -72) finishWar(state, w, "defeat", "Невыгодное перемирие", `Кабинет вынужден остановить конфликт с ${w.enemy}.`);
+        }
+        showDecision(title, result, [["Вероятность", pct(success,0), success > 58 ? "good" : "warn"], ["Инициатива", pct(balance.initiative,0), balance.initiative > 55 ? "good" : "warn"], ["Силы", `${Math.round(balance.ownPower)} / ${Math.round(balance.enemyPower)}`, balance.ownPower >= balance.enemyPower ? "good" : "bad"], ["Фронт", pct(w.control,0), w.control > 50 ? "good" : "bad"], ["Военный счет", w.warScore.toFixed(1), w.warScore >= 0 ? "good" : "bad"], ["Стоимость", `-${money(cost)}`, "bad"]], tone);
       }
 
       function techLab() {
@@ -4287,6 +5665,10 @@
         p.strikes = clamp(p.strikes, 0, 100);
         p.coalition = clamp(p.coalition, 0, 100);
         p.opposition = clamp(p.opposition, 0, 100);
+        if (p.constitution) {
+          p.constitution.rights = clamp(p.constitution.rights, 0, 100);
+          p.constitution.courtIndependence = clamp(p.constitution.courtIndependence, 0, 100);
+        }
         pop.happiness = clamp(pop.happiness, 0, 100);
         pop.discontent = clamp(pop.discontent, 0, 100);
         pop.crime = clamp(pop.crime, 0, 100);
@@ -4299,6 +5681,10 @@
         m.industry = clamp(m.industry, 0, 100);
         m.research = clamp(m.research, 0, 100);
         m.contractShare = clamp(m.contractShare, 0, 100);
+        ["logistics","training","recon","drones","artillery","armor","airSuperiority","navalPower","medical","command","warExhaustion","veterans"].forEach(key => {
+          m[key] = clamp(num(m[key]), 0, 100);
+        });
+        m.wars = (m.wars || []).map(normalizeWar);
       }
 
       function setEditorPath(path, value, asNumber) {
@@ -4395,31 +5781,26 @@
           title: "Новая игра",
           body: `<p class="subtle">Текущее автосохранение будет удалено. Слоты останутся доступны.</p><div class="actions"><button class="danger" data-action="really-new-game">Удалить автосохранение</button><button data-action="close-modal">Отмена</button></div>`
         };
-        render();
-        setTimeout(() => {
-          document.querySelector("[data-action='really-new-game']")?.addEventListener("click", () => {
-            localStorage.removeItem(STORAGE_KEY);
-            state = null;
-            modal = null;
-            render();
-          }, { once: true });
-        });
       }
 
-      document.addEventListener("click", event => {
-        if (event.target.closest("[data-action='really-new-game']")) {
-          localStorage.removeItem(STORAGE_KEY);
-          state = null;
-          modal = null;
-          render();
-        }
-        if (event.target.closest("[data-action='really-clear-slots']")) {
-          localStorage.removeItem(SLOTS_KEY);
-          modal = null;
-          notify("Слоты очищены.");
-          render();
-        }
-      });
+      function startFreshGame() {
+        localStorage.removeItem(STORAGE_KEY);
+        state = null;
+        modal = null;
+        activeTab = "dashboard";
+        setupPage = "state";
+        selectedRegionId = null;
+        selectedCountryId = null;
+        drawMode = false;
+        drawingPoints = [];
+        setupDraft = defaultSetupDraft();
+      }
+
+      function clearSaveSlots() {
+        localStorage.removeItem(SLOTS_KEY);
+        modal = null;
+        notify("Слоты очищены.", "good", "Сохранения");
+      }
 
       document.addEventListener("click", event => {
         const svg = event.target.closest("#countryMap");
