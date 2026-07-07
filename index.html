@@ -1,0 +1,3240 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Президент: симулятор государства</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --bg-2: #111827;
+      --panel: rgba(22, 29, 42, .92);
+      --panel-2: rgba(32, 42, 60, .94);
+      --panel-3: rgba(15, 23, 42, .74);
+      --text: #f8fafc;
+      --muted: #9aa6b2;
+      --line: rgba(148, 163, 184, .22);
+      --line-strong: rgba(226, 232, 240, .34);
+      --accent: #21c7a8;
+      --accent-2: #4fa3ff;
+      --danger: #ff5c7a;
+      --warn: #ffbf47;
+      --ok: #55d66b;
+      --violet: #b487ff;
+      --shadow: 0 22px 60px rgba(0, 0, 0, .33);
+      --radius: 8px;
+      --sidebar: 248px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body.light {
+      color-scheme: light;
+      --bg: #f4f7fb;
+      --bg-2: #e9eef5;
+      --panel: rgba(255, 255, 255, .94);
+      --panel-2: rgba(248, 250, 252, .98);
+      --panel-3: rgba(237, 242, 247, .9);
+      --text: #111827;
+      --muted: #5d6674;
+      --line: rgba(50, 65, 88, .16);
+      --line-strong: rgba(50, 65, 88, .28);
+      --shadow: 0 20px 50px rgba(41, 55, 80, .16);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      min-height: 100%;
+      margin: 0;
+      background:
+        radial-gradient(circle at 16% 10%, rgba(33, 199, 168, .16), transparent 29rem),
+        radial-gradient(circle at 85% 20%, rgba(79, 163, 255, .14), transparent 26rem),
+        linear-gradient(135deg, var(--bg) 0%, var(--bg-2) 100%);
+      color: var(--text);
+    }
+
+    button, input, select, textarea {
+      font: inherit;
+      color: inherit;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      border-radius: var(--radius);
+      padding: 9px 12px;
+      min-height: 38px;
+      cursor: pointer;
+      transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      border-color: var(--line-strong);
+      box-shadow: 0 8px 22px rgba(0, 0, 0, .18);
+    }
+
+    button.primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #06111a;
+      border: 0;
+      font-weight: 800;
+    }
+
+    button.danger {
+      background: color-mix(in oklab, var(--danger) 22%, var(--panel-2));
+      border-color: color-mix(in oklab, var(--danger) 45%, transparent);
+    }
+
+    button.ghost {
+      background: transparent;
+    }
+
+    button.icon {
+      width: 40px;
+      min-width: 40px;
+      padding: 0;
+      display: inline-grid;
+      place-items: center;
+      font-weight: 900;
+    }
+
+    button.active,
+    .pill.active {
+      border-color: color-mix(in oklab, var(--accent) 70%, white 10%);
+      background: color-mix(in oklab, var(--accent) 18%, var(--panel-2));
+    }
+
+    input, select, textarea {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-3);
+      padding: 9px 10px;
+      outline: none;
+      transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+    }
+
+    textarea {
+      min-height: 98px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    input[type="range"] {
+      padding: 0;
+      min-height: 26px;
+    }
+
+    input[type="color"] {
+      padding: 3px;
+      height: 38px;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent-2);
+      box-shadow: 0 0 0 3px rgba(79, 163, 255, .16);
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      letter-spacing: .02em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: var(--sidebar) minmax(0, 1fr);
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      border-right: 1px solid var(--line);
+      background: rgba(7, 12, 20, .62);
+      backdrop-filter: blur(20px);
+      padding: 18px 14px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 18px;
+      z-index: 5;
+    }
+
+    body.light .sidebar { background: rgba(246, 249, 252, .72); }
+
+    .brand {
+      display: grid;
+      grid-template-columns: 54px 1fr;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .seal {
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      border: 1px solid var(--line-strong);
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      background: conic-gradient(from 160deg, var(--accent), var(--accent-2), var(--warn), var(--accent));
+      box-shadow: inset 0 0 0 7px rgba(0, 0, 0, .18), 0 12px 32px rgba(0, 0, 0, .22);
+    }
+
+    .seal span {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: rgba(5, 10, 18, .68);
+      color: white;
+      font-weight: 900;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.15;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .brand p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .nav {
+      display: grid;
+      gap: 6px;
+      align-content: start;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .nav button {
+      min-height: 42px;
+      display: grid;
+      grid-template-columns: 30px 1fr auto;
+      align-items: center;
+      gap: 8px;
+      text-align: left;
+      border-color: transparent;
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .nav button:hover,
+    .nav button.active {
+      color: var(--text);
+      background: var(--panel-2);
+      border-color: var(--line);
+    }
+
+    .nav .nav-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: var(--panel-3);
+      font-weight: 900;
+    }
+
+    .side-foot {
+      display: grid;
+      gap: 10px;
+    }
+
+    .mini-stat {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      padding: 10px;
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .mini-stat strong {
+      color: var(--text);
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .main {
+      min-width: 0;
+      padding: 18px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 4;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      align-items: center;
+      gap: 14px;
+      margin: -18px -18px 18px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in oklab, var(--bg) 74%, transparent);
+      backdrop-filter: blur(20px);
+    }
+
+    .top-title {
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+    }
+
+    .top-title h2 {
+      margin: 0;
+      font-size: clamp(20px, 3vw, 32px);
+      line-height: 1.05;
+    }
+
+    .top-title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .speedbar {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+
+    .speedbar button {
+      min-height: 32px;
+      padding: 5px 8px;
+      border-color: transparent;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .speedbar button.active {
+      background: var(--panel-2);
+      border-color: var(--line);
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .grid.split { grid-template-columns: minmax(0, 1.45fr) minmax(310px, .8fr); }
+    .grid.wide { grid-template-columns: minmax(0, 1fr) minmax(360px, .42fr); }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .panel.pad { padding: 14px; }
+
+    .panel-head {
+      padding: 13px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in oklab, var(--panel-2) 78%, transparent);
+    }
+
+    .panel-head h3,
+    .section-title {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.2;
+    }
+
+    .panel-head small,
+    .subtle {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: var(--panel-3);
+      display: grid;
+      gap: 8px;
+      min-height: 104px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric::after {
+      content: "";
+      position: absolute;
+      inset: auto 0 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      opacity: .74;
+    }
+
+    .metric .label {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+
+    .metric .value {
+      font-size: clamp(22px, 2.4vw, 34px);
+      font-weight: 850;
+      letter-spacing: 0;
+      line-height: 1;
+    }
+
+    .metric .delta {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .delta.good { color: var(--ok); }
+    .delta.bad { color: var(--danger); }
+    .delta.warn { color: var(--warn); }
+
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px;
+    }
+
+    .kpi {
+      padding: 9px 10px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: var(--panel-3);
+      display: grid;
+      gap: 4px;
+    }
+
+    .kpi span {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+
+    .kpi strong {
+      font-size: 16px;
+      line-height: 1.1;
+    }
+
+    .list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-3);
+      min-width: 0;
+    }
+
+    .row.compact {
+      grid-template-columns: auto 1fr auto;
+      padding: 8px;
+    }
+
+    .row strong,
+    .row span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 30px;
+      padding: 5px 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel-3);
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
+    }
+
+    .form-grid.narrow {
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+
+    .form-grid.full label {
+      min-width: 0;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .canvas-wrap {
+      height: 260px;
+      padding: 12px;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .progress {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, .18);
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+
+    .progress i {
+      display: block;
+      height: 100%;
+      width: var(--w, 0%);
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    }
+
+    .setup {
+      min-height: 100vh;
+      padding: 26px;
+      display: grid;
+      place-items: center;
+    }
+
+    .setup-card {
+      width: min(1180px, 100%);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .setup-hero {
+      padding: clamp(22px, 4vw, 42px);
+      min-height: 230px;
+      display: grid;
+      align-content: end;
+      gap: 12px;
+      background:
+        linear-gradient(90deg, rgba(3, 8, 16, .78), rgba(3, 8, 16, .34)),
+        repeating-linear-gradient(130deg, rgba(255,255,255,.08), rgba(255,255,255,.08) 1px, transparent 1px, transparent 28px),
+        radial-gradient(circle at 76% 30%, rgba(33, 199, 168, .42), transparent 18rem),
+        linear-gradient(135deg, #0c1824, #1b2535 55%, #22314a);
+    }
+
+    body.light .setup-hero {
+      background:
+        linear-gradient(90deg, rgba(255,255,255,.88), rgba(255,255,255,.35)),
+        repeating-linear-gradient(130deg, rgba(0,0,0,.06), rgba(0,0,0,.06) 1px, transparent 1px, transparent 28px),
+        radial-gradient(circle at 76% 30%, rgba(33, 199, 168, .28), transparent 18rem),
+        linear-gradient(135deg, #e9f0f5, #dce7ef 55%, #cbd9e6);
+    }
+
+    .setup-hero h1 {
+      margin: 0;
+      font-size: clamp(32px, 6vw, 64px);
+      line-height: .96;
+      max-width: 780px;
+    }
+
+    .setup-hero p {
+      margin: 0;
+      color: color-mix(in oklab, var(--text) 76%, var(--muted));
+      max-width: 720px;
+      font-size: 16px;
+      line-height: 1.55;
+    }
+
+    .setup-body {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .tabs-line {
+      display: flex;
+      gap: 8px;
+      overflow: auto;
+      padding-bottom: 2px;
+    }
+
+    .tabs-line button {
+      white-space: nowrap;
+      min-height: 34px;
+      padding: 6px 10px;
+    }
+
+    .map-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 14px;
+    }
+
+    .map-stage {
+      min-height: 560px;
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background:
+        linear-gradient(135deg, rgba(79, 163, 255, .14), transparent 30%),
+        linear-gradient(0deg, rgba(33, 199, 168, .08), transparent 40%),
+        var(--panel-3);
+    }
+
+    .map-stage svg {
+      width: 100%;
+      height: 100%;
+      min-height: 560px;
+      display: block;
+    }
+
+    .map-grid-line {
+      stroke: rgba(148, 163, 184, .12);
+      stroke-width: 1;
+    }
+
+    .region-poly {
+      cursor: pointer;
+      stroke: rgba(255, 255, 255, .8);
+      stroke-width: 2;
+      transition: filter .2s ease, opacity .2s ease, stroke-width .2s ease;
+    }
+
+    .region-poly:hover,
+    .region-poly.selected {
+      filter: brightness(1.18) saturate(1.18);
+      stroke-width: 4;
+    }
+
+    .map-label {
+      fill: white;
+      paint-order: stroke;
+      stroke: rgba(0,0,0,.55);
+      stroke-width: 4;
+      font-size: 16px;
+      font-weight: 800;
+      pointer-events: none;
+    }
+
+    .build-marker {
+      pointer-events: none;
+      filter: drop-shadow(0 5px 9px rgba(0,0,0,.32));
+    }
+
+    .draw-point {
+      fill: var(--warn);
+      stroke: #111;
+      stroke-width: 2;
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .table th,
+    .table td {
+      border-bottom: 1px solid var(--line);
+      padding: 9px 8px;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    .table th {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+      background: var(--panel-3);
+      position: sticky;
+      top: 0;
+    }
+
+    .scroll {
+      overflow: auto;
+      max-height: 500px;
+    }
+
+    .news-feed {
+      display: grid;
+      gap: 9px;
+      max-height: 640px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .news-item {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-3);
+      padding: 11px;
+      display: grid;
+      gap: 7px;
+    }
+
+    .news-item header {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .news-item strong {
+      font-size: 14px;
+    }
+
+    .news-item p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .tech-tree {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px;
+    }
+
+    .tech-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-3);
+      padding: 12px;
+      display: grid;
+      gap: 9px;
+      min-height: 168px;
+    }
+
+    .tech-card.done {
+      border-color: color-mix(in oklab, var(--ok) 55%, transparent);
+      background: color-mix(in oklab, var(--ok) 10%, var(--panel-3));
+    }
+
+    .tech-card.locked {
+      opacity: .58;
+    }
+
+    .flag {
+      width: 76px;
+      height: 48px;
+      border-radius: 5px;
+      border: 1px solid var(--line-strong);
+      overflow: hidden;
+      box-shadow: 0 10px 22px rgba(0,0,0,.22);
+      display: grid;
+    }
+
+    .portrait {
+      width: 82px;
+      height: 82px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: var(--panel-3);
+      border: 1px solid var(--line);
+    }
+
+    .empty-portrait {
+      width: 82px;
+      height: 82px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #07121c;
+      font-weight: 900;
+      font-size: 30px;
+    }
+
+    .toast {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 30;
+      display: grid;
+      gap: 8px;
+      max-width: 360px;
+    }
+
+    .toast div {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 12px;
+      animation: slideIn .24s ease both;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(0,0,0,.58);
+      backdrop-filter: blur(12px);
+    }
+
+    .modal {
+      width: min(820px, 100%);
+      max-height: calc(100vh - 36px);
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .modal-body {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .hidden { display: none !important; }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 1060px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+      .sidebar {
+        position: relative;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .nav {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        overflow: visible;
+      }
+      .side-foot {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .topbar,
+      .grid.split,
+      .grid.wide,
+      .map-layout {
+        grid-template-columns: 1fr;
+      }
+      .top-actions {
+        justify-content: flex-start;
+      }
+      .grid.two,
+      .grid.three,
+      .grid.four {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .main, .setup {
+        padding: 10px;
+      }
+      .topbar {
+        margin: -10px -10px 10px;
+        padding: 10px;
+      }
+      .setup-card {
+        border-radius: 0;
+      }
+      .speedbar {
+        width: 100%;
+        overflow: auto;
+      }
+      .metric-grid {
+        grid-template-columns: 1fr;
+      }
+      .map-stage,
+      .map-stage svg {
+        min-height: 420px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div class="toast" id="toast"></div>
+  <input class="hidden" id="importFile" type="file" accept="application/json" />
+  <script>
+    (() => {
+      "use strict";
+
+      const STORAGE_KEY = "aaa_president_sim_state_v4";
+      const SLOTS_KEY = "aaa_president_sim_slots_v4";
+      const DAY_MS = 900;
+      const tabs = [
+        ["dashboard", "Обзор", "⌂"],
+        ["map", "Карта", "◇"],
+        ["economy", "Экономика", "₿"],
+        ["politics", "Политика", "§"],
+        ["diplomacy", "Дипломатия", "∞"],
+        ["military", "Армия", "⚑"],
+        ["tech", "Технологии", "⌬"],
+        ["population", "Население", "◌"],
+        ["news", "Новости", "▤"],
+        ["editor", "Редактор", "✎"],
+        ["saves", "Сохранения", "▣"]
+      ];
+
+      const buildingTypes = [
+        ["roads", "Дорога", 18, { growth: .03, unemployment: -.02 }],
+        ["cities", "Город", 120, { gdp: 3.5, population: 65000, happiness: .08 }],
+        ["airports", "Аэропорт", 260, { exports: .18, relations: .04 }],
+        ["ports", "Порт", 220, { exports: .24, imports: .14 }],
+        ["bases", "Военная база", 180, { army: .18, security: .14 }],
+        ["plants", "Электростанция", 170, { gdp: 1.8, inflation: -.02 }],
+        ["factories", "Завод", 150, { gdp: 2.5, unemployment: -.08, pollution: .18 }],
+        ["schools", "Школа", 70, { education: .12, happiness: .04 }],
+        ["hospitals", "Больница", 95, { deathRate: -.01, happiness: .08 }],
+        ["universities", "Университет", 140, { research: .18, education: .18 }],
+        ["farms", "Ферма", 60, { gdp: .7, inflation: -.03 }],
+        ["mines", "Шахта", 105, { exports: .10, pollution: .10 }],
+        ["oil", "Нефтяное месторождение", 240, { exports: .26, reserves: .22, pollution: .18 }],
+        ["gas", "Газовое месторождение", 215, { exports: .22, reserves: .17, pollution: .12 }]
+      ];
+
+      const worldNames = [
+        "Афганистан","Албания","Алжир","Андорра","Ангола","Антигуа и Барбуда","Аргентина","Армения","Австралия","Австрия","Азербайджан","Багамы","Бахрейн","Бангладеш","Барбадос","Беларусь","Бельгия","Белиз","Бенин","Бутан","Боливия","Босния и Герцеговина","Ботсвана","Бразилия","Бруней","Болгария","Буркина-Фасо","Бурунди","Камбоджа","Камерун","Канада","Кабо-Верде","ЦАР","Чад","Чили","Китай","Колумбия","Коморы","Конго","ДР Конго","Коста-Рика","Кот-д'Ивуар","Хорватия","Куба","Кипр","Чехия","Дания","Джибути","Доминика","Доминиканская Республика","Эквадор","Египет","Сальвадор","Экваториальная Гвинея","Эритрея","Эстония","Эсватини","Эфиопия","Фиджи","Финляндия","Франция","Габон","Гамбия","Грузия","Германия","Гана","Греция","Гренада","Гватемала","Гвинея","Гвинея-Бисау","Гайана","Гаити","Гондурас","Венгрия","Исландия","Индия","Индонезия","Иран","Ирак","Ирландия","Израиль","Италия","Ямайка","Япония","Иордания","Казахстан","Кения","Кирибати","Кувейт","Кыргызстан","Лаос","Латвия","Ливан","Лесото","Либерия","Ливия","Лихтенштейн","Литва","Люксембург","Мадагаскар","Малави","Малайзия","Мальдивы","Мали","Мальта","Маршалловы Острова","Мавритания","Маврикий","Мексика","Микронезия","Молдова","Монако","Монголия","Черногория","Марокко","Мозамбик","Мьянма","Намибия","Науру","Непал","Нидерланды","Новая Зеландия","Никарагуа","Нигер","Нигерия","КНДР","Северная Македония","Норвегия","Оман","Пакистан","Палау","Палестина","Панама","Папуа - Новая Гвинея","Парагвай","Перу","Филиппины","Польша","Португалия","Катар","Румыния","Россия","Руанда","Сент-Китс и Невис","Сент-Люсия","Сент-Винсент и Гренадины","Самоа","Сан-Марино","Сан-Томе и Принсипи","Саудовская Аравия","Сенегал","Сербия","Сейшелы","Сьерра-Леоне","Сингапур","Словакия","Словения","Соломоновы Острова","Сомали","ЮАР","Южная Корея","Южный Судан","Испания","Шри-Ланка","Судан","Суринам","Швеция","Швейцария","Сирия","Таджикистан","Танзания","Таиланд","Тимор-Лесте","Того","Тонга","Тринидад и Тобаго","Тунис","Турция","Туркменистан","Тувалу","Уганда","Украина","ОАЭ","Великобритания","США","Уругвай","Узбекистан","Вануату","Ватикан","Венесуэла","Вьетнам","Йемен","Замбия","Зимбабве","Косово","Тайвань","Гренландия","Пуэрто-Рико","Гонконг","Макао","Западная Сахара","Северный Кипр","Сомалиленд","Новая Каледония","Французская Полинезия","Аруба","Кюрасао","Бермуды","Гибралтар","Фарерские острова","Гернси","Джерси","Остров Мэн","Острова Кука","Ниуэ","Гуам","Американское Самоа","Ангилья","Британские Виргинские острова","Каймановы острова","Фолклендские острова","Монтсеррат","Остров Святой Елены","Теркс и Кайкос","Виргинские острова США","Мартиника","Гваделупа","Реюньон","Майотта","Французская Гвиана","Сен-Мартен","Сен-Бартелеми","Сен-Пьер и Микелон"
+      ];
+
+      const ideologies = ["социал-демократия","консерватизм","либерализм","национал-демократия","зелёная политика","технократия","социализм","центризм","федерализм","суверенизм"];
+      const continents = ["Евразия","Африка","Северная Америка","Южная Америка","Океания","Арктический пояс"];
+      const newsCategories = ["Экономика","Политика","Армия","Мир","Катастрофы","Эпидемии","Скандалы","Выборы","Аварии","Безопасность","Открытия"];
+      const speeds = [0, 1, 2, 5, 10, 30, 100];
+
+      let state = null;
+      let activeTab = "dashboard";
+      let setupPage = "state";
+      let selectedRegionId = null;
+      let selectedCountryId = null;
+      let selectedMetric = "gdp";
+      let selectedTech = null;
+      let drawMode = false;
+      let drawingPoints = [];
+      let timer = null;
+      let pendingRender = false;
+      let modal = null;
+      let setupDraft = defaultSetupDraft();
+
+      const app = document.getElementById("app");
+      const toastBox = document.getElementById("toast");
+      const importFile = document.getElementById("importFile");
+
+      function defaultSetupDraft() {
+        return {
+          countryName: "Республика Аврора",
+          capital: "Новая Столица",
+          regions: "Северная провинция, Столичный округ, Западная долина, Восточный край, Южный берег, Горный пояс, Лесная область, Промышленный сектор",
+          currency: "солар",
+          armyName: "Силы обороны Авроры",
+          parliamentName: "Национальное собрание",
+          intelligenceName: "Служба стратегической безопасности",
+          policeName: "Федеральная полиция",
+          courtName: "Верховный конституционный суд",
+          ministries: "Экономики, Обороны, Иностранных дел, Здравоохранения, Образования, Транспорта, Энергетики",
+          language: "аврорский",
+          people: "аврорцы",
+          citizenship: "гражданин Авроры",
+          parties: "Партия обновления, Гражданская платформа, Союз труда, Национальный блок",
+          religions: "Светские, Традиционная вера, Другие конфессии",
+          nationalHoliday: "День Республики",
+          anthem: "Гимн свободных городов",
+          coat: "Серебряная звезда над волной",
+          flagName: "Три горизонта",
+          continent: "Евразия",
+          neighbors: "Финляндия, Казахстан, Турция",
+          presidentName: "Александр Рей",
+          age: 46,
+          gender: "мужчина",
+          party: "Партия обновления",
+          ideology: "центризм",
+          bio: "Реформатор, бывший губернатор столичного региона и автор программы технологического суверенитета.",
+          flagA: "#21c7a8",
+          flagB: "#f8fafc",
+          flagC: "#4fa3ff",
+          flagLayout: "horizontal"
+        };
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function rnd(min, max) {
+        return min + Math.random() * (max - min);
+      }
+
+      function pick(list) {
+        return list[Math.floor(Math.random() * list.length)];
+      }
+
+      function uid(prefix) {
+        return prefix + "_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
+      }
+
+      function esc(value) {
+        return String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+      }
+
+      function num(value, fallback = 0) {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : fallback;
+      }
+
+      function pct(value, digits = 1) {
+        return `${Number(value).toFixed(digits)}%`;
+      }
+
+      function money(value, currency = state?.country?.currency || "кред.") {
+        const n = Number(value);
+        const abs = Math.abs(n);
+        let text;
+        if (abs >= 1000000) text = (n / 1000000).toFixed(2) + " трлн";
+        else if (abs >= 1000) text = (n / 1000).toFixed(2) + " млрд";
+        else text = n.toFixed(1) + " млн";
+        return `${text} ${currency}`;
+      }
+
+      function compact(value) {
+        const n = Number(value);
+        const abs = Math.abs(n);
+        if (abs >= 1000000000) return (n / 1000000000).toFixed(2) + " млрд";
+        if (abs >= 1000000) return (n / 1000000).toFixed(2) + " млн";
+        if (abs >= 1000) return (n / 1000).toFixed(1) + " тыс.";
+        return String(Math.round(n));
+      }
+
+      function formatDate(d) {
+        return `${String(d.day).padStart(2, "0")}.${String(d.month).padStart(2, "0")}.${d.year}`;
+      }
+
+      function dateLabel(d) {
+        const names = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+        return `${d.day} ${names[d.month - 1]} ${d.year}`;
+      }
+
+      function notify(text) {
+        const item = document.createElement("div");
+        item.textContent = text;
+        toastBox.appendChild(item);
+        setTimeout(() => item.remove(), 3600);
+      }
+
+      function saveState() {
+        if (!state) return;
+        state.lastSaved = new Date().toISOString();
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (err) {
+          console.warn(err);
+          notify("LocalStorage переполнен. Экспортируйте сохранение и очистите старые слоты.");
+        }
+      }
+
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return null;
+          const loaded = JSON.parse(raw);
+          return migrateState(loaded);
+        } catch (err) {
+          console.warn(err);
+          return null;
+        }
+      }
+
+      function migrateState(loaded) {
+        if (!loaded || typeof loaded !== "object") return null;
+        loaded.version = 4;
+        loaded.news ||= [];
+        loaded.history ||= emptyHistory();
+        loaded.diplomacy ||= { countries: createWorldCountries([]), organizations: defaultOrganizations() };
+        loaded.diplomacy.organizations ||= defaultOrganizations();
+        loaded.tech ||= createTech();
+        loaded.population ||= defaultPopulation(14500000);
+        loaded.military ||= defaultMilitary();
+        loaded.politics ||= defaultPolitics({});
+        loaded.economy ||= defaultEconomy();
+        loaded.regions ||= defaultRegions();
+        loaded.country ||= {};
+        loaded.country.flag ||= { colors: ["#1f8fff", "#f8fafc", "#21c7a8"], layout: "horizontal" };
+        for (const r of loaded.regions) r.buildings ||= emptyBuildings();
+        if (!loaded.history.date?.length) pushHistory(loaded);
+        return loaded;
+      }
+
+      function emptyHistory() {
+        return { date: [], gdp: [], inflation: [], popularity: [], army: [], population: [], unemployment: [], income: [], expenses: [] };
+      }
+
+      function defaultEconomy() {
+        return {
+          gdp: 642000,
+          inflation: 5.7,
+          unemployment: 6.2,
+          avgSalary: 1290,
+          minSalary: 410,
+          pensions: 360,
+          exchangeRate: 72,
+          budget: 82000,
+          debt: 156000,
+          reserves: 74000,
+          exports: 110000,
+          imports: 97000,
+          stockIndex: 2840,
+          keyRate: 8.5,
+          investments: 47000,
+          smallBusiness: 61,
+          corporations: 34,
+          stateCompanies: 18,
+          bankruptcies: 1.3,
+          growth: 2.4,
+          emission: 0,
+          taxes: { income: 15, vat: 18, corporate: 20, property: 2.2, export: 4 },
+          spending: { defense: 14, health: 13, education: 14, infrastructure: 15, welfare: 18, science: 8, security: 8 },
+          companies: [
+            { name: "НацЭнерго", sector: "Энергетика", value: 12800, state: true, trend: .3 },
+            { name: "ТрансЛиния", sector: "Транспорт", value: 8400, state: true, trend: .1 },
+            { name: "Северный Чип", sector: "Технологии", value: 6200, state: false, trend: .8 },
+            { name: "Гражданский Банк", sector: "Финансы", value: 9300, state: false, trend: -.2 },
+            { name: "АгроСоюз", sector: "Агросектор", value: 4100, state: false, trend: .4 }
+          ]
+        };
+      }
+
+      function defaultPolitics(config) {
+        const party = config.party || "Партия обновления";
+        const opposition = config.opposition || "Гражданская платформа";
+        return {
+          pm: config.pm || "Алексей Воронцов",
+          ministers: [
+            { post: "Министр экономики", name: "Мария Северова", skill: 68, loyalty: 74 },
+            { post: "Министр обороны", name: "Илья Громов", skill: 72, loyalty: 70 },
+            { post: "Министр иностранных дел", name: "София Лебедева", skill: 76, loyalty: 65 },
+            { post: "Министр здравоохранения", name: "Даниил Орлов", skill: 64, loyalty: 69 },
+            { post: "Министр образования", name: "Елена Соколова", skill: 70, loyalty: 72 },
+            { post: "Глава спецслужбы", name: "Виктор Норд", skill: 78, loyalty: 61 }
+          ],
+          parties: [
+            { name: party, ideology: config.ideology || "центризм", seats: 184, support: 39, coalition: true },
+            { name: opposition, ideology: "либерализм", seats: 122, support: 28, coalition: false },
+            { name: "Союз труда", ideology: "социал-демократия", seats: 74, support: 17, coalition: true },
+            { name: "Национальный блок", ideology: "консерватизм", seats: 60, support: 14, coalition: false }
+          ],
+          parliamentSeats: 440,
+          senateSeats: 96,
+          laws: [
+            { name: "Бюджетный кодекс", effect: "Сдерживает долг, но ограничивает расходы", support: 64 },
+            { name: "Закон о центральном банке", effect: "Повышает доверие к валюте", support: 71 },
+            { name: "Антимонопольный пакет", effect: "Поддерживает малый бизнес", support: 58 }
+          ],
+          decrees: [],
+          constitution: {
+            termYears: 5,
+            maxTerms: 2,
+            rights: 72,
+            federalism: 54,
+            courtIndependence: 61,
+            emergencyPower: 32
+          },
+          popularity: 54,
+          corruption: 35,
+          lobbyism: 42,
+          protests: 8,
+          strikes: 4,
+          opposition: 38,
+          coalition: 58,
+          impeachmentRisk: 3,
+          electionInDays: 1180,
+          referendumCooldown: 0
+        };
+      }
+
+      function defaultMilitary() {
+        return {
+          land: 180000,
+          air: 560,
+          navy: 74,
+          airDefense: 112,
+          strategic: 18,
+          cyber: 62,
+          special: 14500,
+          readiness: 61,
+          morale: 64,
+          manpower: 760000,
+          mobilized: 0,
+          conscription: true,
+          contractShare: 46,
+          budget: 14,
+          industry: 55,
+          research: 43,
+          operations: [],
+          wars: []
+        };
+      }
+
+      function defaultPopulation(total) {
+        return {
+          total,
+          birthRate: 10.8,
+          deathRate: 9.7,
+          migration: 0.12,
+          education: 63,
+          happiness: 55,
+          discontent: 26,
+          crime: 31,
+          life: 59,
+          poverty: 14,
+          ageGroups: [
+            { name: "0-14", value: 18 },
+            { name: "15-24", value: 11 },
+            { name: "25-44", value: 31 },
+            { name: "45-64", value: 25 },
+            { name: "65+", value: 15 }
+          ],
+          nationalities: [
+            { name: "титульный народ", value: 76 },
+            { name: "северяне", value: 9 },
+            { name: "южане", value: 7 },
+            { name: "диаспоры", value: 8 }
+          ],
+          religions: [
+            { name: "светские", value: 38 },
+            { name: "традиционная религия", value: 44 },
+            { name: "другие конфессии", value: 18 }
+          ],
+          professions: [
+            { name: "сфера услуг", value: 34 },
+            { name: "промышленность", value: 22 },
+            { name: "госсектор", value: 16 },
+            { name: "сельское хозяйство", value: 10 },
+            { name: "технологии", value: 8 },
+            { name: "безработные", value: 10 }
+          ]
+        };
+      }
+
+      function emptyBuildings() {
+        return { roads: 0, cities: 0, airports: 0, ports: 0, bases: 0, plants: 0, factories: 0, schools: 0, hospitals: 0, universities: 0, farms: 0, mines: 0, oil: 0, gas: 0 };
+      }
+
+      function defaultRegions(names) {
+        const baseNames = names?.length ? names : ["Северная провинция","Столичный округ","Западная долина","Восточный край","Южный берег","Горный пояс","Лесная область","Промышленный сектор"];
+        const points = [
+          [[40,55],[250,35],[318,150],[210,250],[55,230]],
+          [[285,70],[505,55],[550,205],[365,225],[318,150]],
+          [[48,245],[218,264],[285,374],[144,472],[35,378]],
+          [[228,255],[375,232],[455,365],[302,470],[145,472]],
+          [[520,70],[828,58],[866,198],[700,275],[550,205]],
+          [[385,238],[552,218],[688,310],[602,472],[462,370]],
+          [[680,290],[865,214],[858,458],[616,478]],
+          [[306,385],[456,382],[590,485],[316,500]]
+        ];
+        const colors = ["#2e8dd8","#25a885","#c88f3d","#7c72d8","#d85b75","#58a65c","#b36bc7","#d4a629"];
+        return baseNames.slice(0, 12).map((name, i) => ({
+          id: uid("region"),
+          name: name.trim() || `Регион ${i + 1}`,
+          color: colors[i % colors.length],
+          governor: ["Анна Волкова","Роман Истомин","Егор Ковалёв","Алина Миронова","Павел Белый","Ника Заречная","Тимур Грант","Ольга Вей"][i % 8],
+          budget: Math.round(rnd(2400, 8800)),
+          population: Math.round(rnd(700000, 3200000)),
+          loyalty: Math.round(rnd(42, 78)),
+          wealth: Math.round(rnd(38, 77)),
+          security: Math.round(rnd(45, 82)),
+          pollution: Math.round(rnd(12, 49)),
+          points: points[i % points.length],
+          buildings: Object.assign(emptyBuildings(), {
+            roads: Math.floor(rnd(2, 7)),
+            cities: i === 1 ? 2 : Math.floor(rnd(0, 2)),
+            schools: Math.floor(rnd(1, 4)),
+            hospitals: Math.floor(rnd(1, 3)),
+            farms: Math.floor(rnd(0, 4)),
+            factories: Math.floor(rnd(0, 3))
+          })
+        }));
+      }
+
+      function createTech() {
+        const items = [
+          ["energy_grid","Энергосети нового поколения","Энергетика",150,"Снижает инфляцию и повышает устойчивость регионов",[]],
+          ["renewables","Возобновляемая энергетика","Энергетика",220,"Уменьшает загрязнение и импорт топлива",["energy_grid"]],
+          ["ai_admin","ИИ в госуправлении","ИИ",260,"Ускоряет реформы и снижает коррупцию",[]],
+          ["ai_industry","Промышленный ИИ","ИИ",300,"Повышает ВВП и производительность корпораций",["ai_admin"]],
+          ["orbital_net","Орбитальная связь","Космос",340,"Улучшает дипломатию, армию и интернет",[]],
+          ["launchers","Национальные ракеты-носители","Космос",460,"Открывает космические контракты",["orbital_net"]],
+          ["smart_armor","Умная бронетехника","Военные технологии",280,"Повышает боеготовность сухопутных войск",[]],
+          ["drone_swarms","Рои беспилотников","Военные технологии",360,"Усиливает операции и разведку",["smart_armor","ai_admin"]],
+          ["bio_medicine","Биомедицина","Медицина",230,"Снижает смертность и повышает счастье",[]],
+          ["epidemic_ai","Эпидемиологический прогноз","Медицина",280,"Сильно снижает риск эпидемий",["bio_medicine","ai_admin"]],
+          ["fast_rail","Высокоскоростные магистрали","Транспорт",250,"Ускоряет торговлю между регионами",[]],
+          ["green_ports","Умные порты","Транспорт",210,"Увеличивает экспорт и снижает аварии",["fast_rail"]],
+          ["fiber","Национальная оптоволоконная сеть","Интернет",180,"Улучшает образование и бизнес",[]],
+          ["secure_net","Кибербезопасность инфраструктуры","Связь",270,"Снижает шпионаж и киберриски",["fiber"]],
+          ["quantum_crypto","Квантовая криптография","Квантовые технологии",420,"Защищает дипломатию и спецслужбы",["secure_net"]],
+          ["nuclear_modular","Малые модульные реакторы","Ядерные технологии",480,"Даёт дешёвую энергию и экспортные контракты",["energy_grid"]]
+        ];
+        return { points: 80, focus: "ai_admin", labs: 6, nodes: items.map(x => ({ id: x[0], name: x[1], category: x[2], cost: x[3], desc: x[4], requires: x[5], progress: 0, done: false })) };
+      }
+
+      function defaultOrganizations() {
+        return [
+          { id: uid("org"), name: "ООН", purpose: "глобальная безопасность", members: 193, influence: 84, custom: false },
+          { id: uid("org"), name: "НАТО", purpose: "военный союз", members: 32, influence: 77, custom: false },
+          { id: uid("org"), name: "ЕС", purpose: "экономический и политический блок", members: 27, influence: 73, custom: false },
+          { id: uid("org"), name: "БРИКС", purpose: "координация развивающихся экономик", members: 10, influence: 66, custom: false },
+          { id: uid("org"), name: "ОПЕК", purpose: "энергетические рынки", members: 12, influence: 62, custom: false },
+          { id: uid("org"), name: "ШОС", purpose: "безопасность и евразийская кооперация", members: 9, influence: 58, custom: false }
+        ];
+      }
+
+      function createWorldCountries(neighbors) {
+        const neighborSet = new Set((neighbors || []).map(x => x.trim()).filter(Boolean));
+        return worldNames.map((name, i) => ({
+          id: uid("country"),
+          name,
+          continent: continents[i % continents.length],
+          ideology: ideologies[i % ideologies.length],
+          relations: clamp(Math.round(rnd(22, 78) + (neighborSet.has(name) ? 12 : 0)), 0, 100),
+          trade: Math.round(rnd(120, 9200)),
+          gdp: Math.round(rnd(9000, 4900000)),
+          population: Math.round(rnd(350000, 280000000)),
+          military: Math.round(rnd(12, 94)),
+          intelligence: Math.round(rnd(15, 90)),
+          stability: Math.round(rnd(28, 92)),
+          alliance: false,
+          sanctions: false,
+          embargo: false,
+          war: false,
+          embassy: Math.random() > .12,
+          visa: pick(["свободный","электронная виза","обычный","строгий"]),
+          treaties: [],
+          spy: Math.round(rnd(5, 55)),
+          aiMood: pick(["торговый","осторожный","силовой","изоляционный","реформистский"]),
+          aid: 0
+        }));
+      }
+
+      function createGame(config) {
+        const regions = defaultRegions((config.regions || "").split(","));
+        const populationTotal = regions.reduce((sum, r) => sum + r.population, 0);
+        const country = {
+          name: config.countryName || "Республика Аврора",
+          capital: config.capital || "Новая Столица",
+          currency: config.currency || "солар",
+          armyName: config.armyName || "Силы обороны",
+          parliamentName: config.parliamentName || "Национальное собрание",
+          intelligenceName: config.intelligenceName || "Служба стратегической безопасности",
+          policeName: config.policeName || "Федеральная полиция",
+          courtName: config.courtName || "Верховный конституционный суд",
+          ministries: (config.ministries || "Экономики, Обороны, Иностранных дел, Здравоохранения, Образования, Транспорта, Энергетики").split(",").map(s => s.trim()).filter(Boolean),
+          language: config.language || "аврорский",
+          people: config.people || "аврорцы",
+          citizenship: config.citizenship || "гражданин Авроры",
+          partiesText: config.parties || "Партия обновления, Гражданская платформа, Союз труда, Национальный блок",
+          religionsText: config.religions || "Светские, Традиционная вера, Другие конфессии",
+          nationalHoliday: config.nationalHoliday || "День Республики",
+          anthem: config.anthem || "Гимн свободных городов",
+          coat: config.coat || "Серебряная звезда над волной",
+          flagName: config.flagName || "Три горизонта",
+          continent: config.continent || "Евразия",
+          neighbors: (config.neighbors || "Финляндия, Казахстан, Турция").split(",").map(s => s.trim()).filter(Boolean),
+          flag: { colors: [config.flagA || "#21c7a8", config.flagB || "#f8fafc", config.flagC || "#4fa3ff"], layout: config.flagLayout || "horizontal" },
+          president: {
+            name: config.presidentName || "Александр Рей",
+            gender: config.gender || "не указан",
+            age: num(config.age, 46),
+            bio: config.bio || "Реформатор, бывший губернатор столичного региона и автор программы технологического суверенитета.",
+            party: config.party || "Партия обновления",
+            ideology: config.ideology || "центризм",
+            photo: config.photo || ""
+          }
+        };
+        const economy = defaultEconomy();
+        const politics = defaultPolitics({ party: country.president.party, ideology: country.president.ideology, opposition: "Гражданская платформа" });
+        const population = defaultPopulation(populationTotal);
+        const diplomacy = { countries: createWorldCountries(country.neighbors), organizations: defaultOrganizations() };
+        const game = {
+          version: 4,
+          createdAt: new Date().toISOString(),
+          lastSaved: new Date().toISOString(),
+          theme: "dark",
+          speed: 0,
+          date: { day: 1, month: 1, year: 2028 },
+          country,
+          regions,
+          economy,
+          politics,
+          diplomacy,
+          military: defaultMilitary(),
+          tech: createTech(),
+          population,
+          news: [],
+          history: emptyHistory()
+        };
+        selectedRegionId = regions[0]?.id || null;
+        selectedCountryId = diplomacy.countries[0]?.id || null;
+        pushNews(game, "Политика", "Инаугурация", `${country.president.name} вступает в должность президента государства ${country.name}. Правительство получает полный набор инструментов управления страной.`);
+        pushNews(game, "Мир", "Дипломатический календарь открыт", `МИД начал работу с ${diplomacy.countries.length} странами и международными организациями.`);
+        pushHistory(game);
+        return game;
+      }
+
+      function pushNews(game, category, title, text, impact = {}) {
+        game.news.unshift({ id: uid("news"), date: formatDate(game.date), category, title, text, impact });
+        game.news = game.news.slice(0, 240);
+      }
+
+      function pushHistory(game) {
+        const h = game.history;
+        const income = calcIncome(game);
+        const expenses = calcExpenses(game);
+        h.date.push(formatDate(game.date));
+        h.gdp.push(Number(game.economy.gdp.toFixed(2)));
+        h.inflation.push(Number(game.economy.inflation.toFixed(2)));
+        h.popularity.push(Number(game.politics.popularity.toFixed(2)));
+        h.army.push(Number(calcArmyPower(game).toFixed(2)));
+        h.population.push(Math.round(game.population.total));
+        h.unemployment.push(Number(game.economy.unemployment.toFixed(2)));
+        h.income.push(Number(income.toFixed(2)));
+        h.expenses.push(Number(expenses.toFixed(2)));
+        for (const key of Object.keys(h)) h[key] = h[key].slice(-420);
+      }
+
+      function calcIncome(game = state) {
+        const e = game.economy;
+        const t = e.taxes;
+        const base = e.gdp * ((t.income * .19 + t.vat * .23 + t.corporate * .18 + t.property * .05 + t.export * .04) / 100);
+        return base + e.exports * .035 + e.stateCompanies * 140;
+      }
+
+      function calcExpenses(game = state) {
+        const e = game.economy;
+        const spend = Object.values(e.spending).reduce((a, b) => a + b, 0) / 100;
+        return e.gdp * spend * .23 + e.debt * (e.keyRate / 100) / 12 + e.pensions * game.population.total / 1000000 * .09;
+      }
+
+      function calcArmyPower(game = state) {
+        const m = game.military;
+        return (m.land / 10000) + m.air * .13 + m.navy * .42 + m.airDefense * .22 + m.strategic * 1.8 + m.cyber * .8 + m.special / 2600 + m.readiness * .75 + m.morale * .55;
+      }
+
+      function totalBuildings(key) {
+        return state.regions.reduce((sum, r) => sum + (r.buildings[key] || 0), 0);
+      }
+
+      function init() {
+        state = loadState();
+        document.body.classList.toggle("light", state?.theme === "light");
+        if (state) {
+          selectedRegionId = state.regions[0]?.id || null;
+          selectedCountryId = state.diplomacy.countries[0]?.id || null;
+        }
+        render();
+        bindGlobalEvents();
+        startTimer();
+      }
+
+      function bindGlobalEvents() {
+        document.addEventListener("click", onClick);
+        document.addEventListener("input", onInput);
+        document.addEventListener("change", onChange);
+        document.addEventListener("submit", onSubmit);
+        importFile.addEventListener("change", importSaveFile);
+      }
+
+      function startTimer() {
+        if (timer) clearInterval(timer);
+        timer = setInterval(() => {
+          if (!state || !state.speed) return;
+          for (let i = 0; i < state.speed; i++) tickDay(state);
+          saveState();
+          scheduleRender();
+        }, DAY_MS);
+      }
+
+      function scheduleRender() {
+        if (pendingRender) return;
+        pendingRender = true;
+        requestAnimationFrame(() => {
+          pendingRender = false;
+          render();
+        });
+      }
+
+      function render() {
+        document.body.classList.toggle("light", state?.theme === "light");
+        if (!state) {
+          app.innerHTML = renderSetup();
+          return;
+        }
+        app.innerHTML = renderGame();
+        renderCharts();
+      }
+
+      function renderSetup() {
+        const defaults = setupDraft;
+        return `
+          <main class="setup">
+            <section class="setup-card">
+              <div class="setup-hero">
+                <h1>Президент: симулятор государства</h1>
+                <p>Создайте страну, сформируйте институты, управляйте экономикой, картой, армией, дипломатией, технологиями и обществом в ежедневной политической симуляции.</p>
+              </div>
+              <form class="setup-body" id="setupForm">
+                <div class="tabs-line">
+                  ${["state:Государство","identity:Идентичность","president:Президент","visual:Флаг и фото"].map(x => {
+                    const [id, label] = x.split(":");
+                    return `<button type="button" data-setup-tab="${id}" class="${setupPage === id ? "active" : ""}">${label}</button>`;
+                  }).join("")}
+                </div>
+                <div class="${setupPage === "state" ? "" : "hidden"}">
+                  <div class="form-grid">
+                    ${input("countryName", "Название страны", defaults.countryName)}
+                    ${input("capital", "Столица", defaults.capital)}
+                    ${input("regions", "Регионы через запятую", defaults.regions)}
+                    ${input("currency", "Валюта", defaults.currency)}
+                    ${input("continent", "Континент", defaults.continent)}
+                    ${input("neighbors", "Соседи через запятую", defaults.neighbors)}
+                    ${input("armyName", "Название армии", defaults.armyName)}
+                    ${input("parliamentName", "Название парламента", defaults.parliamentName)}
+                    ${input("intelligenceName", "Название спецслужбы", defaults.intelligenceName)}
+                    ${input("policeName", "Название полиции", defaults.policeName)}
+                    ${input("courtName", "Название суда", defaults.courtName)}
+                    ${input("ministries", "Министерства", defaults.ministries)}
+                  </div>
+                </div>
+                <div class="${setupPage === "identity" ? "" : "hidden"}">
+                  <div class="form-grid">
+                    ${input("language", "Язык", defaults.language)}
+                    ${input("people", "Народ", defaults.people)}
+                    ${input("citizenship", "Гражданство", defaults.citizenship)}
+                    ${input("parties", "Партии", defaults.parties)}
+                    ${input("religions", "Религии", defaults.religions)}
+                    ${input("nationalHoliday", "Национальный праздник", defaults.nationalHoliday)}
+                    ${input("anthem", "Гимн", defaults.anthem)}
+                    ${input("coat", "Герб", defaults.coat)}
+                    ${input("flagName", "Название флага", defaults.flagName)}
+                  </div>
+                </div>
+                <div class="${setupPage === "president" ? "" : "hidden"}">
+                  <div class="form-grid">
+                    ${input("presidentName", "Президент", defaults.presidentName)}
+                    ${input("gender", "Пол", defaults.gender)}
+                    ${input("age", "Возраст", defaults.age, "number")}
+                    ${input("party", "Партия", defaults.party)}
+                    ${input("ideology", "Идеология", defaults.ideology)}
+                    <label style="grid-column: 1 / -1;">Биография<textarea name="bio">${esc(defaults.bio)}</textarea></label>
+                  </div>
+                </div>
+                <div class="${setupPage === "visual" ? "" : "hidden"}">
+                  <div class="form-grid">
+                    ${input("flagA", "Цвет флага 1", defaults.flagA, "color")}
+                    ${input("flagB", "Цвет флага 2", defaults.flagB, "color")}
+                    ${input("flagC", "Цвет флага 3", defaults.flagC, "color")}
+                    <label>Расположение флага
+                      <select name="flagLayout">
+                        <option value="horizontal" ${defaults.flagLayout === "horizontal" ? "selected" : ""}>Горизонтальные полосы</option>
+                        <option value="vertical" ${defaults.flagLayout === "vertical" ? "selected" : ""}>Вертикальные полосы</option>
+                        <option value="diagonal" ${defaults.flagLayout === "diagonal" ? "selected" : ""}>Диагональ</option>
+                      </select>
+                    </label>
+                    <label style="grid-column: 1 / -1;">Фото президента
+                      <input name="photo" type="file" accept="image/*" />
+                    </label>
+                  </div>
+                </div>
+                <div class="actions">
+                  <button class="primary" type="submit" data-action="start-game">Начать президентский срок</button>
+                  <button type="button" data-action="load-autosave">Загрузить автосохранение</button>
+                  <button type="button" data-action="toggle-theme-setup">Сменить тему</button>
+                </div>
+              </form>
+            </section>
+          </main>
+        `;
+      }
+
+      function input(name, labelText, value, type = "text") {
+        return `<label>${labelText}<input name="${name}" type="${type}" value="${esc(value)}" /></label>`;
+      }
+
+      function captureSetupDraft() {
+        const form = document.getElementById("setupForm");
+        if (!form) return;
+        for (const el of form.elements) {
+          if (!el.name || el.type === "file") continue;
+          setupDraft[el.name] = el.value;
+        }
+      }
+
+      function renderGame() {
+        const tab = tabs.find(t => t[0] === activeTab) || tabs[0];
+        return `
+          <div class="shell">
+            ${renderSidebar()}
+            <main class="main">
+              <header class="topbar">
+                <div class="top-title">
+                  <h2>${esc(tab[1])}</h2>
+                  <p>${dateLabel(state.date)} · ${esc(state.country.president.name)} · ${esc(state.country.capital)}</p>
+                </div>
+                <div class="top-actions">
+                  <div class="speedbar" title="Скорость времени">
+                    ${speeds.map(s => `<button data-action="speed" data-speed="${s}" class="${state.speed === s ? "active" : ""}">${s ? s + "x" : "Пауза"}</button>`).join("")}
+                  </div>
+                  <button class="icon" data-action="tick" title="Следующий день">›</button>
+                  <button class="icon" data-action="theme" title="Светлая/темная тема">◐</button>
+                  <button class="icon" data-action="autosave" title="Сохранить">▣</button>
+                </div>
+              </header>
+              ${renderActiveTab()}
+            </main>
+          </div>
+          ${modal ? renderModal() : ""}
+        `;
+      }
+
+      function renderSidebar() {
+        return `
+          <aside class="sidebar">
+            <div class="brand">
+              <div class="seal"><span>${esc(state.country.name.slice(0, 1).toUpperCase())}</span></div>
+              <div>
+                <h1>${esc(state.country.name)}</h1>
+                <p>${esc(state.country.flagName)} · ${esc(state.country.currency)}</p>
+              </div>
+            </div>
+            <nav class="nav">
+              ${tabs.map(([id, label, icon]) => `<button data-tab="${id}" class="${activeTab === id ? "active" : ""}"><span class="nav-icon">${icon}</span><span>${label}</span><small>${navBadge(id)}</small></button>`).join("")}
+            </nav>
+            <div class="side-foot">
+              <div class="mini-stat"><span>Популярность</span><strong>${pct(state.politics.popularity, 0)}</strong></div>
+              <div class="mini-stat"><span>Бюджет</span><strong>${money(state.economy.budget)}</strong></div>
+            </div>
+          </aside>
+        `;
+      }
+
+      function navBadge(id) {
+        if (id === "news") return state.news.length;
+        if (id === "diplomacy") return state.diplomacy.countries.filter(c => c.war).length ? "война" : state.diplomacy.countries.length;
+        if (id === "tech") return state.tech.nodes.filter(n => n.done).length + "/" + state.tech.nodes.length;
+        if (id === "map") return state.regions.length;
+        return "";
+      }
+
+      function renderActiveTab() {
+        if (activeTab === "dashboard") return renderDashboard();
+        if (activeTab === "map") return renderMap();
+        if (activeTab === "economy") return renderEconomy();
+        if (activeTab === "politics") return renderPolitics();
+        if (activeTab === "diplomacy") return renderDiplomacy();
+        if (activeTab === "military") return renderMilitary();
+        if (activeTab === "tech") return renderTech();
+        if (activeTab === "population") return renderPopulation();
+        if (activeTab === "news") return renderNews();
+        if (activeTab === "editor") return renderEditor();
+        if (activeTab === "saves") return renderSaves();
+        return renderDashboard();
+      }
+
+      function renderDashboard() {
+        const e = state.economy;
+        const p = state.politics;
+        const pop = state.population;
+        const balance = calcIncome() - calcExpenses();
+        return `
+          <section class="grid">
+            <div class="metric-grid">
+              ${metric("ВВП", money(e.gdp), `Рост ${pct(e.growth)} · Биржа ${Math.round(e.stockIndex)}`, e.growth >= 0 ? "good" : "bad")}
+              ${metric("Инфляция", pct(e.inflation), `Ключевая ставка ${pct(e.keyRate)}`, e.inflation < 7 ? "good" : "warn")}
+              ${metric("Безработица", pct(e.unemployment), `Малый бизнес ${pct(e.smallBusiness, 0)}`, e.unemployment < 6 ? "good" : "bad")}
+              ${metric("Население", compact(pop.total), `Счастье ${pct(pop.happiness, 0)} · Бедность ${pct(pop.poverty, 0)}`, pop.happiness > 55 ? "good" : "warn")}
+              ${metric("Власть", pct(p.popularity, 0), `Протесты ${pct(p.protests, 0)} · Коррупция ${pct(p.corruption, 0)}`, p.popularity > 50 ? "good" : "bad")}
+              ${metric("Армия", Math.round(calcArmyPower()), `Готовность ${pct(state.military.readiness, 0)} · Мораль ${pct(state.military.morale, 0)}`, state.military.readiness > 60 ? "good" : "warn")}
+            </div>
+            <div class="grid wide">
+              <section class="panel">
+                <div class="panel-head">
+                  <h3>Стратегический график</h3>
+                  <select data-action="metric-select" style="max-width: 240px;">
+                    ${chartOptions().map(([id, label]) => `<option value="${id}" ${selectedMetric === id ? "selected" : ""}>${label}</option>`).join("")}
+                  </select>
+                </div>
+                <div class="canvas-wrap"><canvas id="mainChart"></canvas></div>
+              </section>
+              <section class="panel pad">
+                <h3 class="section-title">Президентский кабинет</h3>
+                <div class="row" style="margin-top: 12px; grid-template-columns: auto 1fr;">
+                  ${state.country.president.photo ? `<img class="portrait" src="${state.country.president.photo}" alt="">` : `<div class="empty-portrait">${esc(state.country.president.name.slice(0,1))}</div>`}
+                  <div>
+                    <strong>${esc(state.country.president.name)}</strong>
+                    <p class="subtle">${esc(state.country.president.age)} лет · ${esc(state.country.president.party)} · ${esc(state.country.president.ideology)}</p>
+                    <p class="subtle">${esc(state.country.president.bio)}</p>
+                  </div>
+                </div>
+                <div class="kpi-strip" style="margin-top: 12px;">
+                  <div class="kpi"><span>Доходы/день</span><strong>${money(calcIncome() / 365)}</strong></div>
+                  <div class="kpi"><span>Расходы/день</span><strong>${money(calcExpenses() / 365)}</strong></div>
+                  <div class="kpi"><span>Баланс/год</span><strong class="${balance >= 0 ? "delta good" : "delta bad"}">${money(balance)}</strong></div>
+                  <div class="kpi"><span>Выборы через</span><strong>${state.politics.electionInDays} дн.</strong></div>
+                </div>
+              </section>
+            </div>
+            <div class="grid two">
+              <section class="panel pad">
+                <h3 class="section-title">Быстрые решения</h3>
+                <div class="actions" style="margin-top: 12px;">
+                  <button data-action="policy" data-policy="stimulus">Экономический стимул</button>
+                  <button data-action="policy" data-policy="anticorruption">Антикоррупционный рейд</button>
+                  <button data-action="policy" data-policy="health">Нацпроект медицины</button>
+                  <button data-action="policy" data-policy="education">Образовательная реформа</button>
+                  <button data-action="policy" data-policy="security">Усилить безопасность</button>
+                  <button data-action="policy" data-policy="summit">Международный саммит</button>
+                </div>
+              </section>
+              <section class="panel pad">
+                <h3 class="section-title">Последние новости</h3>
+                <div class="list" style="margin-top: 12px;">
+                  ${state.news.slice(0, 5).map(n => `<div class="row"><span><strong>${esc(n.title)}</strong><br><small class="subtle">${esc(n.category)} · ${esc(n.date)}</small></span><button data-tab="news">Открыть</button></div>`).join("")}
+                </div>
+              </section>
+            </div>
+          </section>
+        `;
+      }
+
+      function metric(label, value, delta, cls) {
+        return `<div class="metric"><span class="label">${label}</span><span class="value">${value}</span><span class="delta ${cls || ""}">${delta}</span></div>`;
+      }
+
+      function chartOptions() {
+        return [["gdp","ВВП"],["inflation","Инфляция"],["popularity","Популярность"],["army","Армия"],["population","Население"],["unemployment","Безработица"],["income","Доходы"],["expenses","Расходы"]];
+      }
+
+      function renderMap() {
+        const region = state.regions.find(r => r.id === selectedRegionId) || state.regions[0];
+        const buildingButtons = buildingTypes.map(([key, label, cost]) => `<button data-action="build" data-building="${key}" title="${money(cost)}">${label} · ${region?.buildings[key] || 0}</button>`).join("");
+        return `
+          <section class="map-layout">
+            <div class="map-stage">
+              <svg id="countryMap" viewBox="0 0 900 520" role="img" aria-label="Интерактивная карта">
+                ${Array.from({ length: 18 }, (_, i) => `<line class="map-grid-line" x1="${i * 54}" y1="0" x2="${i * 54}" y2="520"></line>`).join("")}
+                ${Array.from({ length: 11 }, (_, i) => `<line class="map-grid-line" x1="0" y1="${i * 52}" x2="900" y2="${i * 52}"></line>`).join("")}
+                ${state.regions.map(renderRegionSvg).join("")}
+                ${drawMode ? renderDrawingSvg() : ""}
+              </svg>
+            </div>
+            <aside class="grid">
+              <section class="panel pad">
+                <div class="toolbar">
+                  <button class="${drawMode ? "active" : ""}" data-action="toggle-draw">Рисовать границы</button>
+                  <button data-action="finish-region">Создать регион</button>
+                  <button data-action="cancel-draw">Очистить точки</button>
+                </div>
+              </section>
+              ${region ? `
+                <section class="panel pad">
+                  <h3 class="section-title">${esc(region.name)}</h3>
+                  <div class="form-grid narrow" style="margin-top: 12px;">
+                    <label>Название<input data-region-field="name" value="${esc(region.name)}"></label>
+                    <label>Губернатор<input data-region-field="governor" value="${esc(region.governor)}"></label>
+                    <label>Цвет<input data-region-field="color" type="color" value="${esc(region.color)}"></label>
+                    <label>Бюджет, млн<input data-region-field="budget" type="number" value="${Math.round(region.budget)}"></label>
+                    <label>Лояльность<input data-region-field="loyalty" type="range" min="0" max="100" value="${Math.round(region.loyalty)}"></label>
+                    <label>Безопасность<input data-region-field="security" type="range" min="0" max="100" value="${Math.round(region.security)}"></label>
+                  </div>
+                  <div class="kpi-strip" style="margin-top: 12px;">
+                    <div class="kpi"><span>Население</span><strong>${compact(region.population)}</strong></div>
+                    <div class="kpi"><span>Богатство</span><strong>${pct(region.wealth, 0)}</strong></div>
+                    <div class="kpi"><span>Экология</span><strong>${pct(100 - region.pollution, 0)}</strong></div>
+                  </div>
+                </section>
+                <section class="panel pad">
+                  <h3 class="section-title">Строительство</h3>
+                  <div class="actions" style="margin-top: 12px;">${buildingButtons}</div>
+                </section>
+              ` : ""}
+              <section class="panel pad">
+                <h3 class="section-title">Регионы</h3>
+                <div class="list" style="margin-top: 12px;">
+                  ${state.regions.map(r => `<button data-action="select-region" data-id="${r.id}" class="${r.id === selectedRegionId ? "active" : ""}" style="text-align:left;"><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${esc(r.color)};margin-right:8px;"></span>${esc(r.name)}</button>`).join("")}
+                </div>
+              </section>
+            </aside>
+          </section>
+        `;
+      }
+
+      function renderRegionSvg(region) {
+        const centroid = getCentroid(region.points);
+        const selected = region.id === selectedRegionId ? "selected" : "";
+        return `
+          <g>
+            <polygon class="region-poly ${selected}" data-action="select-region" data-id="${region.id}" points="${pointsAttr(region.points)}" fill="${esc(region.color)}" opacity=".82"></polygon>
+            ${renderRegionRoads(region)}
+            ${renderBuildingMarkers(region, centroid)}
+            <text class="map-label" x="${centroid.x}" y="${centroid.y}" text-anchor="middle">${esc(region.name)}</text>
+          </g>
+        `;
+      }
+
+      function renderRegionRoads(region) {
+        const pts = region.points;
+        const c = getCentroid(pts);
+        let roads = "";
+        for (let i = 0; i < Math.min(region.buildings.roads, pts.length); i++) {
+          const p = pts[i % pts.length];
+          roads += `<line x1="${c.x}" y1="${c.y}" x2="${p[0]}" y2="${p[1]}" stroke="rgba(255,255,255,.72)" stroke-width="4" stroke-linecap="round"></line>`;
+        }
+        return roads;
+      }
+
+      function renderBuildingMarkers(region, centroid) {
+        const markers = [];
+        const icons = { cities:"●", airports:"✈", ports:"⚓", bases:"▲", plants:"◆", factories:"■", schools:"S", hospitals:"+", universities:"U", farms:"F", mines:"M", oil:"O", gas:"G" };
+        let idx = 0;
+        for (const [key] of buildingTypes) {
+          const count = region.buildings[key] || 0;
+          for (let i = 0; i < Math.min(count, key === "roads" ? 0 : 3); i++) {
+            const angle = (idx++ / 16) * Math.PI * 2;
+            const x = centroid.x + Math.cos(angle) * (26 + (idx % 3) * 18);
+            const y = centroid.y + Math.sin(angle) * (20 + (idx % 4) * 14);
+            markers.push(`<g class="build-marker"><circle cx="${x}" cy="${y}" r="11" fill="rgba(5,10,18,.78)" stroke="white" stroke-width="1.5"></circle><text x="${x}" y="${y + 4}" text-anchor="middle" fill="white" font-size="11" font-weight="900">${icons[key] || "•"}</text></g>`);
+          }
+        }
+        return markers.join("");
+      }
+
+      function renderDrawingSvg() {
+        const points = drawingPoints.map(p => `<circle class="draw-point" cx="${p[0]}" cy="${p[1]}" r="6"></circle>`).join("");
+        const line = drawingPoints.length > 1 ? `<polyline points="${pointsAttr(drawingPoints)}" fill="rgba(255,191,71,.18)" stroke="var(--warn)" stroke-width="3" stroke-dasharray="7 6"></polyline>` : "";
+        return `<g>${line}${points}</g>`;
+      }
+
+      function pointsAttr(points) {
+        return points.map(p => `${Number(p[0]).toFixed(1)},${Number(p[1]).toFixed(1)}`).join(" ");
+      }
+
+      function getCentroid(points) {
+        const sum = points.reduce((a, p) => ({ x: a.x + p[0], y: a.y + p[1] }), { x: 0, y: 0 });
+        return { x: sum.x / points.length, y: sum.y / points.length };
+      }
+
+      function renderEconomy() {
+        const e = state.economy;
+        return `
+          <section class="grid">
+            <div class="metric-grid">
+              ${metric("Бюджет", money(e.budget), `Баланс ${money(calcIncome() - calcExpenses())}`, calcIncome() >= calcExpenses() ? "good" : "bad")}
+              ${metric("Госдолг", money(e.debt), `${((e.debt / e.gdp) * 100).toFixed(1)}% ВВП`, e.debt / e.gdp < .6 ? "good" : "warn")}
+              ${metric("Резервы", money(e.reserves), `Курс 1$ = ${e.exchangeRate.toFixed(2)} ${esc(state.country.currency)}`, e.reserves > e.imports * .5 ? "good" : "warn")}
+              ${metric("Экспорт / импорт", `${money(e.exports)} / ${money(e.imports)}`, `Торговый баланс ${money(e.exports - e.imports)}`, e.exports >= e.imports ? "good" : "bad")}
+            </div>
+            <div class="grid split">
+              <section class="panel pad">
+                <h3 class="section-title">Макроэкономика</h3>
+                <div class="form-grid" style="margin-top: 12px;">
+                  ${rangeInput("income", "Подоходный налог", e.taxes.income, 0, 55, "tax")}
+                  ${rangeInput("vat", "НДС", e.taxes.vat, 0, 35, "tax")}
+                  ${rangeInput("corporate", "Налог на корпорации", e.taxes.corporate, 0, 55, "tax")}
+                  ${rangeInput("property", "Налог на имущество", e.taxes.property, 0, 8, "tax", .1)}
+                  ${rangeInput("export", "Экспортная пошлина", e.taxes.export, 0, 25, "tax")}
+                  ${rangeInput("keyRate", "Ключевая ставка", e.keyRate, 0, 35, "economy", .25)}
+                  ${numberInput("minSalary", "Минимальная зарплата", e.minSalary, "economy")}
+                  ${numberInput("pensions", "Пенсии", e.pensions, "economy")}
+                </div>
+                <h3 class="section-title" style="margin-top: 16px;">Расходы бюджета</h3>
+                <div class="form-grid" style="margin-top: 12px;">
+                  ${Object.entries(e.spending).map(([key, val]) => rangeInput(key, spendingLabel(key), val, 0, 35, "spending")).join("")}
+                </div>
+              </section>
+              <section class="panel pad">
+                <h3 class="section-title">Центральный банк и рынок</h3>
+                <div class="actions" style="margin-top: 12px;">
+                  <button data-action="econ-action" data-econ="emit">Денежная эмиссия</button>
+                  <button data-action="econ-action" data-econ="bonds">Выпустить облигации</button>
+                  <button data-action="econ-action" data-econ="privatize">Приватизация</button>
+                  <button data-action="econ-action" data-econ="nationalize">Национализация</button>
+                  <button data-action="econ-action" data-econ="supportSmall">Поддержать малый бизнес</button>
+                  <button data-action="econ-action" data-econ="bailout">Спасти системные компании</button>
+                </div>
+                <div class="kpi-strip" style="margin-top: 12px;">
+                  <div class="kpi"><span>Средняя зарплата</span><strong>${Math.round(e.avgSalary)} ${esc(state.country.currency)}</strong></div>
+                  <div class="kpi"><span>Инвестиции</span><strong>${money(e.investments)}</strong></div>
+                  <div class="kpi"><span>Банкротства</span><strong>${pct(e.bankruptcies)}</strong></div>
+                  <div class="kpi"><span>Госкомпании</span><strong>${e.stateCompanies}</strong></div>
+                </div>
+                <h3 class="section-title" style="margin-top: 16px;">Фондовый рынок</h3>
+                <div class="scroll" style="max-height: 280px; margin-top: 8px;">
+                  <table class="table">
+                    <thead><tr><th>Компания</th><th>Сектор</th><th>Капитализация</th><th>Тренд</th></tr></thead>
+                    <tbody>
+                      ${e.companies.map(c => `<tr><td>${esc(c.name)}</td><td>${esc(c.sector)}</td><td>${money(c.value)}</td><td class="${c.trend >= 0 ? "delta good" : "delta bad"}">${c.trend > 0 ? "+" : ""}${pct(c.trend)}</td></tr>`).join("")}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          </section>
+        `;
+      }
+
+      function spendingLabel(key) {
+        return ({ defense: "Оборона", health: "Здравоохранение", education: "Образование", infrastructure: "Инфраструктура", welfare: "Соцподдержка", science: "Наука", security: "Безопасность" })[key] || key;
+      }
+
+      function rangeInput(key, labelText, value, min, max, group, step = 1) {
+        return `<label>${labelText}: <strong>${Number(value).toFixed(step < 1 ? 1 : 0)}</strong><input data-${group}-field="${key}" type="range" min="${min}" max="${max}" step="${step}" value="${esc(value)}"></label>`;
+      }
+
+      function numberInput(key, labelText, value, group) {
+        return `<label>${labelText}<input data-${group}-field="${key}" type="number" value="${esc(value)}"></label>`;
+      }
+
+      function renderPolitics() {
+        const p = state.politics;
+        return `
+          <section class="grid">
+            <div class="metric-grid">
+              ${metric("Рейтинг власти", pct(p.popularity, 0), `Оппозиция ${pct(p.opposition, 0)}`, p.popularity > p.opposition ? "good" : "bad")}
+              ${metric("Парламент", pct(p.coalition, 0), `${esc(state.country.parliamentName)} · ${p.parliamentSeats} мест`, p.coalition > 50 ? "good" : "warn")}
+              ${metric("Коррупция", pct(p.corruption, 0), `Лоббизм ${pct(p.lobbyism, 0)}`, p.corruption < 35 ? "good" : "bad")}
+              ${metric("Улица", `${pct(p.protests, 0)} / ${pct(p.strikes, 0)}`, `Риск импичмента ${pct(p.impeachmentRisk, 0)}`, p.protests < 20 ? "good" : "bad")}
+            </div>
+            <div class="grid two">
+              <section class="panel pad">
+                <h3 class="section-title">Институты</h3>
+                <div class="kpi-strip" style="margin-top: 12px;">
+                  <div class="kpi"><span>Премьер-министр</span><strong>${esc(p.pm)}</strong></div>
+                  <div class="kpi"><span>Сенат</span><strong>${p.senateSeats} мест</strong></div>
+                  <div class="kpi"><span>${esc(state.country.courtName)}</span><strong>${pct(p.constitution.courtIndependence, 0)}</strong></div>
+                  <div class="kpi"><span>Конституция</span><strong>${p.constitution.termYears} лет · ${p.constitution.maxTerms} срока</strong></div>
+                </div>
+                <h3 class="section-title" style="margin-top: 16px;">Министры</h3>
+                <div class="list" style="margin-top: 8px;">
+                  ${p.ministers.map((m, i) => `<div class="row"><span><strong>${esc(m.post)}</strong><br><small class="subtle">${esc(m.name)} · компетентность ${m.skill} · лояльность ${m.loyalty}</small></span><button data-action="replace-minister" data-index="${i}">Заменить</button></div>`).join("")}
+                </div>
+              </section>
+              <section class="panel pad">
+                <h3 class="section-title">Законы, выборы и кризисы</h3>
+                <div class="actions" style="margin-top: 12px;">
+                  <button data-action="politics-action" data-politics="law">Внести закон</button>
+                  <button data-action="politics-action" data-politics="decree">Подписать указ</button>
+                  <button data-action="politics-action" data-politics="referendum">Референдум</button>
+                  <button data-action="politics-action" data-politics="election">Досрочные выборы</button>
+                  <button data-action="politics-action" data-politics="amend">Поправка к Конституции</button>
+                  <button data-action="politics-action" data-politics="coalition">Собрать коалицию</button>
+                </div>
+                <h3 class="section-title" style="margin-top: 16px;">Партийная система</h3>
+                <div class="scroll" style="max-height: 300px; margin-top: 8px;">
+                  <table class="table">
+                    <thead><tr><th>Партия</th><th>Идеология</th><th>Места</th><th>Поддержка</th></tr></thead>
+                    <tbody>${p.parties.map(x => `<tr><td>${esc(x.name)} ${x.coalition ? "· коалиция" : ""}</td><td>${esc(x.ideology)}</td><td>${x.seats}</td><td>${pct(x.support, 0)}</td></tr>`).join("")}</tbody>
+                  </table>
+                </div>
+                <h3 class="section-title" style="margin-top: 16px;">Действующие законы</h3>
+                <div class="list" style="margin-top: 8px;">${p.laws.map(l => `<div class="row"><span><strong>${esc(l.name)}</strong><br><small class="subtle">${esc(l.effect)}</small></span><span class="pill">${pct(l.support,0)}</span></div>`).join("")}</div>
+              </section>
+            </div>
+          </section>
+        `;
+      }
+
+      function renderDiplomacy() {
+        const list = state.diplomacy.countries;
+        const selected = list.find(c => c.id === selectedCountryId) || list[0];
+        return `
+          <section class="grid split">
+            <section class="panel">
+              <div class="panel-head">
+                <h3>Мировая дипломатия</h3>
+                <input data-action="country-filter" placeholder="Фильтр стран" style="max-width: 260px;">
+              </div>
+              <div class="scroll" style="max-height: 720px;">
+                <table class="table" id="countryTable">
+                  <thead><tr><th>Страна</th><th>Отношения</th><th>Торговля</th><th>Статус</th></tr></thead>
+                  <tbody>
+                    ${list.map(c => `<tr data-country-row="${esc(c.name.toLowerCase())}"><td><button data-action="select-country" data-id="${c.id}" class="${c.id === selectedCountryId ? "active" : ""}" style="width:100%;text-align:left;">${esc(c.name)}</button></td><td>${pct(c.relations,0)}</td><td>${money(c.trade)}</td><td>${countryStatus(c)}</td></tr>`).join("")}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            <aside class="grid">
+              ${selected ? `
+              <section class="panel pad">
+                <h3 class="section-title">${esc(selected.name)}</h3>
+                <div class="kpi-strip" style="margin-top: 12px;">
+                  <div class="kpi"><span>Отношения</span><strong>${pct(selected.relations,0)}</strong></div>
+                  <div class="kpi"><span>ВВП</span><strong>${money(selected.gdp)}</strong></div>
+                  <div class="kpi"><span>Население</span><strong>${compact(selected.population)}</strong></div>
+                  <div class="kpi"><span>Армия</span><strong>${pct(selected.military,0)}</strong></div>
+                  <div class="kpi"><span>Разведка</span><strong>${pct(selected.intelligence,0)}</strong></div>
+                  <div class="kpi"><span>Визовый режим</span><strong>${esc(selected.visa)}</strong></div>
+                </div>
+                <div class="actions" style="margin-top: 12px;">
+                  <button data-action="diplo" data-diplo="relations">Переговоры</button>
+                  <button data-action="diplo" data-diplo="trade">Торговый контракт</button>
+                  <button data-action="diplo" data-diplo="alliance">Союз</button>
+                  <button data-action="diplo" data-diplo="sanctions">Санкции</button>
+                  <button data-action="diplo" data-diplo="embargo">Эмбарго</button>
+                  <button data-action="diplo" data-diplo="milAid">Военная помощь</button>
+                  <button data-action="diplo" data-diplo="humanAid">Гуманитарная помощь</button>
+                  <button data-action="diplo" data-diplo="spy">Разведоперация</button>
+                  <button data-action="diplo" data-diplo="visa">Изменить визы</button>
+                  <button data-action="diplo" data-diplo="war" class="danger">Объявить войну</button>
+                  <button data-action="diplo" data-diplo="peace">Перемирие</button>
+                </div>
+              </section>` : ""}
+              <section class="panel pad">
+                <h3 class="section-title">Международные организации</h3>
+                <div class="list" style="margin-top: 12px;">
+                  ${state.diplomacy.organizations.map(o => `<div class="row"><span><strong>${esc(o.name)}</strong><br><small class="subtle">${esc(o.purpose)} · ${o.members} участников</small></span><span class="pill">${pct(o.influence,0)}</span></div>`).join("")}
+                </div>
+                <div class="form-grid narrow" style="margin-top: 12px;">
+                  <label>Новая организация<input id="newOrgName" placeholder="Название"></label>
+                  <label>Цель<input id="newOrgPurpose" placeholder="Цель"></label>
+                </div>
+                <button style="margin-top: 8px;" data-action="create-org">Создать организацию</button>
+              </section>
+            </aside>
+          </section>
+        `;
+      }
+
+      function countryStatus(c) {
+        const bits = [];
+        if (c.war) bits.push("война");
+        if (c.alliance) bits.push("союз");
+        if (c.sanctions) bits.push("санкции");
+        if (c.embargo) bits.push("эмбарго");
+        if (!bits.length) bits.push(c.embassy ? "посольство" : "нет посольства");
+        return bits.map(b => `<span class="pill">${b}</span>`).join(" ");
+      }
+
+      function renderMilitary() {
+        const m = state.military;
+        return `
+          <section class="grid">
+            <div class="metric-grid">
+              ${metric("Боевой потенциал", Math.round(calcArmyPower()), `Бюджет ${pct(m.budget,0)} ВВП`, calcArmyPower() > 170 ? "good" : "warn")}
+              ${metric("Сухопутные войска", compact(m.land), `Мобрезерв ${compact(m.manpower)}`, "good")}
+              ${metric("Авиация / флот", `${m.air} / ${m.navy}`, `ПВО ${m.airDefense}`, "good")}
+              ${metric("Кибер и РВСН", `${pct(m.cyber,0)} / ${m.strategic}`, `Спецназ ${compact(m.special)}`, "warn")}
+            </div>
+            <div class="grid two">
+              <section class="panel pad">
+                <h3 class="section-title">${esc(state.country.armyName)}</h3>
+                <div class="form-grid" style="margin-top: 12px;">
+                  ${rangeInput("budget", "Военный бюджет, % ВВП", m.budget, 2, 35, "military")}
+                  ${rangeInput("readiness", "Боеготовность", m.readiness, 0, 100, "military")}
+                  ${rangeInput("morale", "Мораль", m.morale, 0, 100, "military")}
+                  ${rangeInput("industry", "Военная промышленность", m.industry, 0, 100, "military")}
+                  ${rangeInput("research", "Разработка техники", m.research, 0, 100, "military")}
+                  ${rangeInput("contractShare", "Контрактная армия", m.contractShare, 0, 100, "military")}
+                </div>
+                <div class="actions" style="margin-top: 12px;">
+                  <button data-action="military-action" data-military="mobilize">Мобилизация</button>
+                  <button data-action="military-action" data-military="contract">Набрать контрактников</button>
+                  <button data-action="military-action" data-military="draft">Переключить призыв</button>
+                  <button data-action="military-action" data-military="industry">Заказ ВПК</button>
+                  <button data-action="military-action" data-military="cyber">Киберучения</button>
+                  <button data-action="military-action" data-military="operation">Военная операция</button>
+                </div>
+              </section>
+              <section class="panel pad">
+                <h3 class="section-title">Операции и войны</h3>
+                <div class="list" style="margin-top: 12px;">
+                  ${m.wars.length ? m.wars.map(w => `<div class="row"><span><strong>Конфликт: ${esc(w.enemy)}</strong><br><small class="subtle">Интенсивность ${pct(w.intensity,0)} · усталость ${pct(w.fatigue,0)}</small></span><button data-action="war-step" data-id="${w.id}">Операция</button></div>`).join("") : `<div class="row"><span>Активных войн нет</span><span class="pill">мир</span></div>`}
+                  ${m.operations.map(o => `<div class="row"><span><strong>${esc(o.name)}</strong><br><small class="subtle">${esc(o.date)} · результат ${pct(o.result,0)}</small></span><span class="pill">${esc(o.type)}</span></div>`).join("")}
+                </div>
+              </section>
+            </div>
+          </section>
+        `;
+      }
+
+      function renderTech() {
+        const t = state.tech;
+        return `
+          <section class="grid">
+            <div class="metric-grid">
+              ${metric("Очки науки", Math.round(t.points), `Лаборатории ${t.labs}`, "good")}
+              ${metric("Исследовано", `${t.nodes.filter(n => n.done).length}/${t.nodes.length}`, `Фокус: ${esc(t.nodes.find(n => n.id === t.focus)?.name || "нет")}`, "good")}
+              ${metric("Образование", pct(state.population.education,0), `Университеты ${totalBuildings("universities")}`, state.population.education > 60 ? "good" : "warn")}
+            </div>
+            <section class="panel pad">
+              <div class="toolbar">
+                <button data-action="tech-lab">Построить лабораторию</button>
+                <button data-action="tech-fund">Гранты исследователям</button>
+              </div>
+              <div class="tech-tree" style="margin-top: 12px;">
+                ${t.nodes.map(n => renderTechCard(n)).join("")}
+              </div>
+            </section>
+          </section>
+        `;
+      }
+
+      function renderTechCard(n) {
+        const locked = n.requires.some(id => !state.tech.nodes.find(x => x.id === id)?.done);
+        return `
+          <article class="tech-card ${n.done ? "done" : ""} ${locked ? "locked" : ""}">
+            <div><strong>${esc(n.name)}</strong><br><small class="subtle">${esc(n.category)} · ${n.cost} очков</small></div>
+            <p class="subtle" style="margin:0;">${esc(n.desc)}</p>
+            <div class="progress"><i style="--w:${n.done ? 100 : clamp((n.progress / n.cost) * 100, 0, 100)}%"></i></div>
+            <button data-action="set-tech" data-id="${n.id}" class="${state.tech.focus === n.id ? "active" : ""}" ${locked || n.done ? "disabled" : ""}>${n.done ? "Открыто" : state.tech.focus === n.id ? "В фокусе" : "Исследовать"}</button>
+          </article>
+        `;
+      }
+
+      function renderPopulation() {
+        const p = state.population;
+        return `
+          <section class="grid">
+            <div class="metric-grid">
+              ${metric("Население", compact(p.total), `Миграция ${pct(p.migration)}`, "good")}
+              ${metric("Рождаемость", p.birthRate.toFixed(1), `Смертность ${p.deathRate.toFixed(1)}`, p.birthRate > p.deathRate ? "good" : "warn")}
+              ${metric("Уровень жизни", pct(p.life,0), `Счастье ${pct(p.happiness,0)}`, p.life > 55 ? "good" : "warn")}
+              ${metric("Преступность", pct(p.crime,0), `Недовольство ${pct(p.discontent,0)}`, p.crime < 35 ? "good" : "bad")}
+            </div>
+            <div class="grid two">
+              ${distributionPanel("Возрастные группы", p.ageGroups)}
+              ${distributionPanel("Национальности", p.nationalities)}
+              ${distributionPanel("Религии", p.religions)}
+              ${distributionPanel("Профессии", p.professions)}
+            </div>
+            <section class="panel pad">
+              <h3 class="section-title">Социальная политика</h3>
+              <div class="actions" style="margin-top: 12px;">
+                <button data-action="social" data-social="family">Семейный капитал</button>
+                <button data-action="social" data-social="migration">Миграционная программа</button>
+                <button data-action="social" data-social="police">Реформа полиции</button>
+                <button data-action="social" data-social="housing">Доступное жильё</button>
+                <button data-action="social" data-social="culture">Национальный праздник</button>
+              </div>
+            </section>
+          </section>
+        `;
+      }
+
+      function distributionPanel(title, rows) {
+        return `<section class="panel pad"><h3 class="section-title">${title}</h3><div class="list" style="margin-top: 12px;">${rows.map(r => `<div><div class="row"><span>${esc(r.name)}</span><strong>${pct(r.value,0)}</strong></div><div class="progress"><i style="--w:${clamp(r.value,0,100)}%"></i></div></div>`).join("")}</div></section>`;
+      }
+
+      function renderNews() {
+        return `
+          <section class="grid split">
+            <section class="panel pad">
+              <div class="toolbar">
+                ${newsCategories.map(c => `<button data-action="generate-news" data-category="${c}">${c}</button>`).join("")}
+              </div>
+              <div class="news-feed" style="margin-top: 12px;">
+                ${state.news.map(n => `<article class="news-item"><header><strong>${esc(n.title)}</strong><span class="pill">${esc(n.category)} · ${esc(n.date)}</span></header><p>${esc(n.text)}</p></article>`).join("")}
+              </div>
+            </section>
+            <aside class="panel pad">
+              <h3 class="section-title">Случайные события</h3>
+              <p class="subtle">Генератор комбинирует тип кризиса, регион, акторов и последствия, поэтому пул событий исчисляется тысячами вариантов.</p>
+              <div class="actions" style="margin-top: 12px;">
+                <button data-action="event" data-event="natural">Природная катастрофа</button>
+                <button data-action="event" data-event="economic">Финансовый кризис</button>
+                <button data-action="event" data-event="scandal">Коррупционный скандал</button>
+                <button data-action="event" data-event="epidemic">Эпидемия</button>
+                <button data-action="event" data-event="unrest">Бунты и забастовки</button>
+                <button data-action="event" data-event="terror">Теракт</button>
+                <button data-action="event" data-event="discovery">Открытие</button>
+              </div>
+            </aside>
+          </section>
+        `;
+      }
+
+      function renderEditor() {
+        const selectedCountry = state.diplomacy.countries.find(c => c.id === selectedCountryId) || state.diplomacy.countries[0];
+        const region = state.regions.find(r => r.id === selectedRegionId) || state.regions[0];
+        return `
+          <section class="grid">
+            <section class="panel pad">
+              <h3 class="section-title">Редактор государства</h3>
+              <div class="form-grid" style="margin-top: 12px;">
+                ${editorInput("country.name", "Страна", state.country.name)}
+                ${editorInput("country.capital", "Столица", state.country.capital)}
+                ${editorInput("country.currency", "Валюта", state.country.currency)}
+                ${editorInput("country.armyName", "Армия", state.country.armyName)}
+                ${editorInput("country.parliamentName", "Парламент", state.country.parliamentName)}
+                ${editorInput("country.intelligenceName", "Спецслужба", state.country.intelligenceName)}
+                ${editorInput("country.policeName", "Полиция", state.country.policeName)}
+                ${editorInput("country.courtName", "Суд", state.country.courtName)}
+                ${editorInput("country.president.name", "Президент", state.country.president.name)}
+                ${editorInput("country.president.age", "Возраст", state.country.president.age, "number")}
+              </div>
+            </section>
+            <div class="grid two">
+              <section class="panel pad">
+                <h3 class="section-title">Любая статистика</h3>
+                <div class="form-grid narrow" style="margin-top: 12px;">
+                  ${Object.entries(state.economy).filter(([k, v]) => typeof v === "number").map(([k, v]) => editorInput(`economy.${k}`, economyLabel(k), v, "number")).join("")}
+                  ${editorInput("politics.popularity", "Популярность", state.politics.popularity, "number")}
+                  ${editorInput("politics.corruption", "Коррупция", state.politics.corruption, "number")}
+                  ${editorInput("population.happiness", "Счастье", state.population.happiness, "number")}
+                  ${editorInput("population.crime", "Преступность", state.population.crime, "number")}
+                </div>
+              </section>
+              <section class="panel pad">
+                <h3 class="section-title">Регион, страна, закон</h3>
+                <div class="form-grid narrow" style="margin-top: 12px;">
+                  <label>Регион<select data-action="editor-region">${state.regions.map(r => `<option value="${r.id}" ${r.id === selectedRegionId ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</select></label>
+                  ${region ? editorInput("selectedRegion.name", "Название региона", region.name) : ""}
+                  ${region ? editorInput("selectedRegion.population", "Население региона", region.population, "number") : ""}
+                  ${region ? editorInput("selectedRegion.budget", "Бюджет региона", region.budget, "number") : ""}
+                  <label>Страна<select data-action="editor-country">${state.diplomacy.countries.map(c => `<option value="${c.id}" ${c.id === selectedCountryId ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>
+                  ${selectedCountry ? editorInput("selectedCountry.relations", "Отношения", selectedCountry.relations, "number") : ""}
+                  ${selectedCountry ? editorInput("selectedCountry.trade", "Торговля", selectedCountry.trade, "number") : ""}
+                  ${selectedCountry ? editorInput("selectedCountry.military", "Армия страны", selectedCountry.military, "number") : ""}
+                </div>
+                <div class="actions" style="margin-top: 12px;">
+                  <button data-action="add-law">Добавить закон</button>
+                  <button data-action="add-party">Добавить партию</button>
+                  <button data-action="normalize">Нормализовать проценты</button>
+                </div>
+              </section>
+            </div>
+          </section>
+        `;
+      }
+
+      function editorInput(path, labelText, value, type = "text") {
+        return `<label>${labelText}<input data-editor-path="${esc(path)}" type="${type}" value="${esc(value)}"></label>`;
+      }
+
+      function economyLabel(k) {
+        return ({ gdp:"ВВП", inflation:"Инфляция", unemployment:"Безработица", avgSalary:"Средняя зарплата", minSalary:"Мин. зарплата", pensions:"Пенсии", exchangeRate:"Курс валют", budget:"Бюджет", debt:"Госдолг", reserves:"Резервы", exports:"Экспорт", imports:"Импорт", stockIndex:"Биржа", keyRate:"Ставка", investments:"Инвестиции", smallBusiness:"Малый бизнес", corporations:"Корпорации", stateCompanies:"Госкомпании", bankruptcies:"Банкротства", growth:"Рост", emission:"Эмиссия" })[k] || k;
+      }
+
+      function renderSaves() {
+        const slots = loadSlots();
+        return `
+          <section class="grid two">
+            <section class="panel pad">
+              <h3 class="section-title">Сохранения</h3>
+              <div class="actions" style="margin-top: 12px;">
+                <button data-action="autosave">Ручное сохранение</button>
+                <button data-action="export-save">Экспорт JSON</button>
+                <button data-action="import-click">Импорт JSON</button>
+                <button data-action="new-game" class="danger">Новая игра</button>
+              </div>
+              <div class="list" style="margin-top: 12px;">
+                ${[1,2,3,4,5].map(i => `<div class="row"><span><strong>Слот ${i}</strong><br><small class="subtle">${slots[i] ? `${esc(slots[i].country?.name || "Сохранение")} · ${esc(formatDate(slots[i].date || state.date))}` : "пусто"}</small></span><span class="actions"><button data-action="save-slot" data-slot="${i}">Сохранить</button><button data-action="load-slot" data-slot="${i}">Загрузить</button></span></div>`).join("")}
+              </div>
+            </section>
+            <section class="panel pad">
+              <h3 class="section-title">JSON</h3>
+              <textarea id="saveJson">${esc(JSON.stringify(state, null, 2))}</textarea>
+              <div class="actions" style="margin-top: 8px;">
+                <button data-action="copy-json">Копировать</button>
+                <button data-action="load-json-text">Загрузить из поля</button>
+              </div>
+            </section>
+          </section>
+        `;
+      }
+
+      function loadSlots() {
+        try { return JSON.parse(localStorage.getItem(SLOTS_KEY) || "{}"); }
+        catch { return {}; }
+      }
+
+      function saveSlots(slots) {
+        localStorage.setItem(SLOTS_KEY, JSON.stringify(slots));
+      }
+
+      function renderModal() {
+        return `
+          <div class="modal-backdrop" data-action="close-modal">
+            <section class="modal" onclick="event.stopPropagation()">
+              <div class="panel-head"><h3>${esc(modal.title)}</h3><button class="icon" data-action="close-modal">×</button></div>
+              <div class="modal-body">${modal.body}</div>
+            </section>
+          </div>
+        `;
+      }
+
+      function renderCharts() {
+        if (!state) return;
+        const main = document.getElementById("mainChart");
+        if (main) drawChart(main, state.history[selectedMetric] || [], chartOptions().find(x => x[0] === selectedMetric)?.[1] || selectedMetric);
+      }
+
+      function drawChart(canvas, data, label) {
+        const rect = canvas.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        canvas.width = Math.max(320, Math.floor(rect.width * ratio));
+        canvas.height = Math.max(180, Math.floor(rect.height * ratio));
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        const w = rect.width;
+        const h = rect.height;
+        ctx.clearRect(0, 0, w, h);
+        const styles = getComputedStyle(document.body);
+        const text = styles.getPropertyValue("--text").trim();
+        const muted = styles.getPropertyValue("--muted").trim();
+        const accent = styles.getPropertyValue("--accent").trim();
+        const accent2 = styles.getPropertyValue("--accent-2").trim();
+        ctx.fillStyle = muted;
+        ctx.font = "12px Inter, sans-serif";
+        ctx.fillText(label, 12, 18);
+        const values = data.length ? data : [0];
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const span = Math.max(1, max - min);
+        const pad = 28;
+        ctx.strokeStyle = "rgba(148, 163, 184, .18)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 5; i++) {
+          const y = pad + (i / 4) * (h - pad * 1.7);
+          ctx.beginPath();
+          ctx.moveTo(10, y);
+          ctx.lineTo(w - 10, y);
+          ctx.stroke();
+        }
+        const grad = ctx.createLinearGradient(0, 0, w, 0);
+        grad.addColorStop(0, accent);
+        grad.addColorStop(1, accent2);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        values.forEach((v, i) => {
+          const x = 14 + (i / Math.max(1, values.length - 1)) * (w - 28);
+          const y = h - pad - ((v - min) / span) * (h - pad * 2);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        ctx.fillStyle = text;
+        ctx.font = "700 13px Inter, sans-serif";
+        ctx.fillText(String(values[values.length - 1] ?? 0), 12, h - 10);
+        ctx.fillStyle = muted;
+        ctx.fillText(`min ${min.toFixed(1)} · max ${max.toFixed(1)}`, Math.max(12, w - 190), h - 10);
+      }
+
+      function onClick(event) {
+        const setupTab = event.target.closest("[data-setup-tab]");
+        if (setupTab) {
+          captureSetupDraft();
+          setupPage = setupTab.dataset.setupTab;
+          render();
+          return;
+        }
+
+        const tabButton = event.target.closest("[data-tab]");
+        if (tabButton) {
+          activeTab = tabButton.dataset.tab;
+          render();
+          return;
+        }
+
+        const actionEl = event.target.closest("[data-action]");
+        if (!actionEl) return;
+        const action = actionEl.dataset.action;
+
+        if (action === "start-game") {
+          event.preventDefault();
+          startGameFromForm();
+          return;
+        }
+        if (action === "load-autosave") {
+          state = loadState();
+          if (state) notify("Автосохранение загружено.");
+          render();
+          return;
+        }
+        if (action === "toggle-theme-setup") {
+          document.body.classList.toggle("light");
+          return;
+        }
+        if (!state) return;
+
+        if (action === "speed") state.speed = num(actionEl.dataset.speed);
+        else if (action === "tick") tickManual();
+        else if (action === "theme") toggleTheme();
+        else if (action === "autosave") { saveState(); notify("Игра сохранена."); }
+        else if (action === "select-region") selectedRegionId = actionEl.dataset.id;
+        else if (action === "toggle-draw") { drawMode = !drawMode; drawingPoints = []; }
+        else if (action === "finish-region") finishRegion();
+        else if (action === "cancel-draw") drawingPoints = [];
+        else if (action === "build") buildInRegion(actionEl.dataset.building);
+        else if (action === "policy") policyAction(actionEl.dataset.policy);
+        else if (action === "econ-action") economyAction(actionEl.dataset.econ);
+        else if (action === "politics-action") politicsAction(actionEl.dataset.politics);
+        else if (action === "replace-minister") replaceMinister(num(actionEl.dataset.index));
+        else if (action === "select-country") selectedCountryId = actionEl.dataset.id;
+        else if (action === "diplo") diplomacyAction(actionEl.dataset.diplo);
+        else if (action === "create-org") createOrganization();
+        else if (action === "military-action") militaryAction(actionEl.dataset.military);
+        else if (action === "war-step") warOperation(actionEl.dataset.id);
+        else if (action === "tech-lab") techLab();
+        else if (action === "tech-fund") techFund();
+        else if (action === "set-tech") state.tech.focus = actionEl.dataset.id;
+        else if (action === "social") socialAction(actionEl.dataset.social);
+        else if (action === "generate-news") generateNews(actionEl.dataset.category);
+        else if (action === "event") triggerEvent(actionEl.dataset.event);
+        else if (action === "add-law") addLaw();
+        else if (action === "add-party") addParty();
+        else if (action === "normalize") normalizePercentages();
+        else if (action === "save-slot") saveSlot(actionEl.dataset.slot);
+        else if (action === "load-slot") loadSlot(actionEl.dataset.slot);
+        else if (action === "export-save") exportSave();
+        else if (action === "import-click") importFile.click();
+        else if (action === "copy-json") copyJson();
+        else if (action === "load-json-text") loadJsonText();
+        else if (action === "new-game") confirmNewGame();
+        else if (action === "close-modal") modal = null;
+        else return;
+
+        saveState();
+        render();
+      }
+
+      function onInput(event) {
+        if (!state) {
+          const el = event.target;
+          if (el.closest("#setupForm") && el.name && el.type !== "file") setupDraft[el.name] = el.value;
+          return;
+        }
+        if (!state) return;
+        const el = event.target;
+        if (el.matches("[data-action='metric-select']")) {
+          selectedMetric = el.value;
+          renderCharts();
+          return;
+        }
+        if (el.matches("[data-country-filter]")) {
+          const term = el.value.trim().toLowerCase();
+          document.querySelectorAll("[data-country-row]").forEach(row => {
+            row.style.display = row.dataset.countryRow.includes(term) ? "" : "none";
+          });
+          return;
+        }
+        if (el.matches("[data-region-field]")) updateRegionField(el);
+        else if (el.matches("[data-tax-field]")) state.economy.taxes[el.dataset.taxField] = num(el.value);
+        else if (el.matches("[data-spending-field]")) state.economy.spending[el.dataset.spendingField] = num(el.value);
+        else if (el.matches("[data-economy-field]")) state.economy[el.dataset.economyField] = num(el.value);
+        else if (el.matches("[data-military-field]")) state.military[el.dataset.militaryField] = num(el.value);
+        else if (el.matches("[data-editor-path]")) setEditorPath(el.dataset.editorPath, el.value, el.type === "number");
+        else return;
+        saveState();
+        scheduleRender();
+      }
+
+      function onChange(event) {
+        if (!state) return;
+        const el = event.target;
+        if (el.matches("[data-action='editor-region']")) {
+          selectedRegionId = el.value;
+          render();
+        } else if (el.matches("[data-action='editor-country']")) {
+          selectedCountryId = el.value;
+          render();
+        }
+      }
+
+      function onSubmit(event) {
+        if (event.target?.id === "setupForm") {
+          event.preventDefault();
+          startGameFromForm();
+        }
+      }
+
+      function startGameFromForm() {
+        const form = document.getElementById("setupForm");
+        if (!form) return;
+        captureSetupDraft();
+        const data = Object.fromEntries(new FormData(form).entries());
+        const file = form.elements.photo?.files?.[0];
+        if (file) {
+          imageToDataUrl(file).then(url => {
+            data.photo = url;
+            state = createGame(data);
+            activeTab = "dashboard";
+            saveState();
+            render();
+          });
+        } else {
+          state = createGame(data);
+          activeTab = "dashboard";
+          saveState();
+          render();
+        }
+      }
+
+      function imageToDataUrl(file) {
+        return new Promise(resolve => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement("canvas");
+              const max = 360;
+              const scale = Math.min(1, max / Math.max(img.width, img.height));
+              canvas.width = Math.max(1, Math.round(img.width * scale));
+              canvas.height = Math.max(1, Math.round(img.height * scale));
+              const ctx = canvas.getContext("2d");
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              resolve(canvas.toDataURL("image/jpeg", .82));
+            };
+            img.onerror = () => resolve(String(reader.result || ""));
+            img.src = String(reader.result || "");
+          };
+          reader.onerror = () => resolve("");
+          reader.readAsDataURL(file);
+        });
+      }
+
+      function tickManual() {
+        tickDay(state);
+        saveState();
+      }
+
+      function toggleTheme() {
+        state.theme = state.theme === "light" ? "dark" : "light";
+        document.body.classList.toggle("light", state.theme === "light");
+      }
+
+      function tickDay(game) {
+        advanceDate(game.date);
+        simulateEconomy(game);
+        simulatePolitics(game);
+        simulatePopulation(game);
+        simulateTech(game);
+        simulateRegions(game);
+        simulateDiplomacy(game);
+        simulateMilitary(game);
+        if (Math.random() < .52) generateDailyNews(game);
+        if (Math.random() < .055) triggerRandomEvent(game);
+        if (game.date.day === 1 || game.history.date.length < 6) pushHistory(game);
+      }
+
+      function advanceDate(d) {
+        const days = [31, isLeap(d.year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        d.day++;
+        if (d.day > days[d.month - 1]) {
+          d.day = 1;
+          d.month++;
+          if (d.month > 12) {
+            d.month = 1;
+            d.year++;
+          }
+        }
+      }
+
+      function isLeap(year) {
+        return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+      }
+
+      function simulateEconomy(game) {
+        const e = game.economy;
+        const pop = game.population;
+        const infra = totalBuildingValue(game, ["roads","ports","airports","plants"]);
+        const education = pop.education / 100;
+        const taxLoad = (e.taxes.income + e.taxes.vat + e.taxes.corporate + e.taxes.export) / 100;
+        const stability = (game.politics.popularity + 100 - game.politics.corruption + pop.happiness) / 300;
+        const warPenalty = game.military.wars.length * .006;
+        const growthDaily = ((e.growth / 365) + infra * .000012 + education * .0008 + stability * .0007 - taxLoad * .0016 - e.inflation * .000035 - warPenalty);
+        e.gdp = Math.max(1000, e.gdp * (1 + growthDaily));
+        const income = calcIncome(game) / 365;
+        const expenses = calcExpenses(game) / 365;
+        e.budget += income - expenses;
+        if (e.budget < -e.gdp * .08) {
+          e.debt += Math.abs(e.budget);
+          e.budget = 0;
+          e.inflation += .08;
+          game.politics.popularity -= .04;
+        }
+        e.debt = Math.max(0, e.debt + Math.max(0, expenses - income) * .18 - Math.max(0, income - expenses) * .05);
+        e.reserves = Math.max(0, e.reserves + (e.exports - e.imports) / 365 * .12 - Math.max(0, e.emission) * .02);
+        e.inflation = clamp(e.inflation + (e.emission * .0008) + (e.keyRate < e.inflation ? .006 : -.004) + (e.spending.welfare > 24 ? .003 : 0) - totalBuildings("plants") * .0005, -2, 80);
+        e.unemployment = clamp(e.unemployment - growthDaily * 180 + e.taxes.corporate * .0008 - totalBuildings("factories") * .0015 - totalBuildings("farms") * .0006, 1, 45);
+        e.avgSalary = Math.max(e.minSalary, e.avgSalary * (1 + growthDaily * 2.4 + (e.inflation / 100) / 365));
+        e.exchangeRate = clamp(e.exchangeRate * (1 + (e.inflation - e.keyRate) / 36500 - (e.reserves / Math.max(1, e.gdp)) * .0006), 0.1, 5000);
+        e.exports = Math.max(100, e.exports * (1 + growthDaily * .45 + totalBuildings("ports") * .00008 + totalBuildings("oil") * .00011 + totalBuildings("gas") * .00009));
+        e.imports = Math.max(100, e.imports * (1 + pop.life * .000002 + e.growth * .00001 - totalBuildings("farms") * .00004));
+        e.investments = Math.max(0, e.investments * (1 + growthDaily + (100 - game.politics.corruption) * .000002 + (e.keyRate < 8 ? .0002 : -.00009)));
+        e.smallBusiness = clamp(e.smallBusiness + (e.taxes.corporate < 18 ? .006 : -.003) + (e.unemployment < 7 ? .002 : -.002), 0, 100);
+        e.bankruptcies = clamp(e.bankruptcies + (e.keyRate > 13 ? .006 : -.003) + (e.growth < 0 ? .012 : -.002), 0, 30);
+        e.growth = clamp((growthDaily * 365 * 100) * .06 + e.growth * .94, -22, 25);
+        e.stockIndex = Math.max(100, e.stockIndex * (1 + growthDaily * 3 + (game.politics.popularity - 50) * .00001 - game.military.wars.length * .001));
+        e.companies.forEach(c => {
+          c.trend = clamp(c.trend * .7 + e.growth * .08 + rnd(-.45, .45) - e.keyRate * .01, -8, 8);
+          c.value = Math.max(100, c.value * (1 + c.trend / 3650));
+        });
+        e.emission *= .985;
+      }
+
+      function totalBuildingValue(game, keys) {
+        return game.regions.reduce((sum, r) => sum + keys.reduce((a, k) => a + (r.buildings[k] || 0), 0), 0);
+      }
+
+      function simulatePolitics(game) {
+        const p = game.politics;
+        const e = game.economy;
+        const pop = game.population;
+        const pressure = e.inflation * .09 + e.unemployment * .16 + pop.poverty * .1 + p.corruption * .07 - pop.happiness * .06;
+        p.popularity = clamp(p.popularity + e.growth * .004 + pop.happiness * .002 - pressure * .01 + rnd(-.025, .025), 0, 100);
+        p.protests = clamp(p.protests + pressure * .008 + p.opposition * .003 - p.popularity * .003 + rnd(-.02, .02), 0, 100);
+        p.strikes = clamp(p.strikes + e.unemployment * .003 + e.inflation * .002 - p.popularity * .002, 0, 100);
+        p.opposition = clamp(p.opposition + (50 - p.popularity) * .002 + p.corruption * .001, 0, 100);
+        p.corruption = clamp(p.corruption + p.lobbyism * .0006 - state.tech.nodes.find(n => n.id === "ai_admin")?.done * .02 - e.spending.security * .0008 + rnd(-.015, .02), 0, 100);
+        p.coalition = clamp(p.coalition + (p.popularity - 50) * .004 + rnd(-.04, .04), 0, 100);
+        p.impeachmentRisk = clamp((p.protests * .22 + p.corruption * .12 + Math.max(0, 45 - p.coalition) * .42 + Math.max(0, 30 - p.popularity) * .5), 0, 100);
+        p.electionInDays--;
+        if (p.referendumCooldown > 0) p.referendumCooldown--;
+        if (p.electionInDays <= 0) runElection(game);
+        if (p.impeachmentRisk > 86 && Math.random() < .006) {
+          p.popularity = clamp(p.popularity - 8, 0, 100);
+          p.coalition = clamp(p.coalition - 12, 0, 100);
+          pushNews(game, "Политика", "Процедура импичмента", "Оппозиция инициировала процедуру импичмента. Коалиция требует срочных уступок и публичного антикризисного плана.");
+        }
+      }
+
+      function simulatePopulation(game) {
+        const p = game.population;
+        const e = game.economy;
+        const dailyBirth = p.total * (p.birthRate / 1000) / 365;
+        const dailyDeath = p.total * (p.deathRate / 1000) / 365;
+        const migration = p.total * (p.migration / 100) / 365;
+        p.total = Math.max(10000, p.total + dailyBirth - dailyDeath + migration);
+        p.happiness = clamp(p.happiness + game.politics.popularity * .0008 + e.growth * .006 - e.inflation * .003 - e.unemployment * .006 - p.crime * .002 + e.spending.welfare * .0016, 0, 100);
+        p.discontent = clamp(100 - p.happiness + e.unemployment * .22 + e.inflation * .18 + game.politics.protests * .2, 0, 100);
+        p.crime = clamp(p.crime + p.poverty * .003 + e.unemployment * .004 - e.spending.security * .002 - totalBuildings("schools") * .0005, 0, 100);
+        p.education = clamp(p.education + e.spending.education * .001 + totalBuildings("universities") * .002 + totalBuildings("schools") * .0007, 0, 100);
+        p.life = clamp(p.life + e.spending.health * .0013 + totalBuildings("hospitals") * .001 - p.crime * .0006 - e.inflation * .0005, 0, 100);
+        p.poverty = clamp(p.poverty + e.unemployment * .004 + e.inflation * .002 - e.spending.welfare * .002 - e.growth * .01, 0, 80);
+        p.birthRate = clamp(p.birthRate + (p.happiness - 50) * .00015 - p.poverty * .00008, 3, 28);
+        p.deathRate = clamp(p.deathRate - p.life * .00005 + p.poverty * .00004, 3, 30);
+      }
+
+      function simulateTech(game) {
+        const t = game.tech;
+        const focus = t.nodes.find(n => n.id === t.focus && !n.done);
+        t.points += (t.labs * .14 + game.economy.spending.science * .025 + totalBuildings("universities") * .04) * (game.population.education / 80);
+        if (focus) {
+          const locked = focus.requires.some(id => !t.nodes.find(x => x.id === id)?.done);
+          if (!locked) {
+            focus.progress += (t.labs * .09 + game.economy.spending.science * .018 + game.military.research * .004);
+            if (focus.progress >= focus.cost) completeTech(game, focus);
+          }
+        }
+      }
+
+      function completeTech(game, node) {
+        node.done = true;
+        node.progress = node.cost;
+        if (node.id === "ai_admin") game.politics.corruption = clamp(game.politics.corruption - 4, 0, 100);
+        if (node.id === "energy_grid") game.economy.inflation = clamp(game.economy.inflation - .8, -2, 80);
+        if (node.id === "bio_medicine") game.population.life = clamp(game.population.life + 4, 0, 100);
+        if (node.id === "smart_armor") game.military.readiness = clamp(game.military.readiness + 5, 0, 100);
+        if (node.id === "drone_swarms") game.military.cyber = clamp(game.military.cyber + 8, 0, 100);
+        pushNews(game, "Открытия", "Технологический прорыв", `Завершено исследование: ${node.name}. ${node.desc}.`);
+      }
+
+      function simulateRegions(game) {
+        for (const r of game.regions) {
+          const infra = Object.entries(r.buildings).reduce((sum, [k, v]) => sum + v * (k === "cities" ? 3 : 1), 0);
+          r.wealth = clamp(r.wealth + game.economy.growth * .004 + infra * .0008 - r.pollution * .0005, 0, 100);
+          r.loyalty = clamp(r.loyalty + game.politics.popularity * .0006 - game.politics.protests * .0008 + r.budget * .00001, 0, 100);
+          r.security = clamp(r.security + game.economy.spending.security * .001 + r.buildings.bases * .006 - game.population.crime * .0009, 0, 100);
+          r.pollution = clamp(r.pollution + r.buildings.factories * .001 + r.buildings.oil * .002 + r.buildings.gas * .001 - r.buildings.plants * .0005, 0, 100);
+          r.population = Math.max(1000, r.population + r.population * ((game.population.birthRate - game.population.deathRate) / 1000) / 365 + r.buildings.cities * 5);
+        }
+      }
+
+      function simulateDiplomacy(game) {
+        const e = game.economy;
+        for (const c of game.diplomacy.countries) {
+          const ai = c.aiMood;
+          if (ai === "торговый") c.trade *= 1 + rnd(-.0002, .0009);
+          if (ai === "силовой") c.military = clamp(c.military + rnd(-.01, .04), 0, 100);
+          if (ai === "реформистский") c.stability = clamp(c.stability + rnd(-.02, .04), 0, 100);
+          c.relations = clamp(c.relations + rnd(-.045, .045) + (c.alliance ? .012 : 0) - (c.sanctions ? .035 : 0) - (c.war ? .18 : 0), 0, 100);
+          c.gdp = Math.max(100, c.gdp * (1 + rnd(-.00008, .00016)));
+          if (!c.war && c.relations < 8 && c.military > 70 && Math.random() < .0005) {
+            c.war = true;
+            game.military.wars.push({ id: uid("war"), enemy: c.name, intensity: Math.round(rnd(24, 58)), fatigue: 0 });
+            pushNews(game, "Мир", "Военный конфликт", `${c.name} начала вооружённую фазу конфликта. Генштаб переводит силы в режим высокой готовности.`);
+          }
+        }
+        const tradeBonus = game.diplomacy.countries.reduce((sum, c) => sum + (c.relations > 60 && !c.sanctions && !c.embargo ? c.trade : 0), 0) * .000001;
+        e.exports *= 1 + tradeBonus / 365;
+      }
+
+      function simulateMilitary(game) {
+        const m = game.military;
+        m.readiness = clamp(m.readiness + m.budget * .001 + m.industry * .0007 - m.wars.length * .018, 0, 100);
+        m.morale = clamp(m.morale + game.politics.popularity * .0004 - m.wars.length * .032 - m.mobilized * .0000008, 0, 100);
+        m.industry = clamp(m.industry + game.economy.spending.defense * .0009 + totalBuildings("factories") * .0007, 0, 100);
+        for (const w of m.wars) {
+          w.fatigue = clamp(w.fatigue + w.intensity * .002, 0, 100);
+          game.economy.budget -= w.intensity * .9;
+          game.politics.protests = clamp(game.politics.protests + w.fatigue * .0009, 0, 100);
+          if (w.fatigue > 85 && Math.random() < .004) {
+            pushNews(game, "Армия", "Перемирие", `Стороны конфликта с ${w.enemy} согласовали режим прекращения огня.`);
+            const c = game.diplomacy.countries.find(x => x.name === w.enemy);
+            if (c) c.war = false;
+            m.wars = m.wars.filter(x => x.id !== w.id);
+          }
+        }
+      }
+
+      function generateDailyNews(game) {
+        const category = pick(newsCategories);
+        const region = pick(game.regions);
+        const country = pick(game.diplomacy.countries);
+        const templates = {
+          "Экономика": [`Биржевой индекс закрылся на отметке ${Math.round(game.economy.stockIndex)} пунктов.`, `Бизнес просит пересмотреть ставку ${pct(game.economy.keyRate)}.`],
+          "Политика": [`Коалиция удерживает ${pct(game.politics.coalition,0)} голосов в парламенте.`, `Оппозиция требует слушаний по расходам бюджета.`],
+          "Армия": [`${game.country.armyName} провели учения в регионе ${region.name}.`, `Военная промышленность оценивается в ${pct(game.military.industry,0)} потенциала.`],
+          "Мир": [`${country.name} меняет тон переговоров: отношения ${pct(country.relations,0)}.`, `Дипломаты готовят саммит по торговле и визовому режиму.`],
+          "Катастрофы": [`В ${region.name} проверяют готовность служб к паводкам и пожарам.`, `МЧС обновляет карту рисков по инфраструктуре.`],
+          "Эпидемии": [`Минздрав усиливает мониторинг сезонных заболеваний.`, `Больницы получают дополнительные резервы лекарств.`],
+          "Скандалы": [`Журналисты изучают контракты региональной администрации.`, `Антикоррупционная комиссия открыла внеплановую проверку.`],
+          "Выборы": [`До очередных выборов осталось ${game.politics.electionInDays} дней.`, `Партии обновляют региональные штабы.`],
+          "Аварии": [`Транспортные службы ${region.name} устраняют сбой на магистрали.`, `Энергетики докладывают о стабильной работе сетей.`],
+          "Безопасность": [`${game.country.intelligenceName} предупреждает о росте кибератак.`, `Полиция отчиталась о раскрытии крупной схемы.`],
+          "Открытия": [`Учёные представили результаты по направлению "${game.tech.nodes.find(n => n.id === game.tech.focus)?.name || "приоритетная технология"}".`, `Университеты получили новые гранты.`]
+        };
+        pushNews(game, category, newsTitle(category), pick(templates[category] || templates["Мир"]));
+      }
+
+      function newsTitle(category) {
+        return ({
+          "Экономика": "Рынки реагируют на решения правительства",
+          "Политика": "Парламентская повестка меняется",
+          "Армия": "Генштаб докладывает президенту",
+          "Мир": "Дипломатическая сводка",
+          "Катастрофы": "Региональные риски",
+          "Эпидемии": "Санитарный мониторинг",
+          "Скандалы": "Проверка контрактов",
+          "Выборы": "Предвыборная динамика",
+          "Аварии": "Инфраструктурный инцидент",
+          "Безопасность": "Сводка безопасности",
+          "Открытия": "Научная новость"
+        })[category] || "Сводка дня";
+      }
+
+      function triggerRandomEvent(game) {
+        triggerEvent(pick(["natural","economic","scandal","epidemic","unrest","terror","discovery"]), game);
+      }
+
+      function triggerEvent(type, game = state) {
+        const region = pick(game.regions);
+        const e = game.economy;
+        const p = game.politics;
+        const pop = game.population;
+        const data = {
+          natural: ["Катастрофы", "Стихийное бедствие", `В регионе ${region.name} произошла чрезвычайная ситуация. Бюджет выделяет средства на восстановление.`, () => { e.budget -= 420; region.loyalty -= 2; pop.happiness -= 1.2; }],
+          economic: ["Экономика", "Финансовый кризис", "Кредитный рынок сжимается, растёт риск банкротств и давления на валюту.", () => { e.stockIndex *= .94; e.bankruptcies += 1.1; e.exchangeRate *= 1.025; p.popularity -= 1.4; }],
+          scandal: ["Скандалы", "Коррупционный скандал", `Прокуратура проверяет закупки в регионе ${region.name}.`, () => { p.corruption += 2.2; p.popularity -= 1.8; p.protests += 1; }],
+          epidemic: ["Эпидемии", "Очаг заболевания", "Минздрав вводит санитарные меры и мобилизует больницы.", () => { pop.happiness -= 1.5; pop.deathRate += .2; e.budget -= 310; }],
+          unrest: ["Политика", "Митинги и забастовки", "Профсоюзы требуют повышения зарплат и снижения инфляции.", () => { p.protests += 3.4; p.strikes += 2.6; e.growth -= .18; }],
+          terror: ["Безопасность", "Теракт предотвращён частично", `${game.country.intelligenceName} задержала часть группы, но общество требует ответов.`, () => { pop.happiness -= 2; pop.crime += 1.6; p.popularity -= .9; game.military.readiness += 1; }],
+          discovery: ["Открытия", "Научный прорыв", "Исследовательский консорциум представил технологию с экспортным потенциалом.", () => { game.tech.points += 55; e.investments += 650; p.popularity += 1.2; }]
+        }[type];
+        data[3]();
+        pushNews(game, data[0], data[1], data[2]);
+      }
+
+      function buildInRegion(key) {
+        const region = state.regions.find(r => r.id === selectedRegionId);
+        const spec = buildingTypes.find(b => b[0] === key);
+        if (!region || !spec) return;
+        const cost = spec[2];
+        if (state.economy.budget < cost) {
+          notify("Недостаточно бюджета.");
+          return;
+        }
+        state.economy.budget -= cost;
+        region.buildings[key] = (region.buildings[key] || 0) + 1;
+        region.budget += cost * .18;
+        const effects = spec[3];
+        if (effects.gdp) state.economy.gdp += effects.gdp * 100;
+        if (effects.population) {
+          region.population += effects.population;
+          state.population.total += effects.population;
+        }
+        if (effects.happiness) state.population.happiness = clamp(state.population.happiness + effects.happiness, 0, 100);
+        if (effects.education) state.population.education = clamp(state.population.education + effects.education, 0, 100);
+        if (effects.research) state.tech.points += effects.research * 10;
+        if (effects.exports) state.economy.exports += effects.exports * 1000;
+        if (effects.imports) state.economy.imports += effects.imports * 600;
+        if (effects.inflation) state.economy.inflation = clamp(state.economy.inflation + effects.inflation, -2, 80);
+        if (effects.unemployment) state.economy.unemployment = clamp(state.economy.unemployment + effects.unemployment, 1, 45);
+        if (effects.army) state.military.readiness = clamp(state.military.readiness + effects.army, 0, 100);
+        if (effects.security) region.security = clamp(region.security + effects.security, 0, 100);
+        if (effects.pollution) region.pollution = clamp(region.pollution + effects.pollution, 0, 100);
+        pushNews(state, "Экономика", "Инфраструктурный проект", `${spec[1]} построен в регионе ${region.name}. Проект уже отражён в бюджете и статистике.`);
+      }
+
+      function updateRegionField(el) {
+        const r = state.regions.find(x => x.id === selectedRegionId);
+        if (!r) return;
+        const key = el.dataset.regionField;
+        r[key] = el.type === "number" || el.type === "range" ? num(el.value) : el.value;
+      }
+
+      function finishRegion() {
+        if (drawingPoints.length < 3) {
+          notify("Для региона нужно минимум три точки на карте.");
+          return;
+        }
+        const region = {
+          id: uid("region"),
+          name: `Новый регион ${state.regions.length + 1}`,
+          color: `hsl(${Math.floor(rnd(0, 360))} 58% 52%)`,
+          governor: "назначьте губернатора",
+          budget: 1200,
+          population: 400000,
+          loyalty: 50,
+          wealth: 42,
+          security: 48,
+          pollution: 18,
+          points: drawingPoints.map(p => [Math.round(p[0]), Math.round(p[1])]),
+          buildings: emptyBuildings()
+        };
+        state.regions.push(region);
+        selectedRegionId = region.id;
+        drawingPoints = [];
+        drawMode = false;
+        pushNews(state, "Политика", "Новый регион", `Административная карта обновлена: создан регион ${region.name}.`);
+      }
+
+      function policyAction(policy) {
+        const e = state.economy, p = state.politics, pop = state.population;
+        const actions = {
+          stimulus: () => { e.budget -= 1800; e.growth += .7; e.unemployment -= .35; e.inflation += .25; pushNews(state, "Экономика", "Пакет стимулов", "Правительство запускает инвестиции в занятость, инфраструктуру и спрос."); },
+          anticorruption: () => { e.budget -= 420; p.corruption -= 5; p.popularity += 1.3; p.lobbyism -= 2; pushNews(state, "Скандалы", "Антикоррупционный рейд", "Прокуратура и аудиторы проверяют крупные контракты."); },
+          health: () => { e.budget -= 900; pop.life += 2; pop.happiness += 1.5; pop.deathRate -= .12; pushNews(state, "Политика", "Нацпроект медицины", "Больницы получают оборудование, кадры и цифровую систему маршрутизации."); },
+          education: () => { e.budget -= 760; pop.education += 2.8; state.tech.points += 35; pushNews(state, "Открытия", "Образовательная реформа", "Школы и университеты получили новый стандарт финансирования."); },
+          security: () => { e.budget -= 520; pop.crime -= 2.6; p.protests += .6; state.military.cyber += 1.5; pushNews(state, "Безопасность", "Усиление безопасности", "Полиция и спецслужбы получили дополнительные полномочия и ресурсы."); },
+          summit: () => { e.budget -= 280; state.diplomacy.countries.slice(0, 20).forEach(c => c.relations = clamp(c.relations + rnd(.2, 1.2), 0, 100)); pushNews(state, "Мир", "Международный саммит", "Президент принял лидеров, инвесторов и руководителей организаций."); }
+        };
+        actions[policy]?.();
+        normalizeCore();
+      }
+
+      function economyAction(type) {
+        const e = state.economy;
+        if (type === "emit") { e.emission += 1200; e.budget += 1200; e.inflation += .9; }
+        if (type === "bonds") { e.budget += 3500; e.debt += 3900; e.keyRate += .15; }
+        if (type === "privatize") { e.budget += 2600; e.stateCompanies = Math.max(0, e.stateCompanies - 1); e.smallBusiness += 1.2; state.politics.lobbyism += .8; }
+        if (type === "nationalize") { e.budget -= 2200; e.stateCompanies += 1; e.corporations = Math.max(0, e.corporations - 1); state.politics.popularity += .8; }
+        if (type === "supportSmall") { e.budget -= 700; e.smallBusiness += 3; e.unemployment -= .25; }
+        if (type === "bailout") { e.budget -= 1500; e.bankruptcies -= 1.2; e.stockIndex *= 1.018; state.politics.popularity -= .4; }
+        normalizeCore();
+        pushNews(state, "Экономика", "Решение экономического блока", "Параметры бюджета, рынка и бизнеса обновлены решением правительства.");
+      }
+
+      function politicsAction(type) {
+        const p = state.politics;
+        if (type === "law") {
+          const law = { name: pick(["Закон о промышленной политике","Закон о цифровом государстве","Закон о местном самоуправлении","Закон о прозрачных закупках"]), effect: pick(["ускоряет инвестиции","усиливает контроль расходов","повышает доверие граждан","меняет баланс центра и регионов"]), support: Math.round(rnd(43, 82)) };
+          p.laws.unshift(law);
+          p.coalition += law.support > 55 ? 1.3 : -1;
+        }
+        if (type === "decree") {
+          p.decrees.unshift({ name: `Указ №${p.decrees.length + 1}`, date: formatDate(state.date), effect: "оперативное решение президента" });
+          p.popularity += .7;
+          p.opposition += .3;
+        }
+        if (type === "referendum") {
+          if (p.referendumCooldown > 0) return notify("Референдум можно провести позже.");
+          p.referendumCooldown = 365;
+          const win = p.popularity + rnd(-18, 18) > 50;
+          p.popularity += win ? 4 : -6;
+          p.coalition += win ? 3 : -4;
+          pushNews(state, "Выборы", win ? "Референдум выигран" : "Референдум проигран", win ? "Большинство граждан поддержало инициативу президента." : "Избиратели отвергли инициативу, оппозиция усилилась.");
+        }
+        if (type === "election") runElection(state, true);
+        if (type === "amend") { p.constitution.rights = clamp(p.constitution.rights + rnd(-3, 5), 0, 100); p.constitution.courtIndependence = clamp(p.constitution.courtIndependence + rnd(-2, 4), 0, 100); p.coalition -= 2; }
+        if (type === "coalition") { p.coalition += rnd(3, 8); p.lobbyism += 1.5; p.popularity += .6; }
+        normalizeCore();
+        pushNews(state, "Политика", "Политическое решение", "Баланс партий, коалиции и общественной поддержки изменился.");
+      }
+
+      function runElection(game, early = false) {
+        const p = game.politics;
+        const result = clamp(p.popularity + game.economy.growth * 2 - p.corruption * .12 - p.protests * .2 + rnd(-12, 12), 0, 100);
+        const won = result >= 45;
+        p.electionInDays = 1825;
+        p.popularity = clamp(result + (won ? 4 : -6), 0, 100);
+        p.coalition = clamp(result + rnd(-8, 10), 0, 100);
+        p.opposition = clamp(100 - result + rnd(-7, 7), 0, 100);
+        p.parties[0].support = clamp(result, 5, 70);
+        p.parties[0].seats = Math.round(p.parliamentSeats * p.parties[0].support / 100);
+        pushNews(game, "Выборы", won ? "Президентская партия побеждает" : "Правящая партия теряет большинство", `${early ? "Досрочные выборы" : "Очередные выборы"} завершены с результатом ${pct(result,0)}.`);
+      }
+
+      function replaceMinister(index) {
+        const names = ["Наталья Руднева","Максим Фомин","Сергей Вальд","Диана Яровая","Артур Ланской","Кира Светлова","Михаил Климов","Инга Ларина"];
+        const m = state.politics.ministers[index];
+        if (!m) return;
+        m.name = pick(names);
+        m.skill = Math.round(rnd(50, 88));
+        m.loyalty = Math.round(rnd(45, 86));
+        state.politics.popularity -= .4;
+        pushNews(state, "Политика", "Кадровое решение", `${m.post}: назначен новый руководитель ${m.name}.`);
+      }
+
+      function diplomacyAction(type) {
+        const c = state.diplomacy.countries.find(x => x.id === selectedCountryId);
+        if (!c) return;
+        const e = state.economy;
+        if (type === "relations") { e.budget -= 90; c.relations += rnd(4, 10); c.embassy = true; }
+        if (type === "trade") { e.budget -= 160; c.trade += rnd(600, 2200); c.treaties.push("торговый контракт"); c.relations += 3; }
+        if (type === "alliance") { if (c.relations < 60) return notify("Для союза нужны отношения выше 60%."); c.alliance = true; c.treaties.push("союз"); c.relations += 5; }
+        if (type === "sanctions") { c.sanctions = !c.sanctions; c.relations += c.sanctions ? -12 : 6; e.exports -= c.sanctions ? c.trade * .04 : -c.trade * .02; }
+        if (type === "embargo") { c.embargo = !c.embargo; c.relations += c.embargo ? -16 : 5; c.trade *= c.embargo ? .62 : 1.18; }
+        if (type === "milAid") { e.budget -= 540; c.relations += 8; c.military += 2; c.aid += 540; }
+        if (type === "humanAid") { e.budget -= 220; c.relations += 6; c.stability += 3; c.aid += 220; }
+        if (type === "spy") { e.budget -= 120; c.spy += rnd(4, 10); c.relations -= rnd(0, 2); state.military.cyber += .4; }
+        if (type === "visa") { c.visa = c.visa === "свободный" ? "строгий" : c.visa === "строгий" ? "обычный" : "свободный"; c.relations += c.visa === "свободный" ? 3 : -2; }
+        if (type === "war") { declareWar(c); }
+        if (type === "peace") { c.war = false; c.relations += 8; state.military.wars = state.military.wars.filter(w => w.enemy !== c.name); }
+        c.relations = clamp(c.relations, 0, 100);
+        c.military = clamp(c.military, 0, 100);
+        c.stability = clamp(c.stability, 0, 100);
+        pushNews(state, "Мир", "Дипломатическое решение", `Отношения с ${c.name} теперь ${pct(c.relations,0)}. Статус: ${stripHtml(countryStatus(c))}.`);
+      }
+
+      function stripHtml(html) {
+        const div = document.createElement("div");
+        div.innerHTML = html;
+        return div.textContent || "";
+      }
+
+      function declareWar(c) {
+        if (c.war) return;
+        c.war = true;
+        c.relations = Math.min(c.relations, 2);
+        state.military.wars.push({ id: uid("war"), enemy: c.name, intensity: Math.round(rnd(32, 72)), fatigue: 0 });
+        state.politics.popularity = clamp(state.politics.popularity - 4, 0, 100);
+        state.economy.stockIndex *= .93;
+      }
+
+      function createOrganization() {
+        const name = document.getElementById("newOrgName")?.value.trim();
+        const purpose = document.getElementById("newOrgPurpose")?.value.trim();
+        if (!name) return notify("Введите название организации.");
+        state.diplomacy.organizations.push({ id: uid("org"), name, purpose: purpose || "координация политики", members: 1, influence: 24, custom: true });
+        pushNews(state, "Мир", "Создана международная организация", `${state.country.name} объявляет о запуске организации "${name}".`);
+      }
+
+      function militaryAction(type) {
+        const m = state.military, e = state.economy;
+        if (type === "mobilize") { m.mobilized += 45000; m.land += 18000; m.readiness += 3; m.morale -= 2; e.budget -= 900; state.politics.protests += 1.5; }
+        if (type === "contract") { m.land += 6500; m.special += 700; m.contractShare += 1.2; e.budget -= 620; }
+        if (type === "draft") { m.conscription = !m.conscription; m.manpower += m.conscription ? 45000 : -30000; state.politics.popularity += m.conscription ? -1.5 : 1.2; }
+        if (type === "industry") { m.industry += 4; m.air += 8; m.airDefense += 3; e.budget -= 1100; }
+        if (type === "cyber") { m.cyber += 4; e.budget -= 260; }
+        if (type === "operation") { m.operations.unshift({ id: uid("op"), name: pick(["Щит столицы","Северный дозор","Киберпериметр","Морской рубеж"]), type: pick(["учения","разведка","контртеррор","операция"]), date: formatDate(state.date), result: Math.round(rnd(48, 92)) }); m.readiness += 1.4; e.budget -= 180; }
+        normalizeCore();
+        pushNews(state, "Армия", "Решение Генштаба", "Военные показатели, бюджет и общественная реакция обновлены.");
+      }
+
+      function warOperation(id) {
+        const w = state.military.wars.find(x => x.id === id);
+        if (!w) return;
+        const power = calcArmyPower();
+        const success = clamp(power / 3 + state.military.readiness + rnd(-35, 35) - w.intensity, 0, 100);
+        w.fatigue += 5;
+        state.economy.budget -= 700;
+        if (success > 62) {
+          w.intensity = clamp(w.intensity - rnd(5, 14), 0, 100);
+          state.military.morale += 2;
+        } else {
+          w.intensity = clamp(w.intensity + rnd(2, 8), 0, 100);
+          state.military.morale -= 2;
+          state.politics.popularity -= 1;
+        }
+        pushNews(state, "Армия", success > 62 ? "Успешная операция" : "Сложная операция", `На направлении ${w.enemy} результат операции оценивается в ${pct(success,0)}.`);
+        if (w.intensity < 8) {
+          const c = state.diplomacy.countries.find(x => x.name === w.enemy);
+          if (c) c.war = false;
+          state.military.wars = state.military.wars.filter(x => x.id !== id);
+          pushNews(state, "Армия", "Капитуляция противника", `${w.enemy} принимает условия прекращения боевых действий.`);
+        }
+      }
+
+      function techLab() {
+        const cost = 900 + state.tech.labs * 180;
+        if (state.economy.budget < cost) return notify("Недостаточно бюджета на лабораторию.");
+        state.economy.budget -= cost;
+        state.tech.labs++;
+        state.tech.points += 15;
+      }
+
+      function techFund() {
+        if (state.economy.budget < 420) return notify("Недостаточно бюджета.");
+        state.economy.budget -= 420;
+        state.tech.points += 90;
+        state.population.education += .5;
+      }
+
+      function socialAction(type) {
+        const p = state.population, e = state.economy;
+        if (type === "family") { e.budget -= 500; p.birthRate += .3; p.happiness += 1.2; }
+        if (type === "migration") { e.budget -= 240; p.migration += .08; p.discontent += .3; e.unemployment += .08; }
+        if (type === "police") { e.budget -= 360; p.crime -= 2.5; state.politics.protests += .4; }
+        if (type === "housing") { e.budget -= 720; p.poverty -= 1.4; p.happiness += 1.8; e.growth += .12; }
+        if (type === "culture") { e.budget -= 180; p.happiness += 1.1; state.politics.popularity += .8; }
+        normalizeCore();
+        pushNews(state, "Политика", "Социальная политика", "Обновлены демография, уровень жизни и общественные настроения.");
+      }
+
+      function generateNews(category) {
+        pushNews(state, category, newsTitle(category), `Экстренная сводка категории "${category}" сформирована пресс-службой на дату ${formatDate(state.date)}.`);
+      }
+
+      function addLaw() {
+        state.politics.laws.unshift({ name: "Новый закон " + (state.politics.laws.length + 1), effect: "настраиваемый эффект через редактор", support: 50 });
+      }
+
+      function addParty() {
+        state.politics.parties.push({ name: "Новая партия " + (state.politics.parties.length + 1), ideology: "центризм", seats: 0, support: 3, coalition: false });
+        normalizePercentages();
+      }
+
+      function normalizePercentages() {
+        const parties = state.politics.parties;
+        const sum = parties.reduce((a, b) => a + num(b.support), 0) || 1;
+        for (const p of parties) {
+          p.support = p.support / sum * 100;
+          p.seats = Math.round(state.politics.parliamentSeats * p.support / 100);
+        }
+        normalizeCore();
+      }
+
+      function normalizeCore() {
+        const e = state.economy, p = state.politics, pop = state.population, m = state.military;
+        e.inflation = clamp(e.inflation, -2, 80);
+        e.unemployment = clamp(e.unemployment, 1, 45);
+        e.smallBusiness = clamp(e.smallBusiness, 0, 100);
+        e.bankruptcies = clamp(e.bankruptcies, 0, 40);
+        p.popularity = clamp(p.popularity, 0, 100);
+        p.corruption = clamp(p.corruption, 0, 100);
+        p.lobbyism = clamp(p.lobbyism, 0, 100);
+        p.protests = clamp(p.protests, 0, 100);
+        p.strikes = clamp(p.strikes, 0, 100);
+        p.coalition = clamp(p.coalition, 0, 100);
+        p.opposition = clamp(p.opposition, 0, 100);
+        pop.happiness = clamp(pop.happiness, 0, 100);
+        pop.discontent = clamp(pop.discontent, 0, 100);
+        pop.crime = clamp(pop.crime, 0, 100);
+        pop.life = clamp(pop.life, 0, 100);
+        pop.education = clamp(pop.education, 0, 100);
+        pop.poverty = clamp(pop.poverty, 0, 80);
+        m.readiness = clamp(m.readiness, 0, 100);
+        m.morale = clamp(m.morale, 0, 100);
+        m.cyber = clamp(m.cyber, 0, 100);
+        m.industry = clamp(m.industry, 0, 100);
+        m.research = clamp(m.research, 0, 100);
+        m.contractShare = clamp(m.contractShare, 0, 100);
+      }
+
+      function setEditorPath(path, value, asNumber) {
+        const final = asNumber ? num(value) : value;
+        if (path.startsWith("selectedRegion.")) {
+          const r = state.regions.find(x => x.id === selectedRegionId);
+          if (r) r[path.split(".")[1]] = final;
+          return;
+        }
+        if (path.startsWith("selectedCountry.")) {
+          const c = state.diplomacy.countries.find(x => x.id === selectedCountryId);
+          if (c) c[path.split(".")[1]] = final;
+          return;
+        }
+        const parts = path.split(".");
+        let obj = state;
+        for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
+        obj[parts[parts.length - 1]] = final;
+        normalizeCore();
+      }
+
+      function saveSlot(slot) {
+        const slots = loadSlots();
+        slots[slot] = JSON.parse(JSON.stringify(state));
+        saveSlots(slots);
+        notify(`Слот ${slot} сохранён.`);
+      }
+
+      function loadSlot(slot) {
+        const slots = loadSlots();
+        if (!slots[slot]) return notify("Слот пуст.");
+        state = migrateState(slots[slot]);
+        saveState();
+        notify(`Слот ${slot} загружен.`);
+      }
+
+      function exportSave() {
+        const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `${state.country.name.replace(/\s+/g, "_")}_save.json`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+
+      function importSaveFile() {
+        const file = importFile.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            state = migrateState(JSON.parse(String(reader.result)));
+            saveState();
+            notify("Сохранение импортировано.");
+            render();
+          } catch {
+            notify("Не удалось прочитать JSON.");
+          }
+        };
+        reader.readAsText(file);
+      }
+
+      function copyJson() {
+        const text = document.getElementById("saveJson")?.value || JSON.stringify(state);
+        navigator.clipboard?.writeText(text).then(() => notify("JSON скопирован."), () => notify("Скопируйте текст вручную."));
+      }
+
+      function loadJsonText() {
+        const text = document.getElementById("saveJson")?.value;
+        try {
+          state = migrateState(JSON.parse(text));
+          saveState();
+          notify("JSON загружен.");
+        } catch {
+          notify("Ошибка JSON.");
+        }
+      }
+
+      function confirmNewGame() {
+        modal = {
+          title: "Новая игра",
+          body: `<p class="subtle">Текущее автосохранение будет удалено. Слоты останутся доступны.</p><div class="actions"><button class="danger" data-action="really-new-game">Удалить автосохранение</button><button data-action="close-modal">Отмена</button></div>`
+        };
+        render();
+        setTimeout(() => {
+          document.querySelector("[data-action='really-new-game']")?.addEventListener("click", () => {
+            localStorage.removeItem(STORAGE_KEY);
+            state = null;
+            modal = null;
+            render();
+          }, { once: true });
+        });
+      }
+
+      document.addEventListener("click", event => {
+        if (event.target.closest("[data-action='really-new-game']")) {
+          localStorage.removeItem(STORAGE_KEY);
+          state = null;
+          modal = null;
+          render();
+        }
+      });
+
+      document.addEventListener("click", event => {
+        const svg = event.target.closest("#countryMap");
+        if (!svg || !drawMode || event.target.closest("[data-action='select-region']")) return;
+        const pt = svg.createSVGPoint();
+        pt.x = event.clientX;
+        pt.y = event.clientY;
+        const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+        drawingPoints.push([clamp(p.x, 0, 900), clamp(p.y, 0, 520)]);
+        render();
+      });
+
+      init();
+    })();
+  </script>
+</body>
+</html>
