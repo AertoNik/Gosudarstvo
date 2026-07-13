@@ -3308,6 +3308,123 @@
       .bill-stage { max-width: none; }
       .fiscal-ledger { grid-template-columns: 1fr; }
     }
+
+    /* Final stability and presentation pass */
+    html {
+      scrollbar-gutter: stable;
+    }
+
+    * {
+      letter-spacing: 0 !important;
+    }
+
+    body.modal-open {
+      overflow: hidden;
+    }
+
+    button:disabled,
+    input:disabled,
+    select:disabled {
+      cursor: not-allowed;
+      opacity: .52;
+      box-shadow: none;
+    }
+
+    button:disabled:hover {
+      border-color: var(--line);
+      background: var(--panel-2);
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
+    summary:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    button,
+    .pill,
+    .metric .value,
+    .kpi strong,
+    .row,
+    .project-card,
+    .crisis-card,
+    .strategy-card,
+    .bill-card,
+    .political-force-card,
+    .constituency-card {
+      overflow-wrap: anywhere;
+    }
+
+    .top-title h2,
+    .metric .value,
+    .command-main h3,
+    .setup-hero h1,
+    .war-report-head h2,
+    .treaty-paper h3 {
+      font-size: 30px;
+    }
+
+    .command-main h3 { font-size: 42px; }
+    .setup-hero h1 { font-size: 54px; }
+    .war-report-head h2 { font-size: 36px; }
+    .treaty-paper h3 { font-size: 32px; }
+
+    .modal {
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
+    }
+
+    .modal > .panel-head {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      background: color-mix(in oklab, var(--panel-2) 94%, var(--state-green));
+    }
+
+    .modal-body,
+    .scroll,
+    .news-feed,
+    .nav {
+      overscroll-behavior: contain;
+    }
+
+    .battle-svg,
+    .battle-theater,
+    .battle-dynamics {
+      backface-visibility: hidden;
+    }
+
+    @media (max-width: 620px) {
+      .top-actions { width: 100%; }
+      .speedbar button { flex: 0 0 auto; }
+      .day-step { flex: 1 1 120px; }
+      .project-action-line { grid-template-columns: 1fr; }
+      .project-action-line button { width: 100%; min-width: 0; }
+      .battle-theater,
+      .battle-svg { min-height: 360px; }
+      .battle-live-note { max-width: calc(100% - 24px); }
+      .war-report-head,
+      .treaty-paper header,
+      .treaty-signatures { grid-template-columns: 1fr; }
+      .top-title h2 { font-size: 25px; }
+      .metric .value { font-size: 26px; }
+      .command-main h3 { font-size: 30px; }
+      .setup-hero h1 { font-size: 38px; }
+      .war-report-head h2 { font-size: 30px; }
+      .treaty-paper h3 { font-size: 27px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .001ms !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -3470,11 +3587,11 @@
       }
 
       function pct(value, digits = 1) {
-        return `${Number(value).toFixed(digits)}%`;
+        return `${num(value).toFixed(Math.max(0, Math.min(4, Math.round(num(digits, 1)))))}%`;
       }
 
       function money(value, currency = state?.country?.currency || "кред.") {
-        const n = Number(value);
+        const n = num(value);
         const abs = Math.abs(n);
         let text;
         if (abs >= 1000000) text = (n / 1000000).toFixed(2) + " трлн";
@@ -3484,7 +3601,7 @@
       }
 
       function compact(value) {
-        const n = Number(value);
+        const n = num(value);
         const abs = Math.abs(n);
         if (abs >= 1000000000) return (n / 1000000000).toFixed(2) + " млрд";
         if (abs >= 1000000) return (n / 1000000).toFixed(2) + " млн";
@@ -3492,13 +3609,23 @@
         return String(Math.round(n));
       }
 
+      function safeDateParts(d) {
+        const value = d && typeof d === "object" ? d : currentGameDate();
+        const year = clamp(Math.round(num(value.year, currentGameDate().year)), 1, 9999);
+        const month = clamp(Math.round(num(value.month, 1)), 1, 12);
+        const maxDay = new Date(year, month, 0).getDate();
+        return { day: clamp(Math.round(num(value.day, 1)), 1, maxDay), month, year };
+      }
+
       function formatDate(d) {
-        return `${String(d.day).padStart(2, "0")}.${String(d.month).padStart(2, "0")}.${d.year}`;
+        const value = safeDateParts(d);
+        return `${String(value.day).padStart(2, "0")}.${String(value.month).padStart(2, "0")}.${value.year}`;
       }
 
       function dateLabel(d) {
         const names = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
-        return `${d.day} ${names[d.month - 1]} ${d.year}`;
+        const value = safeDateParts(d);
+        return `${value.day} ${names[value.month - 1]} ${value.year}`;
       }
 
       function currentGameDate() {
@@ -3517,7 +3644,7 @@
         item.dataset.toastId = id;
         item.innerHTML = `
           <div><strong>${esc(title)}</strong><span>${esc(text)}</span></div>
-          <button class="toast-close" data-action="dismiss-toast" data-toast-id="${id}" title="Закрыть">×</button>
+          <button class="toast-close" data-action="dismiss-toast" data-toast-id="${id}" title="Закрыть" aria-label="Закрыть уведомление">×</button>
         `;
         toastBox.appendChild(item);
         setTimeout(() => item.remove(), 3600);
@@ -3535,6 +3662,7 @@
       }
 
       function serializeStateForStorage(game = state, level = "normal") {
+        if (!game || typeof game !== "object") return null;
         const copy = JSON.parse(JSON.stringify(game));
         const historyLimit = level === "tiny" || level === "safe" ? 60 : 180;
         const newsLimit = level === "tiny" || level === "safe" ? 24 : 90;
@@ -3573,14 +3701,18 @@
           const slots = JSON.parse(raw);
           const compacted = {};
           for (const [slot, save] of Object.entries(slots || {})) {
-            compacted[slot] = serializeStateForStorage(migrateState(save), "tiny");
+            const migrated = migrateState(save);
+            if (migrated) compacted[slot] = serializeStateForStorage(migrated, "tiny");
           }
           localStorage.removeItem(SLOTS_KEY);
           try {
             localStorage.setItem(SLOTS_KEY, JSON.stringify(compacted));
           } catch {
             const safeSlots = {};
-            for (const [slot, save] of Object.entries(compacted)) safeSlots[slot] = serializeStateForStorage(save, "safe");
+            for (const [slot, save] of Object.entries(compacted)) {
+              const safe = serializeStateForStorage(save, "safe");
+              if (safe) safeSlots[slot] = safe;
+            }
             localStorage.setItem(SLOTS_KEY, JSON.stringify(safeSlots));
           }
           return true;
@@ -3641,24 +3773,113 @@
         }
       }
 
+      function activateLoadedState(nextState) {
+        if (!nextState) return false;
+        clearTimeout(deferredRenderTimer);
+        if (simulationFrame !== null) cancelAnimationFrame(simulationFrame);
+        simulationFrame = null;
+        simulationQueue = 0;
+        state = nextState;
+        queuedSimulationState = state;
+        pendingRender = false;
+        modal = null;
+        warDrafts.clear();
+        warLegalDrafts.clear();
+        expandedActionCards.clear();
+        selectedRegionId = state.regions.some(item => item.id === selectedRegionId) ? selectedRegionId : state.regions[0]?.id || null;
+        selectedCountryId = state.diplomacy.countries.some(item => item.id === selectedCountryId) ? selectedCountryId : state.diplomacy.countries[0]?.id || null;
+        selectedTech = null;
+        lastInteractionAt = 0;
+        lastScrollAt = 0;
+        lastBattleSceneRefreshAt = 0;
+        lastBattleLiveRefreshAt = 0;
+        lastSimulationPaintAt = 0;
+        if (!tabs.some(([id]) => id === activeTab)) activeTab = "dashboard";
+        return true;
+      }
+
       function migrateState(loaded) {
         if (!loaded || typeof loaded !== "object") return null;
+        const today = currentGameDate();
+        const loadedYear = clamp(Math.round(num(loaded.date?.year, today.year)), 1, 9999);
+        const loadedMonth = clamp(Math.round(num(loaded.date?.month, today.month)), 1, 12);
+        const maxDay = new Date(loadedYear, loadedMonth, 0).getDate();
+        loaded.date = {
+          day: clamp(Math.round(num(loaded.date?.day, today.day)), 1, maxDay),
+          month: loadedMonth,
+          year: loadedYear
+        };
+        loaded.speed = speeds.includes(num(loaded.speed)) ? num(loaded.speed) : 0;
+        loaded.theme = loaded.theme === "light" ? "light" : "dark";
+        const identityDefaults = defaultSetupDraft();
+        loaded.country = Object.assign({
+          name: identityDefaults.countryName,
+          capital: identityDefaults.capital,
+          currency: identityDefaults.currency,
+          armyName: identityDefaults.armyName,
+          parliamentName: identityDefaults.parliamentName,
+          intelligenceName: identityDefaults.intelligenceName,
+          policeName: identityDefaults.policeName,
+          courtName: identityDefaults.courtName,
+          ministries: identityDefaults.ministries.split(",").map(item => item.trim()),
+          language: identityDefaults.language,
+          people: identityDefaults.people,
+          citizenship: identityDefaults.citizenship,
+          partiesText: identityDefaults.parties,
+          religionsText: identityDefaults.religions,
+          nationalHoliday: identityDefaults.nationalHoliday,
+          anthem: identityDefaults.anthem,
+          coat: identityDefaults.coat,
+          coatImage: "",
+          flagName: identityDefaults.flagName,
+          continent: identityDefaults.continent,
+          neighbors: identityDefaults.neighbors.split(",").map(item => item.trim())
+        }, loaded.country || {});
+        loaded.country.ministries = Array.isArray(loaded.country.ministries) && loaded.country.ministries.length ? loaded.country.ministries : identityDefaults.ministries.split(",").map(item => item.trim());
+        loaded.country.neighbors = Array.isArray(loaded.country.neighbors) && loaded.country.neighbors.length ? loaded.country.neighbors : identityDefaults.neighbors.split(",").map(item => item.trim());
+        loaded.country.president = Object.assign({
+          name: identityDefaults.presidentName,
+          gender: identityDefaults.gender,
+          age: identityDefaults.age,
+          bio: identityDefaults.bio,
+          party: identityDefaults.party,
+          ideology: identityDefaults.ideology,
+          photo: ""
+        }, loaded.country.president || {});
+        loaded.country.flag = Object.assign({ colors: [identityDefaults.flagA, identityDefaults.flagB, identityDefaults.flagC], layout: identityDefaults.flagLayout, image: "" }, loaded.country.flag || {});
+        loaded.country.flag.colors = Array.isArray(loaded.country.flag.colors) && loaded.country.flag.colors.length >= 3 ? loaded.country.flag.colors.slice(0, 3) : [identityDefaults.flagA, identityDefaults.flagB, identityDefaults.flagC];
+        loaded.country.flag.layout = ["horizontal","vertical","diagonal"].includes(loaded.country.flag.layout) ? loaded.country.flag.layout : "horizontal";
+        loaded.country.flag.image = sanitizeImageData(loaded.country.flag.image);
+        loaded.country.coatImage = sanitizeImageData(loaded.country.coatImage);
+        loaded.country.president.photo = sanitizeImageData(loaded.country.president.photo);
         loaded.version = 12;
-        loaded.news ||= [];
-        loaded.history = Object.assign(emptyHistory(), loaded.history || {});
-        loaded.diplomacy ||= { countries: createWorldCountries([]), organizations: defaultOrganizations() };
-        loaded.diplomacy.countries = (loaded.diplomacy.countries || createWorldCountries([])).map(applyCountryProfile);
-        loaded.diplomacy.organizations ||= defaultOrganizations();
-        loaded.diplomacy.inbox ||= [];
+        loaded.news = Array.isArray(loaded.news)
+          ? loaded.news.filter(item => item && typeof item === "object" && !Array.isArray(item)).slice(0, 240)
+          : [];
+        const sourceHistory = loaded.history && typeof loaded.history === "object" && !Array.isArray(loaded.history) ? loaded.history : {};
+        loaded.history = emptyHistory();
+        for (const key of Object.keys(loaded.history)) {
+          const values = Array.isArray(sourceHistory[key]) ? sourceHistory[key] : [];
+          loaded.history[key] = key === "date"
+            ? values.filter(value => typeof value === "string" || typeof value === "number").map(String).slice(-420)
+            : values.map(Number).filter(Number.isFinite).slice(-420);
+        }
+        if (!loaded.diplomacy || typeof loaded.diplomacy !== "object" || Array.isArray(loaded.diplomacy)) loaded.diplomacy = { countries: createWorldCountries(loaded.country.neighbors), organizations: defaultOrganizations() };
+        const validCountries = Array.isArray(loaded.diplomacy.countries)
+          ? loaded.diplomacy.countries.filter(country => country && typeof country === "object" && !Array.isArray(country))
+          : [];
+        loaded.diplomacy.countries = (validCountries.length ? validCountries : createWorldCountries(loaded.country.neighbors)).map(applyCountryProfile);
+        loaded.diplomacy.organizations = Array.isArray(loaded.diplomacy.organizations) ? loaded.diplomacy.organizations : defaultOrganizations();
+        loaded.diplomacy.inbox = Array.isArray(loaded.diplomacy.inbox) ? loaded.diplomacy.inbox.filter(item => item && typeof item === "object" && !Array.isArray(item)) : [];
         loaded.diplomacy.inbox = loaded.diplomacy.inbox.slice(0, 8);
-        loaded.diplomacy.pressureLog ||= [];
+        loaded.diplomacy.pressureLog = Array.isArray(loaded.diplomacy.pressureLog) ? loaded.diplomacy.pressureLog.filter(item => item && typeof item === "object" && !Array.isArray(item)) : [];
         loaded.diplomacy.pressureLog = loaded.diplomacy.pressureLog.slice(0, 12);
-        loaded.tech ||= createTech();
-        loaded.population ||= defaultPopulation(14500000);
+        if (!loaded.tech || typeof loaded.tech !== "object" || Array.isArray(loaded.tech)) loaded.tech = createTech();
+        if (!loaded.population || typeof loaded.population !== "object" || Array.isArray(loaded.population)) loaded.population = defaultPopulation(14500000);
         loaded.military = migrateMilitary(loaded.military);
-        loaded.military.wars = (loaded.military.wars || []).map(war => normalizeWar(war, loaded));
-        loaded.politics ||= defaultPolitics({});
-        loaded.economy ||= defaultEconomy();
+        loaded.military.wars = loaded.military.wars.map(war => normalizeWar(war, loaded));
+        if (!loaded.politics || typeof loaded.politics !== "object" || Array.isArray(loaded.politics)) loaded.politics = defaultPolitics({});
+        if (!loaded.economy || typeof loaded.economy !== "object" || Array.isArray(loaded.economy)) loaded.economy = defaultEconomy();
         migrateEconomicSystems(loaded);
         migrateFinancialSystem(loaded);
         migrateStrategicDiplomacy(loaded);
@@ -3668,7 +3889,10 @@
         migrateJusticeSystem(loaded);
         migrateCabinetSystem(loaded);
         loaded.governance = migrateGovernance(loaded.governance);
-        loaded.regions ||= defaultRegions();
+        const validRegions = Array.isArray(loaded.regions)
+          ? loaded.regions.filter(region => region && typeof region === "object" && !Array.isArray(region))
+          : [];
+        loaded.regions = validRegions.length ? validRegions : defaultRegions();
         loaded.regions = loaded.regions.map((r, index) => ensureRegionDefaults(r, index));
         migrateRegionalAdministration(loaded);
         migrateDemographySystem(loaded);
@@ -3679,16 +3903,6 @@
         migrateClimateSystem(loaded);
         migrateChronicle(loaded);
         layoutAnnexedRegions(loaded);
-        loaded.country ||= {};
-        loaded.country.flag ||= { colors: ["#1f8fff", "#f8fafc", "#21c7a8"], layout: "horizontal" };
-        loaded.country.flag.colors ||= ["#1f8fff", "#f8fafc", "#21c7a8"];
-        loaded.country.flag.layout ||= "horizontal";
-        loaded.country.flag.image ||= "";
-        loaded.country.coat ||= "Государственный герб";
-        loaded.country.coatImage ||= "";
-        loaded.country.flag.image = sanitizeImageData(loaded.country.flag.image);
-        loaded.country.coatImage = sanitizeImageData(loaded.country.coatImage);
-        if (loaded.country.president) loaded.country.president.photo = sanitizeImageData(loaded.country.president.photo);
         for (const r of loaded.regions) r.buildings ||= emptyBuildings();
         if (!loaded.history.date?.length) pushHistory(loaded);
         return loaded;
@@ -3704,12 +3918,14 @@
           projects: mergeById(base.projects, g.projects),
           media: Object.assign(base.media, g.media || {}),
           intelligence: Object.assign(base.intelligence, g.intelligence || {}),
-          crises: Array.isArray(g.crises) ? g.crises : base.crises
+          crises: Array.isArray(g.crises) ? g.crises.filter(item => item && typeof item === "object" && !Array.isArray(item)) : base.crises
         };
       }
 
       function mergeById(base, incoming) {
-        const map = new Map((Array.isArray(incoming) ? incoming : []).map(item => [item.id, item]));
+        const map = new Map((Array.isArray(incoming) ? incoming : [])
+          .filter(item => item && typeof item === "object" && !Array.isArray(item))
+          .map(item => [item.id, item]));
         return base.map(item => Object.assign({}, item, map.get(item.id) || {}));
       }
 
@@ -3736,9 +3952,9 @@
         m.warExhaustion = num(m.warExhaustion, base.warExhaustion);
         m.veterans = num(m.veterans, base.veterans);
         m.lastWarOutcome ||= base.lastWarOutcome;
-        m.warTreaties ||= [];
-        m.operations ||= [];
-        m.wars ||= [];
+        m.warTreaties = Array.isArray(m.warTreaties) ? m.warTreaties.filter(item => item && typeof item === "object" && !Array.isArray(item)) : [];
+        m.operations = Array.isArray(m.operations) ? m.operations.filter(item => item && typeof item === "object" && !Array.isArray(item)) : [];
+        m.wars = Array.isArray(m.wars) ? m.wars.filter(item => item && typeof item === "object" && !Array.isArray(item)) : [];
         return m;
       }
 
@@ -4164,7 +4380,7 @@
 
       function stockText(key, value = stockValue(key)) {
         const meta = stockMeta(key);
-        if (key === "ammo" || key === "fuel") return `${compact(value)} ${meta.unit}`;
+        if (key === "ammo" || key === "fuel") return compact(value);
         return `${compact(value)} ${meta.unit}`;
       }
 
@@ -5956,14 +6172,14 @@
       }
 
       function calcWarBalance(game, rawWar) {
-        const war = normalizeWar(rawWar);
+        const war = normalizeWar(rawWar, game);
         const enemy = game.diplomacy.countries.find(x => x.id === war.enemyId || x.name === war.enemy);
         const own = calcArmyComponents(game);
         const enemyPower = calcEnemyWarPower(enemy, war, game);
         const ownOperational = own.total + war.supply * .6 + game.military.recon * .32 + game.military.command * .36 + game.military.drones * .2 + game.military.airSuperiority * .22 + game.military.electronicWarfare * .14 + game.military.satellites * .12 + game.military.engineers * .1 + game.military.airlift * .08 - war.fatigue * .42 - game.military.warExhaustion * .36;
         const enemyOperational = enemyPower + war.intensity * .52 + Math.max(0, 50 - war.control) * .24;
         const balance = ownOperational - enemyOperational;
-        const initiative = clamp(50 + balance * .23 + (war.control - 50) * .22 + rnd(-2.5, 2.5), 0, 100);
+        const initiative = clamp(50 + balance * .23 + (war.control - 50) * .22 + (war.initiative - 50) * .18, 0, 100);
         const status = initiative >= 62 ? "инициатива у нас" : initiative <= 38 ? "инициатива у противника" : "равновесие фронта";
         return { ownPower: own.total, enemyPower, ownOperational, enemyOperational, balance, initiative, status, enemy };
       }
@@ -5987,7 +6203,7 @@
       }
 
       function powerIndex(value) {
-        return Math.round(value).toLocaleString("ru-RU");
+        return Math.round(num(value)).toLocaleString("ru-RU");
       }
 
       function totalBuildings(key, game = state) {
@@ -6409,6 +6625,7 @@
         }
         const scrollState = options.preserveScroll && state ? captureScrollState() : null;
         document.body.classList.toggle("light", state?.theme === "light");
+        document.body.classList.toggle("modal-open", !!modal);
         if (!state) {
           app.innerHTML = renderSetup();
           if (options.resetScroll) requestAnimationFrame(() => window.scrollTo?.(0, 0));
@@ -6741,8 +6958,8 @@
               <h3 class="section-title">Кризисный штаб</h3>
               <div class="signal-grid" style="margin-top: 12px;">
                 <article class="signal-card"><header><strong>Почему растет риск</strong><span class="pill">${pct(risk,0)}</span></header><p class="subtle" style="margin:0;">Инфляция, протесты, коррупция, войны, киберугрозы и слабые госуслуги поднимают национальный риск.</p></article>
-                <article class="signal-card"><header><strong>Почему кризис гаснет</strong><span class="pill">${pct(score,0)}</span></header><p class="subtle" style="margin:0;">Управляемость, финансирование, коммуникация, безопасность и региональная помощь снижают severity кризиса.</p></article>
-                <article class="signal-card"><header><strong>Порог закрытия</strong><span class="pill">8%</span></header><p class="subtle" style="margin:0;">Когда severity падает ниже 8%, кризис считается почти решенным и уходит из оперативной сводки.</p></article>
+                <article class="signal-card"><header><strong>Почему кризис гаснет</strong><span class="pill">${pct(score,0)}</span></header><p class="subtle" style="margin:0;">Управляемость, финансирование, коммуникация, безопасность и региональная помощь снижают тяжесть кризиса.</p></article>
+                <article class="signal-card"><header><strong>Порог закрытия</strong><span class="pill">8%</span></header><p class="subtle" style="margin:0;">Когда тяжесть падает ниже 8%, кризис считается почти решенным и уходит из оперативной сводки.</p></article>
               </div>
             </section>
             <div class="grid split">
@@ -7562,7 +7779,7 @@
           audit: ["Аудит министерств", "контроль", "Проверка закупок, сроков и KPI министерств.", `коррупция ${pct(p.corruption,0)}, риск проектов ${pct(avg(g.projects, "risk"),0)}`, "Когда проекты дорожают или коррупция мешает управлению.", "Снижает коррупцию, лоббизм и риски нацпроектов.", "Требует бюджета и может вскрыть неприятные факты.", "Запустить аудит", "good"],
           counterintel: ["Контрразведка", "безопасность", "Закрытие уязвимостей критической инфраструктуры и иностранных сетей.", `киберугроза ${pct(g.intelligence.cyberThreat,0)}, сети ${pct(g.intelligence.foreignNetworks,0)}`, "Когда растут кибератаки, диверсии или внешнее давление.", "Усиливает контрразведку, снижает киберугрозу.", "Стоит дорого и может усилить закрытость системы.", "Усилить контур", "institution"],
           media: ["Медиастратегия", "коммуникация", "Единая линия объяснения реформ и кризисных решений.", `доверие ${pct(g.media.trust,0)}, свобода ${pct(g.media.freedom,0)}`, "Когда рейтинг проседает из-за шума и противоречивых сообщений.", "Повышает доверие и немного рейтинг.", "Чрезмерная пропаганда снижает свободу прессы.", "Принять стратегию", "warn"],
-          emergency: ["Штаб реагирования", "кризис", "Единый координационный контур для регионов, служб и инфраструктуры.", `активные кризисы ${g.crises.length}, нагрузка служб ${pct(avg(g.services, "stress"),0)}`, "Когда несколько кризисов давят одновременно.", "Снижает severity кризисов и нагрузку служб.", "Самое дорогое оперативное решение центра.", "Развернуть штаб", "good"]
+          emergency: ["Штаб реагирования", "кризис", "Единый координационный контур для регионов, служб и инфраструктуры.", `активные кризисы ${g.crises.length}, нагрузка служб ${pct(avg(g.services, "stress"),0)}`, "Когда несколько кризисов давят одновременно.", "Снижает тяжесть кризисов и нагрузку служб.", "Самое дорогое оперативное решение центра.", "Развернуть штаб", "good"]
         };
         const item = data[id] || data.briefing;
         return { title: item[0], category: item[1], desc: item[2], signal: item[3], when: item[4], effect: item[5], risk: item[6], cta: item[7], tone: item[8] };
@@ -7571,13 +7788,13 @@
       function crisisDecisionMeta(mode, crisis) {
         const cost = ({ funding: 480 + crisis.severity * 6, communication: 130, security: 300, regional: 360 })[mode] || 260;
         const data = {
-          funding: ["Финансировать", "ресурсы", "Деньги закрывают самые дорогие узкие места кризиса.", "Когда severity высокая и службам не хватает ресурсов.", "Сильно снижает severity и нагрузку госслужб.", "Самый дорогой способ стабилизации.", "Выделить деньги", "good"],
-          communication: ["Коммуникация", "доверие", "Публичная линия снижает панику, слухи и медийную поляризацию.", "Когда кризис разгоняется в СМИ или бьет по рейтингу.", "Снижает severity, повышает доверие СМИ и немного рейтинг.", "Не решает материальные причины кризиса.", "Объяснить людям", "civic"],
-          security: ["Штаб безопасности", "безопасность", "Силовой и кибер-контур локализует угрозу.", "Когда кризис связан с кибератакой, риском насилия или саботажем.", "Снижает severity, внутренний риск и киберугрозу.", "Может выглядеть жестко для общества.", "Подключить штаб", "warn"],
-          regional: ["Помощь региону", "регион", "Управленческая группа, деньги и прямой канал связи с регионом.", "Когда кризис привязан к региону или элитному конфликту.", "Снижает severity, повышает лояльность региона.", "Деньги уходят локально и не всегда лечат системную причину.", "Отправить помощь", "good"]
+          funding: ["Финансировать", "ресурсы", "Деньги закрывают самые дорогие узкие места кризиса.", "Когда тяжесть высокая и службам не хватает ресурсов.", "Сильно снижает тяжесть и нагрузку госслужб.", "Самый дорогой способ стабилизации.", "Выделить деньги", "good"],
+          communication: ["Коммуникация", "доверие", "Публичная линия снижает панику, слухи и медийную поляризацию.", "Когда кризис разгоняется в СМИ или бьет по рейтингу.", "Снижает тяжесть, повышает доверие СМИ и немного рейтинг.", "Не решает материальные причины кризиса.", "Объяснить людям", "civic"],
+          security: ["Штаб безопасности", "безопасность", "Силовой и кибер-контур локализует угрозу.", "Когда кризис связан с кибератакой, риском насилия или саботажем.", "Снижает тяжесть, внутренний риск и киберугрозу.", "Может выглядеть жестко для общества.", "Подключить штаб", "warn"],
+          regional: ["Помощь региону", "регион", "Управленческая группа, деньги и прямой канал связи с регионом.", "Когда кризис привязан к региону или элитному конфликту.", "Снижает тяжесть, повышает лояльность региона.", "Деньги уходят локально и не всегда лечат системную причину.", "Отправить помощь", "good"]
         };
         const item = data[mode] || data.funding;
-        return { title: item[0], category: item[1], desc: item[2], signal: `severity ${pct(crisis.severity,0)}, стоимость ${money(cost)}`, when: item[3], effect: item[4], risk: item[5], cta: item[6], tone: item[7] };
+        return { title: item[0], category: item[1], desc: item[2], signal: `тяжесть ${pct(crisis.severity,0)}, стоимость ${money(cost)}`, when: item[3], effect: item[4], risk: item[5], cta: item[6], tone: item[7] };
       }
 
       function projectDecisionMeta(mode, project) {
@@ -8539,7 +8756,8 @@
           defense: clamp(num(t.defense, 45), 0, 100),
           resources: Object.assign(emptyResources(), t.resources || {}),
           control: clamp(num(t.control, 0), 0, 100),
-          captured: !!t.captured
+          captured: !!t.captured,
+          capturedAt: t.capturedAt || ""
         };
       }
 
@@ -8608,6 +8826,7 @@
           pressureClock: Math.max(0, Math.round(num(war.pressureClock, 0))),
           peaceTerms: Array.isArray(war.peaceTerms) ? war.peaceTerms : [],
           lastOrder: war.lastOrder && typeof war.lastOrder === "object" ? war.lastOrder : null,
+          lastPlan: war.lastPlan && typeof war.lastPlan === "object" ? war.lastPlan : null,
           liveAction: war.liveAction && typeof war.liveAction === "object" ? war.liveAction : null,
           liveBySide: war.liveBySide && typeof war.liveBySide === "object" ? war.liveBySide : {},
           liveLog: Array.isArray(war.liveLog) ? war.liveLog.slice(0, 8) : [],
@@ -10524,7 +10743,10 @@
       }
 
       function loadSlots() {
-        try { return JSON.parse(localStorage.getItem(SLOTS_KEY) || "{}"); }
+        try {
+          const parsed = JSON.parse(localStorage.getItem(SLOTS_KEY) || "{}");
+          return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+        }
         catch { return {}; }
       }
 
@@ -10534,8 +10756,34 @@
           return true;
         } catch (err) {
           console.warn(err);
-          notifyStorageOnce("Слоты слишком большие. Нажмите «Оптимизировать хранилище» или экспортируйте JSON.");
-          return false;
+          try {
+            const compacted = {};
+            for (const [slot, save] of Object.entries(slots || {})) {
+              const migrated = migrateState(save);
+              if (migrated) compacted[slot] = serializeStateForStorage(migrated, "tiny");
+            }
+            localStorage.setItem(SLOTS_KEY, JSON.stringify(compacted));
+            notifyStorageOnce("Слоты сохранены в компактном формате: сокращена только старая история.");
+            return true;
+          } catch (compactError) {
+            console.warn(compactError);
+            try {
+              const safeSlots = {};
+              for (const [slot, save] of Object.entries(slots || {})) {
+                const migrated = migrateState(save);
+                if (!migrated) continue;
+                const safe = serializeStateForStorage(migrated, "safe");
+                if (safe) safeSlots[slot] = safe;
+              }
+              localStorage.setItem(SLOTS_KEY, JSON.stringify(safeSlots));
+              notifyStorageOnce("Слоты сохранены без изображений, поскольку LocalStorage почти заполнен.");
+              return true;
+            } catch (safeError) {
+              console.warn(safeError);
+              notifyStorageOnce("Слоты слишком большие. Оптимизируйте хранилище или экспортируйте JSON.");
+              return false;
+            }
+          }
         }
       }
 
@@ -10549,8 +10797,8 @@
         const scrollKey = liveBattle ? `battle-map:${modal.warId}` : `modal:${title}`;
         return `
           <div class="modal-backdrop${liveBattle ? " battle-backdrop" : ""}" data-modal-backdrop>
-            <section class="modal ${tone}${wide}${battleClass}" role="dialog" aria-modal="true" data-scroll-key="${esc(scrollKey)}:shell">
-              <div class="panel-head"><h3>${esc(title)}</h3><button class="icon" data-action="close-modal" title="Закрыть">×</button></div>
+            <section class="modal ${tone}${wide}${battleClass}" role="dialog" aria-modal="true" aria-label="${esc(title)}" data-scroll-key="${esc(scrollKey)}:shell">
+              <div class="panel-head"><h3>${esc(title)}</h3><button class="icon" data-action="close-modal" title="Закрыть" aria-label="Закрыть окно">×</button></div>
               <div class="modal-body" data-scroll-key="${esc(scrollKey)}">${body}</div>
             </section>
           </div>
@@ -10884,10 +11132,9 @@
           return;
         }
         if (action === "load-autosave") {
-          state = loadState();
-          warDrafts.clear();
-          warLegalDrafts.clear();
-          if (state) notify("Автосохранение загружено.");
+          const loaded = loadState();
+          if (activateLoadedState(loaded)) notify("Автосохранение загружено.");
+          else notify("Автосохранение пока не создано.", "warn", "Сохранения");
           render({ force: true, resetScroll: true });
           return;
         }
@@ -13439,7 +13686,7 @@
           state.climate.emergencies.filter(item => item.status !== "закрыта").forEach(item => { item.severity = clamp(item.severity - 4.5,0,100); item.response = clamp(item.response + 6,0,100); });
           state.climate.responseCapacity += 1.1;
           g.services.forEach(s => s.stress = clamp(s.stress - 1.4, 0, 100));
-          report = ["Штаб реагирования развернут", "Кризисные службы получили единый координационный контур.", [["Бюджет", "-520 млн", "bad"], ["Кризисы", "severity ниже", "good"], ["Нагрузка служб", "-1.4 п.п.", "good"]], "good"];
+          report = ["Штаб реагирования развернут", "Кризисные службы получили единый координационный контур.", [["Бюджет", "-520 млн", "bad"], ["Кризисы", "тяжесть ниже", "good"], ["Нагрузка служб", "-1.4 п.п.", "good"]], "good"];
           pushNews(state, "Безопасность", "Штаб реагирования", "Кризисный штаб синхронизировал регионы, ведомства и инфраструктурные службы.");
         }
         normalizeGovernance();
@@ -13514,8 +13761,8 @@
         }
         normalizeGovernance();
         normalizeCore();
-        pushNews(state, "Безопасность", closed ? "Кризис закрыт" : title, `${crisis.title}: severity ${pct(before,0)} → ${pct(crisis.severity,0)}.`);
-        showDecision(title, result, [["Severity", `${pct(before,0)} → ${pct(crisis.severity,0)}`, crisis.severity < before ? "good" : "warn"], ["Стоимость", `-${money(cost)}`, "bad"], ["Статус", closed ? "закрыт" : "под контролем", closed ? "good" : "warn"]], tone);
+        pushNews(state, "Безопасность", closed ? "Кризис закрыт" : title, `${crisis.title}: тяжесть ${pct(before,0)} → ${pct(crisis.severity,0)}.`);
+        showDecision(title, result, [["Тяжесть", `${pct(before,0)} → ${pct(crisis.severity,0)}`, crisis.severity < before ? "good" : "warn"], ["Стоимость", `-${money(cost)}`, "bad"], ["Статус", closed ? "закрыт" : "под контролем", closed ? "good" : "warn"]], tone);
       }
 
       function projectAction(projectId, mode) {
@@ -15075,9 +15322,9 @@
       function loadSlot(slot) {
         const slots = loadSlots();
         if (!slots[slot]) return notify("Слот пуст.");
-        state = migrateState(slots[slot]);
-        warDrafts.clear();
-        saveState();
+        const loaded = migrateState(slots[slot]);
+        if (!activateLoadedState(loaded)) return notify("Слот поврежден и не может быть загружен.", "bad", "Сохранения");
+        saveState({ force: true });
         notify(`Слот ${slot} загружен.`);
       }
 
@@ -15096,12 +15343,11 @@
         const reader = new FileReader();
         reader.onload = () => {
           try {
-            state = migrateState(JSON.parse(String(reader.result)));
-            warDrafts.clear();
-            warLegalDrafts.clear();
-            saveState();
+            const loaded = migrateState(JSON.parse(String(reader.result)));
+            if (!activateLoadedState(loaded)) throw new Error("Некорректное состояние");
+            saveState({ force: true });
             notify("Сохранение импортировано.");
-            render();
+            render({ force: true, resetScroll: true });
           } catch {
             notify("Не удалось прочитать JSON.");
           }
@@ -15118,9 +15364,9 @@
         const text = document.getElementById("saveJson")?.value;
         if (!text?.trim()) return notify("Вставьте JSON сохранения в поле.");
         try {
-          state = migrateState(JSON.parse(text));
-          warDrafts.clear();
-          saveState();
+          const loaded = migrateState(JSON.parse(text));
+          if (!activateLoadedState(loaded)) throw new Error("Некорректное состояние");
+          saveState({ force: true });
           notify("JSON загружен.");
         } catch {
           notify("Ошибка JSON.");
@@ -15162,6 +15408,10 @@
       function startFreshGame() {
         clearTimeout(saveTimer);
         clearTimeout(deferredRenderTimer);
+        if (simulationFrame !== null) cancelAnimationFrame(simulationFrame);
+        simulationFrame = null;
+        simulationQueue = 0;
+        queuedSimulationState = null;
         pendingRender = false;
         try { localStorage.removeItem(STORAGE_KEY); } catch (err) { console.warn(err); }
         if (timer) {
@@ -15183,6 +15433,8 @@
         lastInteractionAt = 0;
         lastScrollAt = 0;
         lastBattleSceneRefreshAt = 0;
+        lastBattleLiveRefreshAt = 0;
+        lastSimulationPaintAt = 0;
         expandedActionCards.clear();
         warDrafts.clear();
         warLegalDrafts.clear();
