@@ -1532,6 +1532,23 @@
       top: 0;
     }
 
+    .table .link-button {
+      min-height: 0;
+      padding: 2px 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+      color: var(--accent-2);
+      font-weight: 800;
+      text-align: left;
+    }
+
+    .table .link-button:hover {
+      background: transparent;
+      color: var(--accent);
+      box-shadow: none;
+    }
+
     .scroll {
       overflow: auto;
       max-height: 500px;
@@ -3684,6 +3701,16 @@
         if (copy.intelligence?.operations) copy.intelligence.operations = copy.intelligence.operations.slice(0, level === "normal" ? 18 : 8);
         if (copy.climate?.history) copy.climate.history = copy.climate.history.slice(0, level === "normal" ? 42 : 18);
         if (copy.climate?.emergencies) copy.climate.emergencies = copy.climate.emergencies.slice(0, level === "normal" ? 12 : 6);
+        if (copy.worldMarket?.history) copy.worldMarket.history = copy.worldMarket.history.slice(0, level === "normal" ? 36 : 14);
+        if (copy.worldMarket?.incidents) copy.worldMarket.incidents = copy.worldMarket.incidents.slice(0, level === "normal" ? 18 : 7);
+        if (copy.worldMarket?.contracts) copy.worldMarket.contracts = copy.worldMarket.contracts.slice(0, level === "normal" ? 14 : 6);
+        if (copy.elites?.log) copy.elites.log = copy.elites.log.slice(0, level === "normal" ? 28 : 12);
+        if (copy.statistics?.reports) copy.statistics.reports = copy.statistics.reports.slice(0, level === "normal" ? 24 : 10);
+        if (copy.statistics?.revisions) copy.statistics.revisions = copy.statistics.revisions.slice(0, level === "normal" ? 24 : 10);
+        if (copy.federation?.disputes) copy.federation.disputes = copy.federation.disputes.slice(0, level === "normal" ? 14 : 6);
+        if (copy.federation?.log) copy.federation.log = copy.federation.log.slice(0, level === "normal" ? 24 : 10);
+        if (copy.succession?.eras) copy.succession.eras = copy.succession.eras.slice(0, level === "normal" ? 18 : 8);
+        if (copy.succession?.log) copy.succession.log = copy.succession.log.slice(0, level === "normal" ? 24 : 10);
         if (copy.politics?.elections?.log) copy.politics.elections.log = copy.politics.elections.log.slice(0, level === "normal" ? 40 : 16);
         if (copy.politics?.justice?.history) copy.politics.justice.history = copy.politics.justice.history.slice(0, level === "normal" ? 40 : 16);
         if (level === "safe") {
@@ -3852,7 +3879,7 @@
         loaded.country.flag.image = sanitizeImageData(loaded.country.flag.image);
         loaded.country.coatImage = sanitizeImageData(loaded.country.coatImage);
         loaded.country.president.photo = sanitizeImageData(loaded.country.president.photo);
-        loaded.version = 12;
+        loaded.version = 13;
         loaded.news = Array.isArray(loaded.news)
           ? loaded.news.filter(item => item && typeof item === "object" && !Array.isArray(item)).slice(0, 240)
           : [];
@@ -3902,6 +3929,11 @@
         migrateIntelligenceSystem(loaded);
         migrateClimateSystem(loaded);
         migrateChronicle(loaded);
+        migrateSuccessionSystem(loaded);
+        migrateFederationSystem(loaded);
+        migrateWorldMarketSystem(loaded);
+        migrateEliteSystem(loaded);
+        migrateStatisticsSystem(loaded);
         layoutAnnexedRegions(loaded);
         for (const r of loaded.regions) r.buildings ||= emptyBuildings();
         if (!loaded.history.date?.length) pushHistory(loaded);
@@ -4784,6 +4816,7 @@
         c.scandals = clamp(num(c.scandals, 0), 0, 12);
         c.promises = Array.isArray(c.promises) ? c.promises.slice(0, 8) : [];
         c.incumbent = !!c.incumbent;
+        c.isSuccessor = !!c.isSuccessor;
         return c;
       }
 
@@ -5723,6 +5756,837 @@
         return ensureDiplomaticAI(ensureCountryAssets(country));
       }
 
+      function politicalEraSnapshot(game) {
+        return {
+          gdp:num(game.economy?.gdp), growth:num(game.economy?.growth), debt:num(game.economy?.debt), inflation:num(game.economy?.inflation),
+          approval:num(game.politics?.popularity), coalition:num(game.politics?.coalition), corruption:num(game.politics?.corruption), protests:num(game.politics?.protests),
+          population:num(game.population?.total), services:calcServiceScore(game), regions:game.regions?.length||0,
+          reputation:num(game.diplomacy?.law?.reputation,60), ruleOfLaw:num(game.politics?.justice?.ruleOfLaw,55), federalCohesion:num(game.federation?.cohesion,60)
+        };
+      }
+
+      function politicalEraName(game, termNumber = 1) {
+        const ideology=String(game.country?.president?.ideology||"центризм").toLowerCase();
+        const growth=num(game.economy?.growth), rights=num(game.politics?.constitution?.rights,55), security=num(game.population?.security,55);
+        const course=ideology.includes("социал")?"социального государства":ideology.includes("либерал")?"гражданских реформ":ideology.includes("консер")?"национальной консолидации":growth>4?"экономического подъема":rights>70?"институционального обновления":security<45?"восстановления порядка":"государственного развития";
+        return `${termNumber > 1 ? "Продолжение" : "Эпоха"} ${course}`;
+      }
+
+      function normalizePoliticalEra(value, fallback = {}) {
+        const era=Object.assign({},fallback,value||{});era.id||=uid("era");era.name||="Политическая эпоха";era.president||="Президент";era.party||="Независимый";era.ideology||="центризм";
+        era.termNumber=Math.max(1,Math.round(num(era.termNumber,1)));era.days=Math.max(0,Math.round(num(era.days,0)));era.mandate=clamp(num(era.mandate,50),0,100);era.legacyScore=clamp(num(era.legacyScore,50),0,100);
+        era.startSnapshot=Object.assign({},fallback.startSnapshot||{},era.startSnapshot||{});era.endSnapshot=era.endSnapshot&&typeof era.endSnapshot==="object"?era.endSnapshot:null;era.highlights=Array.isArray(era.highlights)?era.highlights.slice(0,8):[];
+        era.startDate||="";era.endDate||="";era.outcome||="действующий срок";era.nextPresident||="";return era;
+      }
+
+      function defaultSuccessionSystem(game) {
+        const president=game.country?.president||{},termNumber=1;
+        const currentEra=normalizePoliticalEra({name:politicalEraName(game,termNumber),president:president.name,party:president.party,ideology:president.ideology,termNumber,startDate:game.chronicle?.termStart||formatDate(game.date),days:num(game.chronicle?.daysInOffice),mandate:num(game.politics?.popularity,54),startSnapshot:politicalEraSnapshot(game)});
+        return {currentEra,eras:[],termNumber,termsServed:1,peacefulTransfers:0,contestedTransfers:0,readiness:58,continuity:61,transitionRisk:22,institutionalMemory:56,caretakerNeutrality:62,archiveQuality:51,designatedSuccessor:null,transitionPlan:false,log:[],lastBriefing:"Полномочия распределены, государственный аппарат работает в рамках текущего президентского срока."};
+      }
+
+      function successionReadiness(game=state) {
+        const s=game?.succession;if(!s)return 0;
+        const cabinet=game.politics?.cabinet||{},justice=game.politics?.justice||{},federation=game.federation||{};
+        return clamp(num(cabinet.execution,55)*.16+num(cabinet.cohesion,55)*.13+num(justice.independence,55)*.12+num(justice.ruleOfLaw,55)*.12+(game.statistics?statisticsConfidence(game):55)*.1+num(federation.cohesion,60)*.1+s.institutionalMemory*.12+s.caretakerNeutrality*.09+s.archiveQuality*.06,0,100);
+      }
+
+      function recordSuccessionEvent(game,title,text,tone="institution") {
+        const s=game.succession,item={id:uid("succession"),date:formatDate(game.date),title,text,tone};s.log.unshift(item);s.log=s.log.slice(0,40);s.lastBriefing=text;
+      }
+
+      function migrateSuccessionSystem(game) {
+        const base=defaultSuccessionSystem(game),incoming=game.succession&&typeof game.succession==="object"&&!Array.isArray(game.succession)?game.succession:{},s=Object.assign(base,incoming);
+        s.currentEra=normalizePoliticalEra(incoming.currentEra,base.currentEra);s.eras=(Array.isArray(incoming.eras)?incoming.eras:[]).map(item=>normalizePoliticalEra(item)).slice(0,24);
+        ["readiness","continuity","transitionRisk","institutionalMemory","caretakerNeutrality","archiveQuality"].forEach(key=>s[key]=clamp(num(s[key],base[key]),0,100));
+        s.termNumber=Math.max(1,Math.round(num(s.termNumber,s.currentEra.termNumber)));s.termsServed=Math.max(1,Math.round(num(s.termsServed,s.termNumber)));s.peacefulTransfers=Math.max(0,Math.round(num(s.peacefulTransfers)));s.contestedTransfers=Math.max(0,Math.round(num(s.contestedTransfers)));
+        s.designatedSuccessor=incoming.designatedSuccessor&&typeof incoming.designatedSuccessor==="object"?Object.assign({},incoming.designatedSuccessor):null;s.transitionPlan=!!incoming.transitionPlan;s.log=Array.isArray(incoming.log)?incoming.log.slice(0,40):[];s.lastBriefing||=base.lastBriefing;game.succession=s;
+        syncSuccessionCandidate(game);return s;
+      }
+
+      function syncSuccessionCandidate(game) {
+        const s=game.succession,el=game.politics?.elections;if(!s||!el?.candidates?.length)return;
+        const termLimited=s.termsServed>=Math.max(1,num(game.politics.constitution.maxTerms,2));
+        let government=el.candidates.find(candidate=>candidate.incumbent)||el.candidates[0];
+        if(termLimited&&s.designatedSuccessor){
+          Object.assign(government,{name:s.designatedSuccessor.name,party:s.designatedSuccessor.party,ideology:s.designatedSuccessor.ideology,isSuccessor:true,incumbent:true,promises:Array.from(new Set([...(government.promises||[]),"преемственность институтов"])).slice(0,8)});
+        }else if(!el.active){
+          Object.assign(government,{name:game.country.president.name,party:game.country.president.party,ideology:game.country.president.ideology,isSuccessor:false,incumbent:true});
+        }
+      }
+
+      function politicalEraLegacyScore(era) {
+        const start=era.startSnapshot||{},end=era.endSnapshot||start;
+        const growth=clamp(50+(num(end.gdp)-num(start.gdp))/Math.max(1,num(start.gdp))*180,0,100),institutions=clamp(50+(num(end.ruleOfLaw)-num(start.ruleOfLaw))*2+(num(start.corruption)-num(end.corruption))*1.2,0,100);
+        const society=clamp(50+(num(end.services)-num(start.services))*1.5+(num(end.approval)-num(start.approval))*.5,0,100),world=clamp(50+(num(end.reputation)-num(start.reputation))*1.4+(num(end.federalCohesion)-num(start.federalCohesion))*.8,0,100);
+        return clamp(growth*.27+institutions*.28+society*.25+world*.2,0,100);
+      }
+
+      function closePoliticalEra(game,outcome,nextPresident="") {
+        const s=game.succession||migrateSuccessionSystem(game),era=normalizePoliticalEra(s.currentEra);
+        era.endDate=formatDate(game.date);era.endSnapshot=politicalEraSnapshot(game);era.outcome=outcome||"срок завершен";era.nextPresident=nextPresident;era.days=Math.max(era.days,num(game.chronicle?.daysInOffice));era.legacyScore=politicalEraLegacyScore(era);
+        era.highlights=(game.chronicle?.entries||[]).slice(0,6).map(item=>item.title);s.eras.unshift(era);s.eras=s.eras.slice(0,24);return era;
+      }
+
+      function startPoliticalEra(game,reason="инаугурация") {
+        const s=game.succession,president=game.country.president;
+        s.currentEra=normalizePoliticalEra({name:politicalEraName(game,s.termNumber),president:president.name,party:president.party,ideology:president.ideology,termNumber:s.termNumber,startDate:formatDate(game.date),days:0,mandate:num(game.politics.popularity),startSnapshot:politicalEraSnapshot(game),outcome:"действующий срок"});
+        game.chronicle.termStart=formatDate(game.date);game.chronicle.daysInOffice=0;game.chronicle.baseline=chronicleSnapshot(game);recordSuccessionEvent(game,"Началась новая политическая эпоха",`${president.name}: ${s.currentEra.name.toLowerCase()}. Основание: ${reason}.`);
+      }
+
+      function simulateSuccessionSystem(game) {
+        const s=game.succession||migrateSuccessionSystem(game),p=game.politics,days=p.electionInDays;
+        s.currentEra.days=Math.max(s.currentEra.days+1,num(game.chronicle?.daysInOffice));
+        const target=successionReadiness(game);s.readiness=clamp(s.readiness+(target-s.readiness)*.006,0,100);
+        const capture=game.elites?eliteCaptureRisk(game):25,continuityTarget=clamp(s.institutionalMemory*.28+s.archiveQuality*.16+p.cabinet.execution*.18+p.cabinet.cohesion*.13+p.justice.ruleOfLaw*.15+(100-capture)*.1,0,100);
+        s.continuity=clamp(s.continuity+(continuityTarget-s.continuity)*.004,0,100);
+        const electionPressure=days<=180?(180-days)/3.6:0,termLimitPressure=s.termsServed>=p.constitution.maxTerms&&!s.designatedSuccessor?18:0;
+        const riskTarget=clamp((100-s.readiness)*.34+(100-s.continuity)*.18+p.protests*.16+capture*.13+num(game.federation?.separatismRisk,18)*.09+electionPressure*.18+termLimitPressure-(s.transitionPlan?8:0),0,100);
+        s.transitionRisk=clamp(s.transitionRisk+(riskTarget-s.transitionRisk)*.008,0,100);
+        if(s.termsServed>=p.constitution.maxTerms&&!s.designatedSuccessor&&days<365){
+          const minister=p.ministers.slice().sort((a,b)=>b.skill-a.skill)[0];s.designatedSuccessor={name:minister?.name||p.pm,party:game.country.president.party,ideology:game.country.president.ideology,competence:num(minister?.skill,64),designatedDate:formatDate(game.date),source:"решение правящей коалиции"};
+          recordSuccessionEvent(game,"Коалиция выдвинула преемника",`${s.designatedSuccessor.name} станет кандидатом правительственного курса из-за ограничения президентских сроков.`,"warn");syncSuccessionCandidate(game);
+        }
+        if(days<90&&s.transitionRisk>62&&Math.random()<.0012){p.protests=clamp(p.protests+.7,0,100);p.cabinet.cohesion=clamp(p.cabinet.cohesion-.5,0,100);recordSuccessionEvent(game,"Риск транзита власти вырос","Элиты и ведомства публично спорят о гарантиях после выборов.","bad");}
+      }
+
+      function successionAction(mode) {
+        const s=state.succession,e=state.economy,p=state.politics;let cost=0,title="Преемственность власти",result="",details=[],tone="good";
+        if(mode==="designate"){
+          const minister=p.ministers.slice().sort((a,b)=>(b.skill+b.loyalty)-(a.skill+a.loyalty))[0]||p.ministers[0];
+          s.designatedSuccessor={name:minister?.name||p.pm,party:state.country.president.party,ideology:state.country.president.ideology,competence:num(minister?.skill,65),designatedDate:formatDate(state.date),source:"открытое решение правящей коалиции"};s.transitionRisk-=5;s.readiness+=4;syncSuccessionCandidate(state);
+          title="Преемник правительственного курса определен";result=`${s.designatedSuccessor.name} получил публичный мандат коалиции участвовать в следующих выборах. Это не назначение президентом: окончательное решение остается за избирателями.`;details=[["Готовность","+4 п.п.","good"],["Риск транзита","-5 п.п.","good"],["Легитимность","решат выборы","institution"]];
+        }else if(mode==="transition"){
+          cost=320;if(e.budget<cost)return showBlockedDecision("План передачи дел не подготовлен","Не хватает средств на аудит обязательств, защищенный архив и межведомственные группы.",[["Нужно",money(cost),"bad"]]);e.budget-=cost;s.transitionPlan=true;s.readiness+=9;s.continuity+=7;s.institutionalMemory+=5;p.cabinet.execution+=2;
+          title="План мирной передачи власти утвержден";result="Каждое ведомство формирует реестр обязательств, сроков, рисков и закрытых материалов для следующей администрации.";details=[["Готовность","+9 п.п.","good"],["Непрерывность","+7 п.п.","good"],["Бюджет",`-${money(cost)}`,"bad"]];
+        }else if(mode==="neutrality"){
+          s.caretakerNeutrality+=9;s.readiness+=5;p.justice.ruleOfLaw+=1.2;p.cabinet.cohesion-=1;state.information.pluralism+=1.5;
+          title="Нейтральность государственного аппарата гарантирована";result="Госслужащим запрещено использовать бюджет, реестры и административные полномочия в интересах любого кандидата.";details=[["Нейтральность","+9 п.п.","good"],["Верховенство права","+1.2 п.п.","good"],["Контроль кабинета","-1 п.п.","warn"]];tone="institution";
+        }else if(mode==="archive"){
+          cost=170;if(e.budget<cost)return showBlockedDecision("Архив срока не профинансирован","Не хватает средств на оцифровку решений и передачу ведомственных знаний.",[["Нужно",money(cost),"bad"]]);e.budget-=cost;s.archiveQuality+=10;s.institutionalMemory+=7;s.continuity+=4;state.statistics.transparency+=1.5;
+          title="Президентский архив систематизирован";result="Ключевые решения, данные, договоры и незавершенные программы получили ответственных и проверяемую историю изменений.";details=[["Качество архива","+10 п.п.","good"],["Институциональная память","+7 п.п.","good"],["Бюджет",`-${money(cost)}`,"bad"]];
+        }else return;
+        recordSuccessionEvent(state,title,result,tone);normalizeCore();showDecision(title,result,details,tone);
+      }
+
+      function defaultRegionIdentity(game, region, index = 0) {
+        const localNames=["северные общины","столичные граждане","долинные общины","восточные землячества","прибрежные общины","горные народы","лесные общины","промышленные города"];
+        const localLanguages=["северный диалект","столичная норма","долинный говор","восточный язык","прибрежный диалект","горный язык","лесной говор","городская норма"];
+        const religions=String(game?.country?.religionsText||"Светские, Традиционная вера, Другие конфессии").split(",").map(item=>item.trim()).filter(Boolean);
+        const minority=clamp(9+(index*11)%36+(region?.annexedFrom?18:0),4,68);
+        const strength=clamp(38+(index*9)%42+(region?.annexedFrom?14:0),20,92);
+        return {
+          majorityIdentity:region?.annexedFrom?`жители территории ${region.annexedFrom}`:(localNames[index%localNames.length]||game?.country?.people||"граждане"),
+          minorityShare:minority,localLanguage:localLanguages[index%localLanguages.length]||game?.country?.language||"государственный язык",
+          primaryReligion:religions[index%Math.max(1,religions.length)]||"светское большинство",identityStrength:strength,
+          desiredAutonomy:clamp(32+strength*.38+minority*.18,25,82),culturalRights:58,representation:55,
+          centerTrust:clamp(num(region?.loyalty,55),0,100),grievance:clamp(30+(50-num(region?.wealth,50))*.18+(region?.annexedFrom?18:0),0,100),
+          separatism:region?.annexedFrom?28:clamp(8+strength*.08+minority*.05,2,32),integration:clamp(num(region?.integration,100),0,100),
+          policy:"культурная автономия",disputeCooldown:90,lastEvent:"Региональные отношения развиваются в конституционном порядке."
+        };
+      }
+
+      function normalizeRegionIdentity(value, fallback) {
+        const identity=Object.assign({},fallback,value||{});
+        identity.majorityIdentity||=fallback.majorityIdentity;identity.localLanguage||=fallback.localLanguage;identity.primaryReligion||=fallback.primaryReligion;identity.policy||="культурная автономия";
+        ["minorityShare","identityStrength","desiredAutonomy","culturalRights","representation","centerTrust","grievance","separatism","integration"].forEach(key=>identity[key]=clamp(num(identity[key],fallback[key]),0,100));
+        identity.disputeCooldown=Math.max(0,Math.round(num(identity.disputeCooldown,0)));identity.lastEvent||=fallback.lastEvent;
+        return identity;
+      }
+
+      function defaultFederationSystem(game) {
+        return {cohesion:64,centerLegitimacy:61,autonomyBalance:58,culturalPluralism:63,fiscalSolidarity:55,separatismRisk:18,disputes:[],log:[],councilCooldown:0,lastBriefing:"Федеративные отношения устойчивы, однако различия регионов требуют постоянного политического диалога."};
+      }
+
+      function migrateFederationSystem(game) {
+        const base=defaultFederationSystem(game),incoming=game.federation&&typeof game.federation==="object"&&!Array.isArray(game.federation)?game.federation:{};
+        const federation=Object.assign(base,incoming);
+        game.regions.forEach((region,index)=>region.identity=normalizeRegionIdentity(region.identity,defaultRegionIdentity(game,region,index)));
+        ["cohesion","centerLegitimacy","autonomyBalance","culturalPluralism","fiscalSolidarity","separatismRisk"].forEach(key=>federation[key]=clamp(num(federation[key],base[key]),0,100));
+        federation.councilCooldown=Math.max(0,Math.round(num(federation.councilCooldown,0)));
+        federation.disputes=(Array.isArray(incoming.disputes)?incoming.disputes:[]).filter(item=>item&&typeof item==="object").slice(0,18);
+        federation.log=(Array.isArray(incoming.log)?incoming.log:[]).filter(item=>item&&typeof item==="object").slice(0,32);
+        federation.lastBriefing||=base.lastBriefing;game.federation=federation;return federation;
+      }
+
+      function federalCohesion(game=state) {
+        const regions=game?.regions||[];if(!regions.length)return 0;
+        return clamp(regions.reduce((sum,region)=>{const i=region.identity;return sum+i.centerTrust*.28+(100-i.grievance)*.24+(100-i.separatism)*.22+i.integration*.16+region.loyalty*.1;},0)/regions.length,0,100);
+      }
+
+      function recordFederalEvent(game,region,title,text,tone="warn") {
+        const federation=game.federation,item={id:uid("federal_event"),date:formatDate(game.date),regionId:region?.id||"",region:region?.name||"вся страна",title,text,tone};
+        federation.log.unshift(item);federation.log=federation.log.slice(0,32);federation.lastBriefing=`${item.region}: ${text}`;if(region)region.identity.lastEvent=text;
+      }
+
+      function simulateFederationSystem(game) {
+        const federation=game.federation||migrateFederationSystem(game),regions=game.regions,nationalWealth=avg(regions,"wealth"),nationalRights=num(game.politics?.constitution?.rights,55);
+        federation.councilCooldown=Math.max(0,federation.councilCooldown-1);
+        for(const region of regions){
+          const i=region.identity||normalizeRegionIdentity(null,defaultRegionIdentity(game,region,0)),a=region.administration;
+          const autonomyGap=Math.max(0,i.desiredAutonomy-a.autonomy);
+          const economicGap=Math.max(0,nationalWealth-region.wealth);
+          const culturalGap=Math.max(0,62-i.culturalRights)*(i.identityStrength/100);
+          const representationGap=Math.max(0,58-i.representation);
+          const targetGrievance=clamp(autonomyGap*.42+economicGap*.24+culturalGap*.34+representationGap*.2+num(region.damage)*.24+(region.annexedFrom?8:0)-a.serviceQuality*.08-federation.fiscalSolidarity*.08,0,100);
+          i.grievance=clamp(i.grievance+(targetGrievance-i.grievance)*.0022+rnd(-.012,.012),0,100);
+          const trustTarget=clamp(region.loyalty*.38+a.governorTrust*.19+a.serviceQuality*.16+i.representation*.13+i.culturalRights*.12+(nationalRights<35?-4:2),0,100);
+          i.centerTrust=clamp(i.centerTrust+(trustTarget-i.centerTrust)*.0019-i.grievance*.00012,0,100);
+          const separatismTarget=clamp(i.identityStrength*.24+i.minorityShare*.12+i.grievance*.44+(100-i.centerTrust)*.24+(region.annexedFrom?10:0)-i.culturalRights*.16-a.autonomy*.1,0,100);
+          i.separatism=clamp(i.separatism+(separatismTarget-i.separatism)*.0015+rnd(-.008,.009),0,100);
+          i.integration=clamp(i.integration+(i.centerTrust-i.grievance)*.0006+a.serviceQuality*.00015,0,100);region.integration=i.integration;
+          region.loyalty=clamp(region.loyalty+(i.centerTrust-region.loyalty)*.0007-i.separatism*.00012,0,100);
+          i.disputeCooldown=Math.max(0,i.disputeCooldown-1);
+          if(i.separatism>62&&!i.disputeCooldown&&Math.random()<clamp((i.separatism-55)*.00008,.0003,.003)){
+            const dispute={id:uid("federal_dispute"),regionId:region.id,region:region.name,date:formatDate(game.date),issue:autonomyGap>culturalGap?"распределение полномочий":"языковые и культурные гарантии",severity:clamp(i.grievance*.55+i.separatism*.45,0,100),status:"открыт"};
+            federation.disputes.unshift(dispute);federation.disputes=federation.disputes.slice(0,18);i.disputeCooldown=180;game.politics.protests+=.8;
+            recordFederalEvent(game,region,"Открыт федеративный спор",`Регион требует переговоров по вопросу «${dispute.issue}».`,"bad");pushNews(game,"Политика","Федеративный спор",`${region.name} требует переговоров с центральной властью: ${dispute.issue}.`);
+          }
+        }
+        federation.cohesion=federalCohesion(game);federation.centerLegitimacy=clamp(avg(regions.map(region=>({value:region.identity.centerTrust})),"value"),0,100);
+        federation.autonomyBalance=clamp(100-avg(regions.map(region=>({value:Math.abs(region.identity.desiredAutonomy-region.administration.autonomy)})),"value")*1.45,0,100);
+        federation.culturalPluralism=clamp(avg(regions.map(region=>({value:region.identity.culturalRights})),"value"),0,100);
+        federation.separatismRisk=clamp(Math.max(...regions.map(region=>region.identity.separatism),0)*.62+avg(regions.map(region=>({value:region.identity.separatism})),"value")*.38,0,100);
+        game.politics.protests=clamp(game.politics.protests+Math.max(0,federation.separatismRisk-55)*.00025,0,100);
+      }
+
+      function federalAction(mode,regionId) {
+        const federation=state.federation,e=state.economy,p=state.politics,region=state.regions.find(item=>item.id===regionId)||state.regions[0],i=region?.identity,a=region?.administration;
+        let cost=0,title="Федеративное решение",result="",details=[],tone="good";
+        if(mode==="council"){
+          if(federation.councilCooldown>0)return showBlockedDecision("Федеральный совет недавно собирался",`Следующее расширенное заседание доступно через ${federation.councilCooldown} дней.`,[["Пауза",`${federation.councilCooldown} дн.`,"warn"]]);
+          cost=180;if(e.budget<cost)return showBlockedDecision("Совет не подготовлен","Не хватает средств на региональные делегации и экспертные комиссии.",[["Нужно",money(cost),"bad"]]);
+          e.budget-=cost;state.regions.forEach(item=>{item.identity.centerTrust+=3;item.identity.grievance-=3;item.identity.representation+=2;});federation.councilCooldown=60;
+          title="Федеральный совет завершен";result="Президент, губернаторы и региональные собрания согласовали календарь полномочий, трансфертов и культурных гарантий.";details=[["Доверие регионов","+3 п.п.","good"],["Претензии","-3 п.п.","good"],["Пауза","60 дней","warn"]];
+        }else if(mode==="equalization"){
+          cost=620;if(!region)return;if(e.budget<cost)return showBlockedDecision("Выравнивание не профинансировано","Федеральный бюджет не покрывает инфраструктурный и социальный пакет.",[["Нужно",money(cost),"bad"]]);
+          e.budget-=cost;region.budget+=420;region.wealth+=2.5;a.serviceQuality+=3;i.grievance-=7;i.centerTrust+=5;federation.fiscalSolidarity+=4;
+          title="Пакет регионального выравнивания";result=`${region.name} получает прозрачный трансферт на услуги и инфраструктуру с измеримыми показателями.`;details=[["Бюджет региона",`+${money(420)}`,"good"],["Доверие","+5 п.п.","good"],["Претензии","-7 п.п.","good"],["Федеральный бюджет",`-${money(cost)}`,"bad"]];
+        }else if(mode==="culture"){
+          cost=260;if(!region)return;if(e.budget<cost)return showBlockedDecision("Культурная программа не профинансирована","Школы, архивы и общественное вещание требуют бюджета.",[["Нужно",money(cost),"bad"]]);
+          e.budget-=cost;i.culturalRights+=10;i.integration+=4;i.centerTrust+=4;i.grievance-=5;p.constitution.rights+=.4;
+          title="Культурные гарантии расширены";result=`${region.name}: местный язык и культурные организации получили правовые гарантии внутри единого гражданского пространства.`;details=[["Культурные права","+10 п.п.","good"],["Интеграция","+4 п.п.","good"],["Претензии","-5 п.п.","good"]];
+        }else if(mode==="autonomy"){
+          if(!region)return;a.autonomy+=9;i.representation+=5;i.centerTrust+=4;i.grievance-=6;i.policy="расширенная автономия";p.coalition-=.4;
+          title="Полномочия региона расширены";result=`${region.name} получает больше ответственности за бюджет, образование и инфраструктуру при федеральном аудите.`;details=[["Автономия","+9 п.п.","good"],["Представительство","+5 п.п.","good"],["Коалиция","-0.4 п.п.","warn"]];tone="warn";
+        }else if(mode==="centralize"){
+          if(!region)return;a.autonomy-=10;region.security+=3;i.centerTrust-=7;i.grievance+=9;i.separatism+=4;i.policy="прямое федеральное управление";p.coalition+=.5;
+          title="Федеральный контроль усилен";result=`Центр изъял часть полномочий ${region.name}. Исполнение стало жестче, но политическое отчуждение выросло.`;details=[["Автономия","-10 п.п.","warn"],["Безопасность","+3 п.п.","good"],["Претензии","+9 п.п.","bad"],["Сепаратизм","+4 п.п.","bad"]];tone="bad";
+        }else if(mode==="court"){
+          const dispute=federation.disputes.find(item=>item.status==="открыт"&&(item.regionId===regionId||!regionId));if(!dispute)return showBlockedDecision("Открытого спора нет","Федеративный суд рассматривает только зарегистрированные споры о полномочиях и гарантиях.",[["Статус","нет дела","good"]]);
+          cost=140;if(e.budget<cost)return showBlockedDecision("Процесс не обеспечен","Не хватает средств на правовую экспертизу и участие региона.",[["Нужно",money(cost),"bad"]]);e.budget-=cost;
+          const score=clamp(p.justice.independence*.45+p.justice.ruleOfLaw*.3+federation.autonomyBalance*.25+rnd(-12,12),0,100);dispute.status="закрыт";dispute.result=score>=52?"достигнут конституционный компромисс":"решение оспаривается политически";i.grievance-=score>=52?10:3;i.centerTrust+=score>=52?6:-2;
+          title="Федеративный спор рассмотрен";result=score>=52?`${region.name} и центр приняли обязательное разграничение полномочий.`:`Суд вынес решение, но региональные стороны продолжают политический спор.`;details=[["Качество решения",pct(score,0),score>=52?"good":"warn"],["Претензии",score>=52?"-10 п.п.":"-3 п.п.","good"],["Бюджет",`-${money(cost)}`,"bad"]];tone=score>=52?"good":"warn";
+        }else return;
+        recordFederalEvent(state,region,title,result,tone);normalizeCore();showDecision(title,result,details,tone);
+      }
+
+      function statisticsMetricCatalog(game) {
+        const balance = calcIncome(game) - calcExpenses(game);
+        return {
+          growth: { label:"Рост ВВП", unit:"percent", actual:num(game.economy?.growth), scale:5.5, favorable:1 },
+          inflation: { label:"Инфляция", unit:"percent", actual:num(game.economy?.inflation), scale:7.5, favorable:-1 },
+          unemployment: { label:"Безработица", unit:"percent", actual:num(game.economy?.unemployment), scale:6.5, favorable:-1 },
+          population: { label:"Население", unit:"people", actual:num(game.population?.total), scale:Math.max(25000,num(game.population?.total)*.025), favorable:0 },
+          budgetBalance: { label:"Баланс бюджета", unit:"money", actual:balance, scale:Math.max(180,Math.abs(balance)*.3), favorable:1 },
+          debt: { label:"Государственный долг", unit:"money", actual:num(game.economy?.debt), scale:Math.max(500,num(game.economy?.debt)*.08), favorable:-1 },
+          corruption: { label:"Коррупционный риск", unit:"percent", actual:num(game.politics?.corruption), scale:12, favorable:-1 },
+          approval: { label:"Поддержка президента", unit:"percent", actual:num(game.politics?.popularity), scale:9, favorable:1 }
+        };
+      }
+
+      function statisticsActualSnapshot(game) {
+        return Object.fromEntries(Object.entries(statisticsMetricCatalog(game)).map(([key,item]) => [key,item.actual]));
+      }
+
+      function defaultStatisticsSystem(game) {
+        const actual = statisticsActualSnapshot(game);
+        return {
+          quality:62, independence:58, coverage:67, timeliness:61, methodology:64, auditCapacity:52,
+          openData:48, manipulation:18, publicTrust:56, revisionRisk:32, daysUntilRelease:7,
+          observed:Object.assign({},actual), margins:Object.fromEntries(Object.keys(actual).map(key=>[key,0])),
+          lastActual:Object.assign({},actual), reports:[], revisions:[],
+          lastRelease:formatDate(game.date || currentGameDate()), lastAudit:"Комплексный аудит статистики еще не проводился.",
+          lastBriefing:"Официальные показатели имеют среднюю надежность; решения следует принимать с учетом диапазона погрешности."
+        };
+      }
+
+      function normalizeStatisticsRecord(record) {
+        if (!record || typeof record !== "object" || Array.isArray(record)) return null;
+        return {
+          id:record.id || uid("stat_report"), date:String(record.date || ""), confidence:clamp(num(record.confidence,50),0,100),
+          observed:record.observed && typeof record.observed === "object" ? Object.fromEntries(Object.entries(record.observed).map(([key,value])=>[key,num(value)])) : {},
+          actual:record.actual && typeof record.actual === "object" ? Object.fromEntries(Object.entries(record.actual).map(([key,value])=>[key,num(value)])) : {},
+          margins:record.margins && typeof record.margins === "object" ? Object.fromEntries(Object.entries(record.margins).map(([key,value])=>[key,Math.max(0,num(value))])) : {},
+          note:String(record.note || "Плановый выпуск показателей.")
+        };
+      }
+
+      function migrateStatisticsSystem(game) {
+        const base = defaultStatisticsSystem(game);
+        const incoming = game.statistics && typeof game.statistics === "object" && !Array.isArray(game.statistics) ? game.statistics : {};
+        const stats = Object.assign(base, incoming);
+        ["quality","independence","coverage","timeliness","methodology","auditCapacity","openData","manipulation","publicTrust","revisionRisk"].forEach(key => stats[key] = clamp(num(stats[key],base[key]),0,100));
+        stats.daysUntilRelease = Math.max(0,Math.round(num(stats.daysUntilRelease,base.daysUntilRelease)));
+        const actual = statisticsActualSnapshot(game);
+        stats.observed = Object.fromEntries(Object.keys(actual).map(key=>[key,num(incoming.observed?.[key],actual[key])]));
+        stats.margins = Object.fromEntries(Object.keys(actual).map(key=>[key,Math.max(0,num(incoming.margins?.[key],0))]));
+        stats.lastActual = Object.fromEntries(Object.keys(actual).map(key=>[key,num(incoming.lastActual?.[key],actual[key])]));
+        stats.reports = (Array.isArray(incoming.reports)?incoming.reports:[]).map(normalizeStatisticsRecord).filter(Boolean).slice(0,36);
+        stats.revisions = (Array.isArray(incoming.revisions)?incoming.revisions:[]).filter(item=>item&&typeof item==="object").slice(0,36);
+        stats.lastRelease ||= base.lastRelease; stats.lastAudit ||= base.lastAudit; stats.lastBriefing ||= base.lastBriefing;
+        game.statistics = stats;
+        return stats;
+      }
+
+      function statisticsConfidence(game = state) {
+        const s = game?.statistics;
+        if (!s) return 0;
+        return clamp(s.quality*.24+s.independence*.19+s.coverage*.15+s.timeliness*.12+s.methodology*.13+s.auditCapacity*.08+s.openData*.09-s.manipulation*.28,2,99);
+      }
+
+      function formatStatisticValue(key, value, game = state) {
+        const meta = statisticsMetricCatalog(game)[key];
+        if (!meta) return compact(value);
+        if (meta.unit === "money") return money(value);
+        if (meta.unit === "people") return compact(value);
+        return pct(value,1);
+      }
+
+      function publishStatisticsReport(game, reason = "Плановый статистический выпуск") {
+        const s = game.statistics || migrateStatisticsSystem(game);
+        const catalog = statisticsMetricCatalog(game);
+        const actual = statisticsActualSnapshot(game);
+        const confidence = statisticsConfidence(game);
+        const observed = {}, margins = {};
+        for (const [key,meta] of Object.entries(catalog)) {
+          const uncertainty = meta.scale * clamp((112-confidence)/100,.08,1.1);
+          const institutionalBias = meta.favorable * meta.scale * s.manipulation/100*.48;
+          const noise = rnd(-uncertainty,uncertainty);
+          let value = meta.actual + institutionalBias + noise;
+          if (["inflation","unemployment","corruption","approval"].includes(key)) value = clamp(value,0,100);
+          if (["population","debt"].includes(key)) value = Math.max(0,value);
+          observed[key] = value;
+          margins[key] = Math.max(meta.unit==="people"?1000:.1,uncertainty*(.65+s.openData/300));
+          const previous = num(s.observed?.[key],value);
+          const revision = meta.actual-previous;
+          if (Math.abs(revision)>Math.max(margins[key]*.75,meta.scale*.16)) {
+            s.revisions.unshift({id:uid("revision"),date:formatDate(game.date),metric:key,label:meta.label,previous,revised:meta.actual,delta:revision,reason:confidence<48?"уточнение источников и устранение методологической ошибки":"поступление полных административных данных"});
+          }
+        }
+        s.observed=observed;s.margins=margins;s.lastActual=actual;s.lastRelease=formatDate(game.date);s.daysUntilRelease=30;
+        s.revisionRisk=clamp((100-confidence)*.72+s.manipulation*.34,0,100);
+        s.lastBriefing=confidence>=75?"Выпуск основан на широком охвате и независимой методологии.":confidence>=50?"Часть показателей может быть пересмотрена после поступления региональных данных.":"Низкая достоверность: показатели содержат широкую погрешность и риск административного искажения.";
+        s.reports.unshift(normalizeStatisticsRecord({date:formatDate(game.date),confidence,observed,actual,margins,note:reason}));
+        s.reports=s.reports.slice(0,36);s.revisions=s.revisions.slice(0,36);
+        return s.reports[0];
+      }
+
+      function simulateStatisticsSystem(game) {
+        const s=game.statistics||migrateStatisticsSystem(game);
+        const digital=num(game.infrastructure?.digitalCoverage,60), cabinet=num(game.politics?.cabinet?.integrity,55), corruption=num(game.politics?.corruption,35);
+        const qualityTarget=s.methodology*.24+s.coverage*.24+s.timeliness*.18+digital*.18+s.auditCapacity*.16;
+        s.quality=clamp(s.quality+(qualityTarget-s.quality)*.0018+rnd(-.01,.01),0,100);
+        const manipulationTarget=clamp(corruption*.34+num(game.governance?.media?.propaganda,20)*.25+(game.politics?.elections?.active?8:0)+(100-s.independence)*.22-cabinet*.1,0,100);
+        s.manipulation=clamp(s.manipulation+(manipulationTarget-s.manipulation)*.0016+rnd(-.008,.008),0,100);
+        s.publicTrust=clamp(s.publicTrust+(statisticsConfidence(game)-s.publicTrust)*.0012+s.openData*.0002-s.manipulation*.00025,0,100);
+        s.daysUntilRelease=Math.max(0,s.daysUntilRelease-1);
+        if(!s.daysUntilRelease)publishStatisticsReport(game);
+        const uncertaintyPenalty=(100-statisticsConfidence(game))/100;
+        game.economy.investments=Math.max(0,game.economy.investments*(1-uncertaintyPenalty*.000006));
+        game.politics.cabinet.execution=clamp(game.politics.cabinet.execution-uncertaintyPenalty*.0015,0,100);
+      }
+
+      function statisticsAction(mode) {
+        const s=state.statistics,e=state.economy,p=state.politics;
+        let cost=0,title="Решение по государственным данным",result="",details=[],tone="good",published=false;
+        if(mode==="census"){
+          cost=1180;if(e.budget<cost)return showBlockedDecision("Перепись не профинансирована","Полевой этап, защищенный реестр и контроль качества требуют отдельного бюджета.",[["Нужно",money(cost),"bad"]]);
+          e.budget-=cost;s.coverage+=13;s.quality+=7;s.timeliness+=4;state.regions.forEach(region=>region.population=Math.max(1000,region.population*(1+rnd(-.006,.006))));
+          title="Национальная перепись проведена";result="Полевые регистраторы и административные реестры уточнили население, миграцию и региональную структуру.";details=[["Охват","+13 п.п.","good"],["Качество","+7 п.п.","good"],["Бюджет",`-${money(cost)}`,"bad"]];
+        }else if(mode==="independence"){
+          cost=520;if(e.budget<cost)return showBlockedDecision("Реформа не профинансирована","Независимому агентству нужен защищенный бюджет и конкурсные назначения.",[["Нужно",money(cost),"bad"]]);
+          e.budget-=cost;s.independence+=11;s.manipulation-=6;s.methodology+=4;p.coalition-=.8;
+          title="Статистическая служба получила независимость";result="Руководитель назначается на защищенный срок, а методики публикуются до выхода показателей.";details=[["Независимость","+11 п.п.","good"],["Манипуляция","-6 п.п.","good"],["Коалиция","-0.8 п.п.","warn"]];
+        }else if(mode==="audit"){
+          cost=260;if(e.budget<cost)return showBlockedDecision("Аудит не профинансирован","Нужны независимые выборки и проверка первичных реестров.",[["Нужно",money(cost),"bad"]]);
+          e.budget-=cost;s.auditCapacity+=8;s.quality+=3;s.manipulation-=4;s.lastAudit=`${formatDate(state.date)} · проверены методики, выборки и административные источники.`;publishStatisticsReport(state,"Внеочередной выпуск после независимого аудита");published=true;
+          title="Независимый аудит завершен";result="Аудиторы сопоставили официальные ряды с налоговыми, банковскими и региональными источниками. Существенные расхождения направлены на пересмотр.";details=[["Аудит","+8 п.п.","good"],["Качество","+3 п.п.","good"],["Пересмотры",`${s.revisions.length}`,s.revisions.length?"warn":"good"]];
+        }else if(mode==="open"){
+          cost=310;if(e.budget<cost)return showBlockedDecision("Портал данных не профинансирован","Требуются обезличивание, API и защита персональных данных.",[["Нужно",money(cost),"bad"]]);
+          e.budget-=cost;s.openData+=10;s.publicTrust+=4;s.timeliness+=3;state.information.transparency+=3;
+          title="Открытые государственные данные опубликованы";result="Граждане, университеты и СМИ получили машиночитаемые ряды, методики и календарь пересмотров.";details=[["Открытость","+10 п.п.","good"],["Доверие","+4 п.п.","good"],["Прозрачность СМИ","+3 п.п.","good"]];
+        }else if(mode==="pressure"){
+          s.manipulation+=14;s.independence-=9;s.publicTrust-=7;p.corruption+=1.2;publishStatisticsReport(state,"Внеочередной выпуск по требованию администрации");published=true;
+          title="Административное давление применено";result="Выпуск показывает более благоприятную картину, но методологические риски и вероятность будущего пересмотра резко выросли.";details=[["Манипуляция","+14 п.п.","bad"],["Независимость","-9 п.п.","bad"],["Доверие","-7 п.п.","bad"],["Риск пересмотра",pct(s.revisionRisk,0),"bad"]];tone="bad";
+        }else return;
+        if(!published)publishStatisticsReport(state,title);normalizeCore();showDecision(title,result,details,tone);
+      }
+
+      function defaultEliteActors(game) {
+        const president = game?.country?.president?.name || "Президент";
+        const firstRegion = game?.regions?.[0];
+        return [
+          { id:"elite_industry", name:"Виктор Арден", role:"Председатель промышленного союза", bloc:"business", influence:76, loyalty:48, ambition:68, integrity:42, resources:82, pressure:38, access:64, agenda:"льготный кредит и инфраструктурные контракты", network:["elite_bureaucracy","elite_media"] },
+          { id:"elite_finance", name:"София Мирова", role:"Глава банковской ассоциации", bloc:"finance", influence:69, loyalty:52, ambition:61, integrity:58, resources:88, pressure:31, access:57, agenda:"стабильная валюта и независимый регулятор", network:["elite_industry","elite_technology"] },
+          { id:"elite_regions", name:firstRegion?.governor || "Арсений Берег", role:"Председатель совета губернаторов", bloc:"regional", influence:64, loyalty:55, ambition:73, integrity:54, resources:61, pressure:34, access:70, agenda:"трансферты и расширение региональных полномочий", network:["elite_labor","elite_bureaucracy"] },
+          { id:"elite_security", name:"Генерал Илья Северин", role:"Начальник Генерального штаба", bloc:"security", influence:71, loyalty:67, ambition:49, integrity:66, resources:74, pressure:25, access:78, agenda:"боеготовность, резервы и защищенное финансирование", network:["elite_intelligence","elite_bureaucracy"] },
+          { id:"elite_bureaucracy", name:"Марина Статова", role:"Государственный секретарь аппарата", bloc:"bureaucracy", influence:62, loyalty:61, ambition:57, integrity:63, resources:52, pressure:29, access:86, agenda:"управляемость и сохранение профессионального аппарата", network:["elite_regions","elite_industry"] },
+          { id:"elite_labor", name:"Антон Руднев", role:"Председатель конфедерации труда", bloc:"labor", influence:58, loyalty:49, ambition:56, integrity:71, resources:48, pressure:43, access:46, agenda:"реальные зарплаты и защита занятости", network:["elite_regions","elite_media"] },
+          { id:"elite_media", name:"Елена Вестова", role:"Владелец национального медиахолдинга", bloc:"media", influence:67, loyalty:44, ambition:77, integrity:46, resources:73, pressure:47, access:62, agenda:"доступ к информации и устойчивость медиарынка", network:["elite_industry","elite_labor"] },
+          { id:"elite_technology", name:"Давид Ланской", role:"Ректор технологического консорциума", bloc:"technology", influence:51, loyalty:58, ambition:65, integrity:76, resources:55, pressure:24, access:49, agenda:"исследования, университеты и привлечение талантов", network:["elite_finance","elite_media"] },
+          { id:"elite_intelligence", name:"Надежда Орлова", role:`Директор службы безопасности`, bloc:"intelligence", influence:63, loyalty:72, ambition:43, integrity:62, resources:67, pressure:22, access:82, agenda:`защита ${president} и контрразведывательный режим`, network:["elite_security","elite_bureaucracy"] }
+        ].map(actor => Object.assign(actor, { cooldown: 20, status:"в рабочем контакте", lastMove:"Публичных действий не предпринимал.", favors:0 }));
+      }
+
+      function normalizeEliteActor(value, fallback, index = 0) {
+        const actor = Object.assign({}, fallback || {}, value || {});
+        actor.id ||= `elite_${index}`;
+        actor.name ||= `Представитель элиты ${index + 1}`;
+        actor.role ||= "Влиятельный общественный деятель";
+        actor.bloc ||= "civic";
+        actor.agenda ||= "сохранение влияния";
+        ["influence","loyalty","ambition","integrity","resources","pressure","access"].forEach(key => actor[key] = clamp(num(actor[key], fallback?.[key] ?? 50), 0, 100));
+        actor.cooldown = Math.max(0, Math.round(num(actor.cooldown, 0)));
+        actor.favors = Math.max(0, Math.round(num(actor.favors, 0)));
+        actor.network = Array.isArray(actor.network) ? actor.network.slice(0, 6) : [];
+        actor.status ||= "в рабочем контакте";
+        actor.lastMove ||= "Публичных действий не предпринимал.";
+        return actor;
+      }
+
+      function defaultEliteSystem(game) {
+        return {
+          actors: defaultEliteActors(game), log: [], captureRisk: 34, pluralism: 61, transparency: 54,
+          networkStability: 62, presidentialAuthority: 58, unresolvedFavors: 0,
+          lastBriefing: "Ключевые центры влияния сохраняют рабочие отношения с администрацией."
+        };
+      }
+
+      function migrateEliteSystem(game) {
+        const base = defaultEliteSystem(game);
+        const incoming = game.elites && typeof game.elites === "object" && !Array.isArray(game.elites) ? game.elites : {};
+        const system = Object.assign(base, incoming);
+        const actorMap = new Map((Array.isArray(incoming.actors) ? incoming.actors : []).filter(Boolean).map(actor => [actor.id, actor]));
+        system.actors = base.actors.map((actor,index) => normalizeEliteActor(actorMap.get(actor.id), actor, index));
+        system.log = Array.isArray(incoming.log) ? incoming.log.filter(item => item && typeof item === "object").slice(0, 36) : [];
+        ["captureRisk","pluralism","transparency","networkStability","presidentialAuthority"].forEach(key => system[key] = clamp(num(system[key], base[key]), 0, 100));
+        system.unresolvedFavors = Math.max(0, Math.round(num(system.unresolvedFavors, 0)));
+        system.lastBriefing ||= base.lastBriefing;
+        game.elites = system;
+        return system;
+      }
+
+      function eliteBlocLabel(bloc) {
+        return ({ business:"промышленность", finance:"финансы", regional:"регионы", security:"армия", bureaucracy:"аппарат", labor:"профсоюзы", media:"медиа", technology:"наука", intelligence:"спецслужбы" })[bloc] || bloc;
+      }
+
+      function eliteCaptureRisk(game = state) {
+        const system = game?.elites;
+        if (!system?.actors?.length) return 0;
+        const total = system.actors.reduce((sum, actor) => sum + actor.influence, 0) || 1;
+        const concentration = system.actors.reduce((sum, actor) => sum + Math.pow(actor.influence / total, 2), 0) * 500;
+        const opaquePower = system.actors.reduce((sum, actor) => sum + actor.influence * (100 - actor.integrity) / 100, 0) / system.actors.length;
+        return clamp(concentration * .34 + opaquePower * .48 + num(game.politics?.lobbyism) * .2 + system.unresolvedFavors * 1.4 - system.transparency * .24, 0, 100);
+      }
+
+      function eliteLoyaltyTarget(game, actor) {
+        const e = game.economy, p = game.politics, m = game.military, c = p.cabinet;
+        const values = {
+          business: 48 + e.growth * 2 + e.smallBusiness * .12 - e.taxes.corporate * .45 - p.corruption * .08,
+          finance: 56 + (15 - Math.abs(e.inflation - 4)) * .8 + e.financial.centralBank.independence * .12 - e.financial.crisisLevel * .3,
+          regional: avg(game.regions, "loyalty") * .62 + avg(game.regions.map(region => ({ value: region.administration.autonomy })), "value") * .28,
+          security: m.readiness * .36 + m.morale * .25 + m.logistics * .18 + Math.min(16, m.budget) * 1.1 - m.warExhaustion * .18,
+          bureaucracy: c.execution * .34 + c.cohesion * .28 + c.integrity * .2 - c.bureaucracy * .08,
+          labor: 65 - e.unemployment * 2.2 - e.inflation * 1.4 + e.spending.welfare * .55 + game.population.happiness * .18,
+          media: game.governance.media.freedom * .42 + game.governance.media.trust * .25 + game.information.pressAccess * .2 - game.information.misinformation * .08,
+          technology: game.tech.points * .05 + e.spending.science * 1.5 + game.population.education * .46 + e.growth * 1.2,
+          intelligence: game.governance.intelligence.counterIntel * .36 + m.command * .24 + p.constitution.rights * .12 + c.integrity * .15
+        };
+        return clamp(num(values[actor.bloc], 52), 5, 95);
+      }
+
+      function recordEliteEvent(game, actor, title, text, tone = "warn") {
+        const system = game.elites;
+        system.log.unshift({ id:uid("elite_event"), date:formatDate(game.date), actorId:actor.id, actor:actor.name, title, text, tone });
+        system.log = system.log.slice(0, 36);
+        system.lastBriefing = `${actor.name}: ${text}`;
+        actor.lastMove = text;
+      }
+
+      function runEliteMove(game, actor) {
+        const p = game.politics, e = game.economy, m = game.military;
+        const hostile = actor.loyalty < 40 || actor.pressure > 66;
+        let title = "Закулисная инициатива", text = "", tone = hostile ? "bad" : "good";
+        if (actor.bloc === "business") {
+          if (hostile) { e.investments *= .996; e.smallBusiness -= .3; p.lobbyism += .35; text = "Промышленная группа заморозила часть инвестиций и усилила лоббирование налоговых уступок."; }
+          else { e.investments += 110; e.smallBusiness += .25; text = "Промышленный союз объявил совместную инвестиционную программу без бюджетной гарантии."; }
+          title = hostile ? "Инвестиционное давление" : "Частная инвестиционная коалиция";
+        } else if (actor.bloc === "finance") {
+          if (hostile) { e.financial.capitalFlight += 1.2; e.financial.exchangePressure += 1.4; text = "Финансовые группы перевели ликвидность в защитные активы, усилив давление на валюту."; }
+          else { e.financial.depositConfidence += .8; e.investments += 70; text = "Банковская ассоциация открыла долгосрочные кредитные линии для промышленности."; }
+          title = hostile ? "Отток частного капитала" : "Кредитная инициатива банков";
+        } else if (actor.bloc === "regional") {
+          if (hostile) { game.regions.forEach(region => { region.loyalty -= .18; region.administration.fiscalDiscipline -= .1; }); p.opposition += .35; text = "Губернаторы потребовали пересмотра трансфертов и начали координировать публичное давление на центр."; }
+          else { game.regions.forEach(region => region.administration.serviceQuality += .08); text = "Совет губернаторов согласовал единые сроки федеральных программ и обмен ресурсами."; }
+          title = hostile ? "Фронда губернаторов" : "Координация регионов";
+        } else if (actor.bloc === "security") {
+          if (hostile) { m.readiness += .4; p.impeachmentRisk += .25; p.coalition -= .25; text = "Военное руководство публично потребовало защищенного бюджета и расширения полномочий штаба."; }
+          else { game.military.command += .35; game.military.readiness += .3; text = "Генштаб провел межведомственную проверку готовности без политических требований."; }
+          title = hostile ? "Политическое заявление генералитета" : "Штабная координация";
+        } else if (actor.bloc === "bureaucracy") {
+          if (hostile) { p.cabinet.execution -= .65; p.cabinet.bureaucracy += .6; text = "Аппарат растянул согласования ключевых поручений и потребовал пересмотра регламентов."; }
+          else { p.cabinet.execution += .35; p.cabinet.bureaucracy -= .2; text = "Государственный аппарат ускорил межведомственные согласования по приоритетным решениям."; }
+          title = hostile ? "Бюрократическое торможение" : "Аппарат ускорил исполнение";
+        } else if (actor.bloc === "labor") {
+          if (hostile) { p.protests += .7; game.population.discontent += .45; text = "Профсоюзы объявили предупредительные акции из-за цен и реальных доходов."; }
+          else { game.population.happiness += .25; p.protests -= .25; text = "Профсоюзы согласились на отраслевые переговоры и отказались от забастовочной кампании."; }
+          title = hostile ? "Профсоюзная мобилизация" : "Социальное соглашение";
+        } else if (actor.bloc === "media") {
+          if (hostile) { game.governance.media.polarization += .8; game.information.governmentCredibility -= .45; text = "Крупный медиахолдинг открыл критическую кампанию против закрытости администрации."; }
+          else { game.governance.media.trust += .25; game.information.transparency += .2; text = "Медиахолдинг присоединился к стандарту открытой проверки государственных данных."; }
+          title = hostile ? "Медийная кампания элит" : "Пакт редакционной прозрачности";
+        } else if (actor.bloc === "technology") {
+          if (hostile) { game.tech.points = Math.max(0, game.tech.points - 1); e.investments -= 35; text = "Технологический консорциум предупредил об оттоке специалистов и переносе лабораторий."; }
+          else { game.tech.points += 1.5; game.population.education += .12; text = "Университеты и компании открыли совместные лаборатории и программу возвращения специалистов."; }
+          title = hostile ? "Угроза утечки талантов" : "Научно-технологический консорциум";
+        } else {
+          if (hostile) { game.governance.intelligence.domesticRisk += .7; p.popularity -= .2; text = "В закрытом докладе спецслужба потребовала расширить полномочия и предупредила об утечках."; }
+          else { game.governance.intelligence.counterIntel += .35; text = "Спецслужба передала проверенную оценку рисков без публичного вмешательства в политику."; }
+          title = hostile ? "Давление силового аппарата" : "Закрытая оценка угроз";
+        }
+        actor.pressure = clamp(actor.pressure + (hostile ? -8 : -4), 0, 100);
+        actor.resources = clamp(actor.resources + (hostile ? -1 : 1), 0, 100);
+        actor.cooldown = Math.round(rnd(45, 110));
+        recordEliteEvent(game, actor, title, text, tone);
+        if (hostile || actor.influence > 72) pushNews(game, "Политика", title, `${actor.name}, ${actor.role}: ${text}`);
+      }
+
+      function simulateEliteSystem(game) {
+        const system = game.elites || migrateEliteSystem(game);
+        for (const actor of system.actors) {
+          const target = eliteLoyaltyTarget(game, actor);
+          actor.loyalty = clamp(actor.loyalty + (target - actor.loyalty) * .0018 + rnd(-.012,.012), 0, 100);
+          actor.pressure = clamp(actor.pressure + (actor.ambition - actor.loyalty) * .0008 + (actor.influence - system.presidentialAuthority) * .00035 - system.transparency * .00018, 0, 100);
+          actor.resources = clamp(actor.resources + (actor.influence - 50) * .00012 - actor.pressure * .00005, 0, 100);
+          actor.cooldown = Math.max(0, actor.cooldown - 1);
+          if (!actor.cooldown && Math.random() < clamp(.002 + actor.pressure * .000055 + actor.ambition * .000018, .001, .011)) runEliteMove(game, actor);
+          actor.status = actor.pressure >= 70 ? "готовит давление" : actor.loyalty < 38 ? "в оппозиции" : actor.loyalty >= 68 ? "лоялен курсу" : "в рабочем контакте";
+        }
+        system.captureRisk = eliteCaptureRisk(game);
+        system.networkStability = clamp(avg(system.actors, "loyalty") * .55 + (100 - avg(system.actors, "pressure")) * .28 + system.pluralism * .17, 0, 100);
+        system.presidentialAuthority = clamp(game.politics.popularity * .32 + game.politics.coalition * .28 + game.politics.cabinet.execution * .22 + game.politics.constitution.courtIndependence * .18 - system.captureRisk * .12, 0, 100);
+        system.pluralism = clamp(system.pluralism + (system.transparency - system.captureRisk) * .00045, 0, 100);
+        system.unresolvedFavors = Math.max(0, system.actors.reduce((sum, actor) => sum + actor.favors, 0));
+        game.politics.corruption = clamp(game.politics.corruption + system.captureRisk * .000035 - system.transparency * .000028, 0, 100);
+      }
+
+      function eliteAction(actorId, mode) {
+        const system = state.elites;
+        const actor = system.actors.find(item => item.id === actorId);
+        if (!actor) return;
+        const e = state.economy, p = state.politics;
+        let cost = 0, title = "Работа с центром влияния", result = "", details = [], tone = "good";
+        if (mode === "consult") {
+          cost = 70;
+          if (e.budget < cost) return showBlockedDecision("Консультация не подготовлена", "Аппарату не хватает средств на независимую экспертизу и переговорную группу.", [["Нужно", money(cost), "bad"]]);
+          e.budget -= cost; actor.loyalty += 4; actor.pressure -= 4; actor.access += 2; actor.cooldown = Math.max(actor.cooldown, 18);
+          title = "Консультация проведена"; result = `${actor.name} представил интересы блока «${eliteBlocLabel(actor.bloc)}» без закрытых обязательств администрации.`;
+          details = [["Лояльность", "+4 п.п.", "good"], ["Давление", "-4 п.п.", "good"], ["Бюджет", `-${money(cost)}`, "bad"]];
+        } else if (mode === "deal") {
+          cost = 240;
+          if (e.budget < cost) return showBlockedDecision("Соглашение не обеспечено", "Пакет уступок требует финансового ресурса.", [["Нужно", money(cost), "bad"]]);
+          e.budget -= cost; actor.loyalty += 9; actor.pressure -= 10; actor.resources += 3; actor.favors += 1; p.lobbyism += .8; system.unresolvedFavors += 1;
+          title = "Политическое соглашение заключено"; result = `Администрация приняла часть повестки «${actor.agenda}». Поддержка получена ценой будущего обязательства.`;
+          details = [["Лояльность", "+9 п.п.", "good"], ["Давление", "-10 п.п.", "good"], ["Лоббизм", "+0.8 п.п.", "warn"], ["Обязательство", "+1", "warn"]]; tone = "warn";
+        } else if (mode === "audit") {
+          cost = 150;
+          if (e.budget < cost) return showBlockedDecision("Проверка не профинансирована", "Нужны следователи, аудиторы и защита свидетелей.", [["Нужно", money(cost), "bad"]]);
+          e.budget -= cost;
+          const finding = clamp((100 - actor.integrity) * .62 + actor.resources * .2 + rnd(-12, 18), 0, 100);
+          actor.integrity += finding > 48 ? 7 : 2; actor.resources -= finding > 48 ? 5 : 1; actor.loyalty -= 4; system.transparency += 4; p.corruption -= finding > 48 ? 1.1 : .25;
+          title = finding > 48 ? "Аудит выявил конфликт интересов" : "Аудит завершен без крупных нарушений";
+          result = finding > 48 ? `${actor.name} обязан раскрыть активы, отказаться от части контрактов и устранить конфликт интересов.` : `Существенных скрытых обязательств у ${actor.name} не обнаружено.`;
+          details = [["Риск нарушения", pct(finding,0), finding > 48 ? "bad" : "good"], ["Прозрачность", "+4 п.п.", "good"], ["Лояльность", "-4 п.п.", "warn"]]; tone = finding > 48 ? "warn" : "good";
+        } else if (mode === "rules") {
+          cost = 110;
+          if (e.budget < cost) return showBlockedDecision("Правила не внедрены", "Реестр встреч и конфликтов интересов требует защищенной инфраструктуры.", [["Нужно", money(cost), "bad"]]);
+          e.budget -= cost; actor.influence -= 3; actor.access -= 5; actor.loyalty -= 5; system.transparency += 6; system.pluralism += 2; p.lobbyism -= .7;
+          title = "Введены правила прозрачного влияния"; result = `Контакты с ${actor.name} теперь проходят через публичный реестр встреч, доноров и интересов.`;
+          details = [["Прозрачность", "+6 п.п.", "good"], ["Влияние", "-3 п.п.", "good"], ["Лояльность", "-5 п.п.", "warn"], ["Лоббизм", "-0.7 п.п.", "good"]]; tone = "warn";
+        } else return;
+        actor.cooldown = Math.max(actor.cooldown, 24);
+        recordEliteEvent(state, actor, title, result, tone);
+        normalizeCore();
+        showDecision(title, result, details, tone);
+      }
+
+      function worldCommodityCatalog() {
+        return [
+          { id: "oil", name: "Нефть", unit: "баррель", basePrice: 78, price: 78, volatility: 58, supply: 66, demand: 68, strategic: true, domesticKey: "raw" },
+          { id: "gas", name: "Природный газ", unit: "индекс", basePrice: 92, price: 92, volatility: 52, supply: 64, demand: 63, strategic: true, domesticKey: "energy" },
+          { id: "food", name: "Продовольствие", unit: "индекс", basePrice: 100, price: 100, volatility: 28, supply: 72, demand: 70, strategic: true, domesticKey: "food" },
+          { id: "metals", name: "Промышленные металлы", unit: "индекс", basePrice: 118, price: 118, volatility: 38, supply: 61, demand: 67, strategic: false, domesticKey: "metals" },
+          { id: "components", name: "Электронные компоненты", unit: "индекс", basePrice: 136, price: 136, volatility: 46, supply: 58, demand: 72, strategic: true, domesticKey: "components" },
+          { id: "fertilizer", name: "Удобрения", unit: "индекс", basePrice: 104, price: 104, volatility: 34, supply: 65, demand: 64, strategic: false, domesticKey: "chemicals" },
+          { id: "machinery", name: "Промышленное оборудование", unit: "индекс", basePrice: 124, price: 124, volatility: 25, supply: 63, demand: 66, strategic: false, domesticKey: "machinery" },
+          { id: "defense", name: "Оборонная продукция", unit: "индекс", basePrice: 148, price: 148, volatility: 31, supply: 54, demand: 61, strategic: true, domesticKey: "defense" }
+        ].map(item => Object.assign(item, { trend: 0, shock: 0, history: [item.price] }));
+      }
+
+      function normalizeWorldCommodity(value, fallback) {
+        const item = Object.assign({}, fallback, value || {});
+        item.id = fallback.id;
+        item.name ||= fallback.name;
+        item.unit ||= fallback.unit;
+        item.basePrice = Math.max(.1, num(item.basePrice, fallback.basePrice));
+        item.price = clamp(num(item.price, item.basePrice), item.basePrice * .28, item.basePrice * 5);
+        item.volatility = clamp(num(item.volatility, fallback.volatility), 0, 100);
+        item.supply = clamp(num(item.supply, fallback.supply), 1, 160);
+        item.demand = clamp(num(item.demand, fallback.demand), 1, 160);
+        item.trend = clamp(num(item.trend, 0), -25, 25);
+        item.shock = clamp(num(item.shock, 0), -100, 100);
+        item.strategic = !!item.strategic;
+        item.domesticKey ||= fallback.domesticKey;
+        item.history = (Array.isArray(item.history) ? item.history : [item.price]).map(Number).filter(Number.isFinite).slice(-48);
+        if (!item.history.length) item.history = [item.price];
+        return item;
+      }
+
+      function defaultTradeRoutes(game) {
+        const countries = game?.diplomacy?.countries || [];
+        const findCountry = (...names) => countries.find(country => names.includes(country.name)) || countries.find(country => !country.war) || countries[0];
+        const neighbors = game?.country?.neighbors || [];
+        const neighbor = countries.find(country => neighbors.includes(country.name)) || findCountry("Финляндия", "Казахстан", "Турция");
+        const routes = [
+          ["north_rail", "Северный железнодорожный коридор", "железная дорога", neighbor, 72, 76, 74, 820, ["metals","machinery","components"]],
+          ["south_land", "Южный сухопутный коридор", "автодороги", findCountry("Турция", "Иран", "Индия"), 68, 69, 62, 1260, ["food","fertilizer","machinery"]],
+          ["ocean_port", "Морской контейнерный маршрут", "морской путь", findCountry("Китай", "Япония", "Южная Корея"), 86, 72, 66, 5400, ["components","machinery","metals"]],
+          ["energy_line", "Трансграничный энергокоридор", "трубопровод", findCountry("Казахстан", "Россия", "Саудовская Аравия"), 79, 81, 70, 1120, ["oil","gas","fertilizer"]],
+          ["air_cargo", "Международный грузовой авиамост", "авиация", findCountry("Германия", "Франция", "Великобритания"), 44, 83, 78, 2860, ["components","defense","machinery"]]
+        ];
+        return routes.map((row, index) => ({
+          id: row[0], name: row[1], type: row[2], partnerId: row[3]?.id || "", partnerName: row[3]?.name || "международный рынок",
+          capacity: row[4], condition: row[5], security: row[6], distance: row[7], commodityIds: row[8],
+          disruption: 0, congestion: 38 + index * 6, insurance: 18 + index * 4, volume: row[4] * .58,
+          expansionDays: 0, protectedDays: 0, status: "работает", lastEvent: "Маршрут работает в штатном режиме."
+        }));
+      }
+
+      function normalizeTradeRoute(value, fallback, index = 0) {
+        const route = Object.assign({}, fallback || {}, value || {});
+        route.id ||= `route_${index}`;
+        route.name ||= `Международный коридор ${index + 1}`;
+        route.type ||= "смешанный маршрут";
+        route.partnerId ||= "";
+        route.partnerName ||= "международный рынок";
+        ["capacity","condition","security","congestion","insurance","volume"].forEach(key => route[key] = clamp(num(route[key], fallback?.[key] ?? 55), 0, key === "volume" ? 200 : 100));
+        route.distance = Math.max(80, Math.round(num(route.distance, fallback?.distance || 900)));
+        route.disruption = clamp(num(route.disruption, 0), 0, 100);
+        route.expansionDays = Math.max(0, Math.round(num(route.expansionDays, 0)));
+        route.protectedDays = Math.max(0, Math.round(num(route.protectedDays, 0)));
+        route.commodityIds = Array.isArray(route.commodityIds) ? route.commodityIds.slice(0, 8) : (fallback?.commodityIds || ["food","machinery"]);
+        route.status = route.status || "работает";
+        route.lastEvent ||= "Маршрут работает в штатном режиме.";
+        return route;
+      }
+
+      function defaultWorldMarket(game) {
+        return {
+          commodities: worldCommodityCatalog(), routes: defaultTradeRoutes(game), contracts: [], incidents: [], history: [],
+          policy: "сбалансированная торговля", tariffAverage: 7.5, logisticsReliability: 71, freightIndex: 100,
+          importDependency: 46, exportDiversity: 53, insuranceRisk: 28, reserveCoverage: 64,
+          tradeBalance: num(game?.economy?.exports) - num(game?.economy?.imports), customsEfficiency: 62,
+          corridorDiplomacy: 58, lastUpdate: formatDate(game?.date || currentGameDate()), lastBriefing: "Мировые маршруты открыты, критических разрывов поставок нет."
+        };
+      }
+
+      function migrateWorldMarketSystem(game) {
+        const base = defaultWorldMarket(game);
+        const incoming = game.worldMarket && typeof game.worldMarket === "object" && !Array.isArray(game.worldMarket) ? game.worldMarket : {};
+        const market = Object.assign(base, incoming);
+        const incomingCommodities = new Map((Array.isArray(incoming.commodities) ? incoming.commodities : []).filter(Boolean).map(item => [item.id, item]));
+        market.commodities = base.commodities.map(item => normalizeWorldCommodity(incomingCommodities.get(item.id), item));
+        const routeFallbacks = defaultTradeRoutes(game);
+        const incomingRoutes = new Map((Array.isArray(incoming.routes) ? incoming.routes : []).filter(Boolean).map(item => [item.id, item]));
+        market.routes = routeFallbacks.map((item, index) => normalizeTradeRoute(incomingRoutes.get(item.id), item, index));
+        market.contracts = Array.isArray(incoming.contracts) ? incoming.contracts.filter(item => item && typeof item === "object").slice(0, 20) : [];
+        market.incidents = Array.isArray(incoming.incidents) ? incoming.incidents.filter(item => item && typeof item === "object").slice(0, 24) : [];
+        market.history = Array.isArray(incoming.history) ? incoming.history.filter(item => item && typeof item === "object").slice(0, 48) : [];
+        ["tariffAverage","logisticsReliability","importDependency","exportDiversity","insuranceRisk","reserveCoverage","customsEfficiency","corridorDiplomacy"].forEach(key => market[key] = clamp(num(market[key], base[key]), 0, 100));
+        market.freightIndex = clamp(num(market.freightIndex, 100), 20, 300);
+        market.tradeBalance = num(market.tradeBalance, base.tradeBalance);
+        market.policy ||= base.policy;
+        market.lastUpdate ||= base.lastUpdate;
+        market.lastBriefing ||= base.lastBriefing;
+        game.worldMarket = market;
+        return market;
+      }
+
+      function tradeRouteEfficiency(route) {
+        return clamp((route.capacity * .31 + route.condition * .23 + route.security * .2 + (100 - route.disruption) * .18 + (100 - route.congestion) * .08) / 100, .08, 1.08);
+      }
+
+      function recordWorldMarket(game, title, text, type = "рынок") {
+        const market = game.worldMarket;
+        market.incidents.unshift({ id: uid("trade"), date: formatDate(game.date), title, text, type });
+        market.incidents = market.incidents.slice(0, 24);
+        market.lastBriefing = text;
+      }
+
+      function commodityPriceIndex(game = state) {
+        const market = game?.worldMarket;
+        if (!market?.commodities?.length) return 100;
+        return market.commodities.reduce((sum, item) => sum + item.price / Math.max(.1, item.basePrice) * 100, 0) / market.commodities.length;
+      }
+
+      function simulateWorldMarket(game) {
+        const market = game.worldMarket || migrateWorldMarketSystem(game);
+        const tension = num(game.diplomacy?.globalTension, 30);
+        const warLoad = (game.military?.wars?.length || 0) * 4.5;
+        const climateLoad = num(game.climate?.temperatureAnomaly, 0) * 2 + (game.climate?.emergencies || []).filter(item => item.status !== "закрыта").length * 1.4;
+        for (const item of market.commodities) {
+          const sector = game.economy?.industries?.find(entry => entry.product === item.domesticKey || entry.id === item.domesticKey);
+          const industrialDemand = sector ? clamp(sector.demand / Math.max(1, sector.capacity) * 65, 20, 120) : 64;
+          const conflictDemand = item.id === "defense" ? warLoad * 2.4 : ["oil","gas"].includes(item.id) ? warLoad * .8 : 0;
+          const weatherDemand = ["food","fertilizer"].includes(item.id) ? climateLoad : 0;
+          item.demand = clamp(item.demand * .992 + (industrialDemand + conflictDemand + weatherDemand) * .008, 12, 150);
+          const routeAccess = market.logisticsReliability / 100;
+          item.supply = clamp(item.supply + (routeAccess - .65) * .018 - item.shock * .0007 + rnd(-.015, .015), 10, 150);
+          item.shock = clamp(item.shock * .986, -100, 100);
+          const imbalance = (item.demand - item.supply) / Math.max(20, item.supply);
+          const tensionPremium = tension * item.volatility / 100 * .0000025;
+          const dailyMove = clamp(imbalance * .00042 + item.shock * .000012 + tensionPremium + rnd(-item.volatility, item.volatility) * .0000012, -.018, .018);
+          item.price = clamp(item.price * (1 + dailyMove), item.basePrice * .28, item.basePrice * 5);
+          item.trend = clamp(item.trend * .88 + dailyMove * 1200, -25, 25);
+          if (game.date.day === 1) item.history.push(Number(item.price.toFixed(2)));
+          item.history = item.history.slice(-48);
+        }
+
+        for (const route of market.routes) {
+          route.expansionDays = Math.max(0, route.expansionDays - 1);
+          route.protectedDays = Math.max(0, route.protectedDays - 1);
+          if (route.expansionDays === 1) {
+            route.capacity = clamp(route.capacity + 11, 0, 100);
+            route.condition = clamp(route.condition + 6, 0, 100);
+            route.lastEvent = "Расширение коридора введено в эксплуатацию.";
+            recordWorldMarket(game, "Расширение торгового коридора", `${route.name}: новая пропускная способность введена в эксплуатацию.`, "инфраструктура");
+          }
+          route.disruption = clamp(route.disruption - (route.protectedDays ? .12 : .055) - route.condition * .00025, 0, 100);
+          route.condition = clamp(route.condition - route.volume / 190000 - route.disruption / 180000, 0, 100);
+          route.congestion = clamp(route.congestion + (route.volume - route.capacity * .68) * .003 - .02, 0, 100);
+          route.insurance = clamp(12 + tension * .34 + route.disruption * .42 + (100 - route.security) * .2 - route.protectedDays * .05, 4, 100);
+          const partner = game.diplomacy?.countries?.find(country => country.id === route.partnerId);
+          const diplomaticAccess = partner ? clamp((partner.relations + (partner.embargo ? 0 : 45) - (partner.sanctions ? 24 : 0)) / 100, .12, 1.15) : .72;
+          const efficiency = tradeRouteEfficiency(route) * diplomaticAccess;
+          route.volume = clamp(route.volume * .94 + route.capacity * efficiency * .06, 0, 160);
+          route.status = route.disruption > 65 ? "остановлен" : route.disruption > 28 || route.condition < 38 ? "нарушен" : route.congestion > 82 ? "перегружен" : "работает";
+          const incidentChance = clamp(.00018 + tension * .000003 + warLoad * .000007 + (100 - route.security) * .000004 - route.protectedDays * .000004, .00005, .0018);
+          if (Math.random() < incidentChance) {
+            const impact = rnd(10, 28);
+            route.disruption = clamp(route.disruption + impact, 0, 100);
+            route.security = clamp(route.security - rnd(1, 4), 0, 100);
+            route.lastEvent = pick(["Задержка на границе нарушила график поставок.", "Страховщики повысили тариф после инцидента.", "Перегрузка узла замедлила контейнерный поток.", "Политический спор ограничил транзит."]);
+            recordWorldMarket(game, `Нарушение маршрута: ${route.name}`, route.lastEvent, "логистика");
+          }
+        }
+
+        const routeWeight = market.routes.reduce((sum, route) => sum + route.capacity, 0) || 1;
+        market.logisticsReliability = clamp(market.routes.reduce((sum, route) => sum + tradeRouteEfficiency(route) * route.capacity, 0) / routeWeight * 100, 0, 100);
+        market.insuranceRisk = clamp(avg(market.routes, "insurance"), 0, 100);
+        market.freightIndex = clamp(100 + market.insuranceRisk * .55 + avg(market.routes, "congestion") * .28 + (100 - market.logisticsReliability) * .46, 30, 260);
+        market.tradeBalance = num(game.economy.exports) - num(game.economy.imports);
+        market.importDependency = clamp(market.importDependency + (game.economy.imports > game.economy.exports ? .006 : -.003) - market.exportDiversity * .000025, 5, 95);
+        market.reserveCoverage = clamp(market.reserveCoverage - Math.max(0, 55 - market.logisticsReliability) * .0014 + (game.economy.supply?.food > 80 ? .003 : -.001), 0, 100);
+        market.corridorDiplomacy = clamp(market.corridorDiplomacy + (avg(game.diplomacy.countries.filter(country => market.routes.some(route => route.partnerId === country.id)), "relations") - market.corridorDiplomacy) * .0008, 0, 100);
+        const pricePressure = Math.max(0, commodityPriceIndex(game) - 100);
+        game.economy.inflation = clamp(game.economy.inflation + pricePressure * market.importDependency / 100 * .000012 + Math.max(0, 62 - market.logisticsReliability) * .00008, -5, 80);
+        game.economy.supplyShock = clamp(game.economy.supplyShock + Math.max(0, 65 - market.logisticsReliability) * .0012 - market.reserveCoverage * .00022, 0, 100);
+        const supply = game.economy.supply || (game.economy.supply = defaultSupplyStocks());
+        for (const item of market.commodities) {
+          if (!item.domesticKey || !(item.domesticKey in supply)) continue;
+          const access = market.logisticsReliability / 100 * (1 - market.importDependency / 220);
+          supply[item.domesticKey] = clamp(num(supply[item.domesticKey], 60) + (access - .58) * .012 - Math.max(0, item.price / item.basePrice - 1) * .006, 0, 180);
+        }
+        for (const contract of market.contracts) {
+          contract.days = Math.max(0, Math.round(num(contract.days, 0)) - 1);
+          const item = market.commodities.find(entry => entry.id === contract.commodityId);
+          if (item && contract.days > 0) {
+            item.supply = clamp(item.supply + num(contract.supplyBoost, .01), 0, 160);
+            market.reserveCoverage = clamp(market.reserveCoverage + num(contract.reserveBoost, .002), 0, 100);
+          }
+        }
+        market.contracts = market.contracts.filter(contract => contract.days > 0).slice(0, 20);
+        if (game.date.day === 1) market.history.unshift({ date: formatDate(game.date), priceIndex: commodityPriceIndex(game), reliability: market.logisticsReliability, freight: market.freightIndex, balance: market.tradeBalance });
+        market.history = market.history.slice(0, 48);
+        market.lastUpdate = formatDate(game.date);
+      }
+
+      function worldMarketAction(mode) {
+        const market = state.worldMarket;
+        const e = state.economy;
+        let cost = 0, title = "Решение торгового штаба", result = "", details = [], tone = "good";
+        if (mode === "reserves") {
+          cost = 780;
+          if (e.budget < cost) return showBlockedDecision("Резерв не профинансирован", "Бюджет не покрывает закупку продовольствия, топлива и критических компонентов.", [["Нужно", money(cost), "bad"]]);
+          e.budget -= cost; market.reserveCoverage += 10; market.importDependency -= 1.2;
+          market.commodities.filter(item => item.strategic).forEach(item => item.supply += 1.8);
+          title = "Стратегический резерв пополнен"; result = "Государство закупило критические товары и распределило запасы между защищенными складами.";
+          details = [["Покрытие резервов", "+10 п.п.", "good"], ["Импортная зависимость", "-1.2 п.п.", "good"], ["Бюджет", `-${money(cost)}`, "bad"]];
+        } else if (mode === "diversify") {
+          cost = 640;
+          if (e.budget < cost) return showBlockedDecision("Диверсификация не профинансирована", "Экспортное агентство и сертификация требуют бюджета.", [["Нужно", money(cost), "bad"]]);
+          e.budget -= cost; market.exportDiversity += 7; market.importDependency -= 2.5; market.corridorDiplomacy += 2;
+          title = "Торговля диверсифицирована"; result = "Экспортное агентство открыло новые рынки, а импортеры получили альтернативных поставщиков.";
+          details = [["Разнообразие экспорта", "+7 п.п.", "good"], ["Зависимость", "-2.5 п.п.", "good"], ["Бюджет", `-${money(cost)}`, "bad"]];
+        } else if (mode === "customs") {
+          cost = 420;
+          if (e.budget < cost) return showBlockedDecision("Таможенная реформа не профинансирована", "Нужны цифровые декларации, сканеры и единый риск-профиль.", [["Нужно", money(cost), "bad"]]);
+          e.budget -= cost; market.customsEfficiency += 8; market.logisticsReliability += 2.2; market.tariffAverage = clamp(market.tariffAverage - .6, 0, 100);
+          title = "Таможня модернизирована"; result = "Единое окно сократило задержки легальных грузов и усилило риск-контроль.";
+          details = [["Таможня", "+8 п.п.", "good"], ["Надежность", "+2.2 п.п.", "good"], ["Средний тариф", "-0.6 п.п.", "warn"]];
+        } else if (mode === "insurance") {
+          cost = 360;
+          if (e.budget < cost) return showBlockedDecision("Страховой пул не создан", "Гарантийный капитал недостаточен.", [["Нужно", money(cost), "bad"]]);
+          e.budget -= cost; market.insuranceRisk -= 7; market.routes.forEach(route => { route.insurance -= 5; route.protectedDays = Math.max(route.protectedDays, 120); });
+          title = "Экспортный страховой пул открыт"; result = "Государственная гарантия снизила стоимость покрытия политических и транспортных рисков.";
+          details = [["Страховой риск", "-7 п.п.", "good"], ["Защита маршрутов", "120 дней", "good"], ["Бюджет", `-${money(cost)}`, "bad"]];
+        } else return;
+        recordWorldMarket(state, title, result, "решение");
+        normalizeCore();
+        showDecision(title, result, details, tone);
+      }
+
+      function tradeRouteAction(routeId, mode) {
+        const route = state.worldMarket.routes.find(item => item.id === routeId);
+        if (!route) return;
+        const e = state.economy;
+        let cost = 0, title = "Решение по коридору", result = "", details = [], tone = "good";
+        if (mode === "repair") {
+          cost = Math.round(180 + route.disruption * 5 + (100 - route.condition) * 3);
+          if (e.budget < cost) return showBlockedDecision("Ремонт не профинансирован", "Транспортный резерв бюджета недостаточен.", [["Нужно", money(cost), "bad"]]);
+          e.budget -= cost; route.disruption -= 18; route.condition += 10; route.lastEvent = "Аварийные бригады восстановили узлы маршрута.";
+          title = "Коридор восстановлен"; result = `${route.name}: устранены повреждения и задержки на ключевых узлах.`;
+          details = [["Нарушение", "-18 п.п.", "good"], ["Состояние", "+10 п.п.", "good"], ["Бюджет", `-${money(cost)}`, "bad"]];
+        } else if (mode === "secure") {
+          cost = 290;
+          if (e.budget < cost) return showBlockedDecision("Охрана не профинансирована", "Не хватает средств на досмотр, киберзащиту и сопровождение.", [["Нужно", money(cost), "bad"]]);
+          e.budget -= cost; route.security += 9; route.protectedDays = Math.max(route.protectedDays, 150); route.insurance -= 4;
+          title = "Безопасность маршрута усилена"; result = `${route.name}: введена совместная охрана узлов, грузов и цифровых документов.`;
+          details = [["Безопасность", "+9 п.п.", "good"], ["Защита", "150 дней", "good"], ["Страхование", "дешевле", "good"]];
+        } else if (mode === "expand") {
+          cost = 960;
+          if (route.expansionDays > 0) return showBlockedDecision("Расширение уже строится", `До ввода осталось ${route.expansionDays} дней.`, [["Срок", `${route.expansionDays} дн.`, "warn"]]);
+          if (e.budget < cost) return showBlockedDecision("Расширение не профинансировано", "Проект требует федеральной гарантии и капитальных расходов.", [["Нужно", money(cost), "bad"]]);
+          e.budget -= cost; route.expansionDays = 180;
+          title = "Расширение коридора начато"; result = `${route.name}: подписан 180-дневный проект новых терминалов и пропускных мощностей.`;
+          details = [["Срок", "180 дней", "warn"], ["Будущая мощность", "+11 п.п.", "good"], ["Бюджет", `-${money(cost)}`, "bad"]]; tone = "warn";
+        } else return;
+        recordWorldMarket(state, title, result, "маршрут");
+        normalizeCore();
+        showDecision(title, result, details, tone);
+      }
+
       function createGame(config) {
         const regions = defaultRegions((config.regions || "").split(","));
         const populationTotal = regions.reduce((sum, r) => sum + r.population, 0);
@@ -5764,7 +6628,7 @@
         const population = defaultPopulation(populationTotal);
         const diplomacy = { countries: createWorldCountries(country.neighbors), organizations: defaultOrganizations(), inbox: [], pressureLog: [], worldLog: [], globalTension: 34 };
         const game = {
-          version: 12,
+          version: 13,
           createdAt: new Date().toISOString(),
           lastSaved: new Date().toISOString(),
           theme: "dark",
@@ -5799,6 +6663,11 @@
         migrateIntelligenceSystem(game);
         migrateClimateSystem(game);
         migrateChronicle(game);
+        migrateSuccessionSystem(game);
+        migrateFederationSystem(game);
+        migrateWorldMarketSystem(game);
+        migrateEliteSystem(game);
+        migrateStatisticsSystem(game);
         selectedRegionId = regions[0]?.id || null;
         selectedCountryId = diplomacy.countries[0]?.id || null;
         pushNews(game, "Политика", "Инаугурация", `${country.president.name} вступает в должность президента государства ${country.name}. Правительство получает полный набор инструментов управления страной.`);
@@ -6942,6 +7811,30 @@
         return [["gdp","ВВП"],["inflation","Инфляция"],["popularity","Популярность"],["army","Армия"],["population","Население"],["unemployment","Безработица"],["risk","Нацриск"],["governance","Управляемость"],["services","Госуслуги"],["income","Доходы"],["expenses","Расходы"]];
       }
 
+      function renderStatisticsPanel() {
+        const s=state.statistics,confidence=statisticsConfidence(state),catalog=statisticsMetricCatalog(state);
+        const rows=Object.entries(catalog).map(([key,meta])=>{
+          const value=num(s.observed[key],meta.actual),margin=num(s.margins[key]);
+          const risk=margin>meta.scale*.65?"bad":margin>meta.scale*.28?"warn":"good";
+          return `<tr><td><strong>${esc(meta.label)}</strong></td><td>${formatStatisticValue(key,value)}</td><td class="delta ${risk}">± ${formatStatisticValue(key,margin)}</td><td><span class="pill">${risk==="good"?"устойчиво":risk==="bad"?"низкая точность":"предварительно"}</span></td></tr>`;
+        }).join("");
+        return `
+          <section class="panel pad">
+            <div class="panel-section-head"><span><h3 class="section-title">Достоверность государственных данных</h3><p class="subtle">Президент получает официальный отчет, а не прямой доступ к истине. Диапазон показывает возможную ошибку; пересмотры появляются после новых региональных, налоговых и банковских данных.</p></span><span class="pill">следующий выпуск через ${s.daysUntilRelease} дн.</span></div>
+            <div class="kpi-strip" style="margin-top:12px;"><div class="kpi"><span>Общая уверенность</span><strong class="delta ${confidence>=70?"good":confidence<45?"bad":"warn"}">${pct(confidence,0)}</strong></div><div class="kpi"><span>Независимость</span><strong>${pct(s.independence,0)}</strong></div><div class="kpi"><span>Охват</span><strong>${pct(s.coverage,0)}</strong></div><div class="kpi"><span>Открытые данные</span><strong>${pct(s.openData,0)}</strong></div><div class="kpi"><span>Манипуляция</span><strong class="${s.manipulation>45?"delta bad":""}">${pct(s.manipulation,0)}</strong></div><div class="kpi"><span>Риск пересмотра</span><strong>${pct(s.revisionRisk,0)}</strong></div></div>
+            <div class="decision-banner ${confidence>=70?"good":confidence<45?"bad":"warn"}" style="margin-top:12px;"><strong>${esc(s.lastBriefing)}</strong><span class="subtle">Последний выпуск ${esc(s.lastRelease)} · ${esc(s.lastAudit)}</span></div>
+            <div class="scroll" style="margin-top:12px;"><table class="table"><thead><tr><th>Показатель</th><th>Официально</th><th>Погрешность</th><th>Оценка</th></tr></thead><tbody>${rows}</tbody></table></div>
+            <div class="policy-action-grid compact" style="margin-top:12px;">
+              ${renderActionCard({title:"Национальная перепись",category:"охват",desc:"Полевой и регистровый учет населения, миграции и домохозяйств.",signal:`охват ${pct(s.coverage,0)}`,when:"Когда численность и региональные данные давно не уточнялись.",effect:"Повышает охват, качество и своевременность статистики.",risk:"Дорого и организационно сложно.",cta:"Провести",tone:"good"},{"data-action":"statistics-action","data-mode":"census"},{compact:true})}
+              ${renderActionCard({title:"Независимость статистической службы",category:"институты",desc:"Защищенный срок руководителя и публикация методик до выхода данных.",signal:`независимость ${pct(s.independence,0)}`,when:"При недоверии к официальным показателям.",effect:"Снижает административное искажение и укрепляет методологию.",risk:"Правительство теряет возможность управлять календарем неудобных публикаций.",cta:"Гарантировать",tone:"institution"},{"data-action":"statistics-action","data-mode":"independence"},{compact:true})}
+              ${renderActionCard({title:"Независимый аудит",category:"верификация",desc:"Сопоставление официальных рядов с первичными реестрами и выборками.",signal:`аудит ${pct(s.auditCapacity,0)}`,when:"Когда погрешность велика или показатели противоречат реальности.",effect:"Уточняет данные и формирует честные пересмотры.",risk:"Обнаруженные ошибки могут временно снизить доверие.",cta:"Проверить",tone:"warn"},{"data-action":"statistics-action","data-mode":"audit"},{compact:true})}
+              ${renderActionCard({title:"Портал открытых данных",category:"прозрачность",desc:"Методики, временные ряды и обезличенные реестры становятся машиночитаемыми.",signal:`открытость ${pct(s.openData,0)}`,when:"Для независимой проверки СМИ, науки и бизнеса.",effect:"Повышает доверие и скорость публикации.",risk:"Ошибки и противоречия становятся публичными.",cta:"Опубликовать",tone:"good"},{"data-action":"statistics-action","data-mode":"open"},{compact:true})}
+              ${renderActionCard({title:"Приукрасить отчет",category:"административное давление",desc:"Требование показать более благоприятные значения перед важным политическим событием.",signal:`манипуляция ${pct(s.manipulation,0)}`,when:"Политически соблазнительно, но институционально опасно.",effect:"Текущий выпуск выглядит лучше.",risk:"Резко растут недоверие, коррупция и будущий пересмотр.",cta:"Оказать давление",tone:"bad"},{"data-action":"statistics-action","data-mode":"pressure"},{compact:true})}
+            </div>
+            ${s.revisions.length?`<h3 class="section-title" style="margin-top:16px;">Журнал пересмотров</h3><div class="list" style="margin-top:8px;">${s.revisions.slice(0,10).map(item=>`<div class="row"><span><strong>${esc(item.label)}</strong><br><small class="subtle">${esc(item.date)} · ${esc(item.reason)}</small></span><span class="pill">${formatStatisticValue(item.metric,item.previous)} → ${formatStatisticValue(item.metric,item.revised)}</span></div>`).join("")}</div>`:""}
+          </section>`;
+      }
+
       function renderGovernance() {
         const g = state.governance;
         const risk = calcNationalRisk();
@@ -6962,6 +7855,7 @@
                 <article class="signal-card"><header><strong>Порог закрытия</strong><span class="pill">8%</span></header><p class="subtle" style="margin:0;">Когда тяжесть падает ниже 8%, кризис считается почти решенным и уходит из оперативной сводки.</p></article>
               </div>
             </section>
+            ${renderStatisticsPanel()}
             <div class="grid split">
               <section class="panel pad">
                 <h3 class="section-title">Повестка общества</h3>
@@ -7139,6 +8033,44 @@
         return (game.governance?.projects || []).reduce((sum, p) => sum + clamp(p.progress, 0, 100) * (p.status === "done" ? .12 : .05), 0);
       }
 
+      function renderFederationPanel(region) {
+        const f = state.federation;
+        if (!f || !region?.identity || !region?.administration) return "";
+        const i = region.identity, a = region.administration;
+        const openDisputes = f.disputes.filter(item => item.status === "открыт");
+        const regionalRows = state.regions.slice().sort((left, right) => right.identity.separatism - left.identity.separatism).map(item => {
+          const identity = item.identity;
+          const tone = identity.separatism >= 55 ? "bad" : identity.grievance >= 45 ? "warn" : "good";
+          return `<tr><td><button class="link-button" data-action="select-region" data-id="${esc(item.id)}">${esc(item.name)}</button></td><td>${pct(identity.centerTrust,0)}</td><td>${pct(item.administration.autonomy,0)} / ${pct(identity.desiredAutonomy,0)}</td><td>${pct(identity.grievance,0)}</td><td><span class="pill ${tone}">${pct(identity.separatism,0)}</span></td></tr>`;
+        }).join("");
+        return `
+          <section class="panel pad">
+            <div class="panel-section-head"><span><h3 class="section-title">Федерация и идентичность</h3><p class="subtle">Баланс общего гражданства, регионального самоуправления и культурных гарантий.</p></span><span class="pill ${f.separatismRisk >= 50 ? "bad" : f.cohesion < 55 ? "warn" : "good"}">связность ${pct(f.cohesion,0)}</span></div>
+            <div class="kpi-strip" style="margin-top:12px;">
+              <div class="kpi"><span>Легитимность центра</span><strong>${pct(f.centerLegitimacy,0)}</strong></div>
+              <div class="kpi"><span>Баланс автономии</span><strong>${pct(f.autonomyBalance,0)}</strong></div>
+              <div class="kpi"><span>Культурный плюрализм</span><strong>${pct(f.culturalPluralism,0)}</strong></div>
+              <div class="kpi"><span>Риск сепаратизма</span><strong class="${f.separatismRisk >= 50 ? "delta bad" : ""}">${pct(f.separatismRisk,0)}</strong></div>
+            </div>
+            <div class="decision-banner ${i.separatism >= 55 ? "bad" : i.grievance >= 42 ? "warn" : "good"}" style="margin-top:12px;">
+              <strong>${esc(region.name)}: ${esc(i.majorityIdentity)}</strong>
+              <span class="subtle">Язык: ${esc(i.localLanguage)} · традиция: ${esc(i.primaryReligion)} · меньшинства ${pct(i.minorityShare,0)} · культурные права ${pct(i.culturalRights,0)}</span>
+              <span class="subtle">Доверие центру ${pct(i.centerTrust,0)} · претензии ${pct(i.grievance,0)} · автономия ${pct(a.autonomy,0)} при запросе ${pct(i.desiredAutonomy,0)}</span>
+            </div>
+            <div class="policy-action-grid compact" style="margin-top:12px;">
+              ${renderActionCard({title:"Федеральный совет",category:"диалог",desc:"Президент, губернаторы и региональные собрания согласуют полномочия, трансферты и культурные гарантии.",signal:f.councilCooldown?`пауза ${f.councilCooldown} дн.`:`открытых споров ${openDisputes.length}`,when:"При росте межрегионального напряжения или перед крупной реформой.",effect:"Повышает доверие и представительство всех регионов, снижает накопленные претензии.",risk:"Требует 180 млн и доступен один раз в 60 дней.",cta:"Созвать совет",tone:"civic"},{"data-action":"federal-action","data-mode":"council"},{compact:true})}
+              ${renderActionCard({title:"Финансовое выравнивание",category:"бюджет",desc:"Адресный пакет услуг и инфраструктуры для выбранного региона.",signal:`богатство ${pct(region.wealth,0)} · услуги ${pct(a.serviceQuality,0)}`,when:"Когда экономический разрыв питает недоверие к центру.",effect:"Улучшает услуги, благосостояние и доверие; снижает претензии.",risk:"Стоит 620 млн и может закрепить зависимость от трансфертов.",cta:"Выделить пакет",tone:"good"},{"data-action":"federal-action","data-mode":"equalization","data-region":region.id},{compact:true})}
+              ${renderActionCard({title:"Культурные гарантии",category:"права",desc:"Поддержка местного языка, школ, архивов и общественного вещания.",signal:`права ${pct(i.culturalRights,0)} · идентичность ${pct(i.identityStrength,0)}`,when:"При сильной местной идентичности и культурном отчуждении.",effect:"Укрепляет интеграцию и доверие без административного давления.",risk:"Стоит 260 млн; часть сторонников централизации может возражать.",cta:"Принять гарантии",tone:"institution"},{"data-action":"federal-action","data-mode":"culture","data-region":region.id},{compact:true})}
+              ${renderActionCard({title:"Расширить автономию",category:"полномочия",desc:"Передает региону бюджетные, образовательные и инфраструктурные компетенции под аудитом.",signal:`автономия ${pct(a.autonomy,0)} / запрос ${pct(i.desiredAutonomy,0)}`,when:"Когда местная администрация дееспособна, а запрос на полномочия высок.",effect:"Снижает претензии и повышает представительство региона.",risk:"Слегка ослабляет коалицию; слабый аудит усиливает местные элиты.",cta:"Передать полномочия",tone:"civic"},{"data-action":"federal-action","data-mode":"autonomy","data-region":region.id},{compact:true})}
+              ${renderActionCard({title:"Усилить федеральный контроль",category:"безопасность",desc:"Центр временно изымает часть региональных полномочий.",signal:`сепаратизм ${pct(i.separatism,0)} · безопасность ${pct(region.security,0)}`,when:"Только при остром провале управления или угрозе насилия.",effect:"Быстро повышает управляемость и безопасность.",risk:"Резко увеличивает отчуждение, претензии и сепаратизм.",cta:"Централизовать",tone:"warn"},{"data-action":"federal-action","data-mode":"centralize","data-region":region.id},{compact:true})}
+              ${renderActionCard({title:"Федеративный суд",category:"арбитраж",desc:"Независимый суд разрешает зарегистрированный спор о полномочиях или гарантиях.",signal:openDisputes.some(item=>item.regionId===region.id)?"дело региона открыто":"открытого дела нет",when:"После регистрации формального спора, если переговоры не дали результата.",effect:"Конституционное решение способно надолго снизить напряжение.",risk:"При слабом правосудии решение может остаться политически спорным.",cta:"Передать дело",tone:"institution"},{"data-action":"federal-action","data-mode":"court","data-region":region.id},{compact:true})}
+            </div>
+            <details class="action-fold" style="margin-top:12px;"><summary><span class="action-fold-arrow" aria-hidden="true">›</span><span class="action-summary-main"><strong>Сравнение регионов</strong><small>доверие, автономия и риск отделения</small></span><span class="pill">${state.regions.length}</span></summary><div class="action-fold-body"><div class="scroll"><table class="table"><thead><tr><th>Регион</th><th>Доверие</th><th>Автономия / запрос</th><th>Претензии</th><th>Сепаратизм</th></tr></thead><tbody>${regionalRows}</tbody></table></div></div></details>
+            ${f.log[0] ? `<p class="subtle" style="margin:10px 0 0;"><strong>${esc(f.log[0].date)} · ${esc(f.log[0].region)}</strong>: ${esc(f.log[0].text)}</p>` : ""}
+          </section>
+        `;
+      }
+
       function renderMap() {
         const region = state.regions.find(r => r.id === selectedRegionId) || state.regions[0];
         const buildingButtons = buildingTypes.map(([key]) => renderActionCard(buildingDecisionMeta(key, region), { "data-action": "build", "data-building": key }, { compact: true })).join("");
@@ -7159,6 +8091,7 @@
             </div>
             <aside class="grid">
               ${renderMapWarPanel()}
+              ${renderFederationPanel(region)}
               <section class="panel pad">
                 <h3 class="section-title">Редактор карты</h3>
                 ${actionCardGrid([
@@ -8098,6 +9031,37 @@
         `;
       }
 
+      function eliteActorTone(actor) {
+        return actor.pressure >= 70 || actor.loyalty < 32 ? "bad" : actor.loyalty >= 65 && actor.pressure < 42 ? "good" : "warn";
+      }
+
+      function renderEliteSystem() {
+        const system = state.elites;
+        const actors = system.actors.slice().sort((a,b) => b.influence - a.influence);
+        const strongest = actors[0];
+        return `
+          <section class="panel pad">
+            <div class="panel-section-head"><span><h3 class="section-title">Сеть влиятельных людей и элит</h3><p class="subtle">Политические силы показывают организованные интересы, а здесь находятся конкретные люди. Они располагают личными сетями, ресурсами, доступом к президенту и способны действовать самостоятельно.</p></span><span class="pill">главный центр: ${esc(strongest?.name || "нет")}</span></div>
+            <div class="kpi-strip" style="margin-top:12px;">
+              <div class="kpi"><span>Риск захвата государства</span><strong class="delta ${worldMarketTone(system.captureRisk,true)}">${pct(system.captureRisk,0)}</strong></div>
+              <div class="kpi"><span>Устойчивость сети</span><strong>${pct(system.networkStability,0)}</strong></div>
+              <div class="kpi"><span>Авторитет президента</span><strong>${pct(system.presidentialAuthority,0)}</strong></div>
+              <div class="kpi"><span>Прозрачность влияния</span><strong>${pct(system.transparency,0)}</strong></div>
+              <div class="kpi"><span>Плюрализм</span><strong>${pct(system.pluralism,0)}</strong></div>
+              <div class="kpi"><span>Неисполненные обязательства</span><strong class="${system.unresolvedFavors>3?"delta bad":""}">${system.unresolvedFavors}</strong></div>
+            </div>
+            <div class="decision-banner ${system.captureRisk>62?"bad":system.captureRisk>38?"warn":"good"}" style="margin-top:12px;"><strong>${esc(system.lastBriefing)}</strong><span class="subtle">Высокое влияние полезно для исполнения решений, но при слабой прозрачности превращается в частный контроль над институтами.</span></div>
+            <div class="bill-grid" style="margin-top:12px;">${actors.map(actor => `
+              <article class="bill-card ${eliteActorTone(actor)}">
+                <header><span><strong>${esc(actor.name)}</strong><small>${esc(actor.role)} · ${esc(eliteBlocLabel(actor.bloc))}</small></span><span class="pill">влияние ${pct(actor.influence,0)}</span></header>
+                <div class="progress"><i style="--w:${actor.loyalty}%"></i></div>
+                <div class="bill-kpis"><div><span>Лояльность</span><strong>${pct(actor.loyalty,0)}</strong></div><div><span>Давление</span><strong>${pct(actor.pressure,0)}</strong></div><div><span>Амбиции</span><strong>${pct(actor.ambition,0)}</strong></div><div><span>Честность</span><strong>${pct(actor.integrity,0)}</strong></div></div>
+                <details class="action-fold"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>${esc(actor.status)}</strong><small>${esc(actor.agenda)}</small></span></summary><div class="action-fold-body"><p class="subtle" style="margin:0;">Ресурсы ${pct(actor.resources,0)} · доступ ${pct(actor.access,0)} · связи: ${actor.network.map(id=>system.actors.find(item=>item.id===id)?.name).filter(Boolean).map(esc).join(", ")||"не раскрыты"}.</p><p class="subtle" style="margin:8px 0 0;">Последний ход: ${esc(actor.lastMove)}</p><div class="actions"><button data-action="elite-action" data-id="${esc(actor.id)}" data-mode="consult">Консультация</button><button data-action="elite-action" data-id="${esc(actor.id)}" data-mode="deal">Соглашение</button><button data-action="elite-action" data-id="${esc(actor.id)}" data-mode="audit">Аудит</button><button class="danger" data-action="elite-action" data-id="${esc(actor.id)}" data-mode="rules">Ограничить влияние</button></div></div></details>
+              </article>`).join("")}</div>
+          </section>
+        `;
+      }
+
       function renderPolitics() {
         const p = state.politics;
         const groups = state.population.groups || [];
@@ -8129,6 +9093,7 @@
               <div class="panel-section-head"><span><h3 class="section-title">Самостоятельные политические силы</h3><p class="subtle">Они действуют по собственной повестке даже без решений игрока.</p></span><span class="pill">давление ${pct(avg(p.forces,"pressure"),0)}</span></div>
               <div class="political-force-grid" style="margin-top: 12px;">${p.forces.map(renderPoliticalForceCard).join("")}</div>
             </section>
+            ${renderEliteSystem()}
             <section class="panel pad">
               <h3 class="section-title">Что улучшать сейчас</h3>
               <div class="signal-grid" style="margin-top: 12px;">
@@ -8220,18 +9185,45 @@
         `;
       }
 
+      function renderSuccessionPanel() {
+        const s=state.succession,p=state.politics,era=s.currentEra,limit=Math.max(1,p.constitution.maxTerms),limited=s.termsServed>=limit;
+        return `
+          <section class="panel pad">
+            <div class="panel-section-head"><span><h3 class="section-title">Преемственность власти</h3><p class="subtle">Срок президента заканчивается выборами, а государство должно сохранить обязательства, архивы и нейтральный аппарат при любом победителе.</p></span><span class="pill ${s.transitionRisk>=55?"bad":s.readiness<58?"warn":"good"}">риск транзита ${pct(s.transitionRisk,0)}</span></div>
+            <div class="decision-banner ${limited?"warn":"good"}" style="margin-top:12px;"><strong>${esc(era.name)}</strong><span class="subtle">${esc(era.president)} · срок ${s.termsServed} из ${limit} · начат ${esc(era.startDate)} · ${era.days} дней</span><span class="subtle">${limited?"Действующий президент достиг ограничения сроков и не может баллотироваться лично.":"Конституционное право на переизбрание сохраняется."}</span></div>
+            <div class="kpi-strip" style="margin-top:12px;">
+              <div class="kpi"><span>Готовность к передаче</span><strong>${pct(s.readiness,0)}</strong></div>
+              <div class="kpi"><span>Непрерывность курса</span><strong>${pct(s.continuity,0)}</strong></div>
+              <div class="kpi"><span>Нейтральность аппарата</span><strong>${pct(s.caretakerNeutrality,0)}</strong></div>
+              <div class="kpi"><span>Институциональная память</span><strong>${pct(s.institutionalMemory,0)}</strong></div>
+              <div class="kpi"><span>Мирные передачи</span><strong>${s.peacefulTransfers}</strong></div>
+              <div class="kpi"><span>Архив срока</span><strong>${pct(s.archiveQuality,0)}</strong></div>
+            </div>
+            ${s.designatedSuccessor?`<div class="signal-card" style="margin-top:12px;"><header><strong>Кандидат преемственности: ${esc(s.designatedSuccessor.name)}</strong><span class="pill">компетентность ${pct(s.designatedSuccessor.competence,0)}</span></header><p class="subtle" style="margin:0;">${esc(s.designatedSuccessor.party)} · ${esc(s.designatedSuccessor.ideology)} · выдвинут ${esc(s.designatedSuccessor.designatedDate)}. Он участвует в конкурентных выборах и не получает должность автоматически.</p></div>`:""}
+            <div class="policy-action-grid compact" style="margin-top:12px;">
+              ${renderActionCard({title:"Определить преемника курса",category:"коалиция",desc:"Правящая коалиция открыто выбирает своего будущего кандидата из числа наиболее компетентных министров.",signal:s.designatedSuccessor?s.designatedSuccessor.name:`срок ${s.termsServed} из ${limit}`,when:"Заранее до ограничения сроков, чтобы избежать кулуарной борьбы элит.",effect:"Повышает готовность и снижает неопределенность, но не заменяет выборы.",risk:"Раннее выдвижение создает второго политического центра.",cta:s.designatedSuccessor?"Обновить кандидатуру":"Назвать кандидата",tone:"civic"},{"data-action":"succession-action","data-mode":"designate"},{compact:true})}
+              ${renderActionCard({title:"План передачи дел",category:"аппарат",desc:"Ведомства составляют реестр обязательств, рисков, сроков и закрытых материалов.",signal:s.transitionPlan?"план утвержден":"план не утвержден",when:"Перед выборами или при высокой вероятности смены администрации.",effect:"Резко повышает готовность, непрерывность и исполнительскую дисциплину.",risk:"Стоит 320 млн и раскрывает слабые места ведомств.",cta:"Утвердить план",tone:"good"},{"data-action":"succession-action","data-mode":"transition"},{compact:true})}
+              ${renderActionCard({title:"Нейтральность аппарата",category:"честные выборы",desc:"Запрещает использовать бюджет, реестры и административный ресурс в интересах кандидата.",signal:`нейтральность ${pct(s.caretakerNeutrality,0)}`,when:"До и во время президентской кампании.",effect:"Укрепляет верховенство права и доверие к результату.",risk:"Кабинет теряет часть прямого политического контроля.",cta:"Дать гарантию",tone:"institution"},{"data-action":"succession-action","data-mode":"neutrality"},{compact:true})}
+              ${renderActionCard({title:"Архив и передача знаний",category:"память государства",desc:"Решения, данные, договоры и незавершенные программы получают проверяемую историю.",signal:`качество ${pct(s.archiveQuality,0)}`,when:"Регулярно в течение срока, а не только после выборов.",effect:"Снижает потери компетенций при смене министров и президента.",risk:"Стоит 170 млн и делает прежние решения доступнее для аудита.",cta:"Систематизировать",tone:"good"},{"data-action":"succession-action","data-mode":"archive"},{compact:true})}
+            </div>
+            ${s.log[0]?`<p class="subtle" style="margin:10px 0 0;"><strong>${esc(s.log[0].date)} · ${esc(s.log[0].title)}</strong>: ${esc(s.log[0].text)}</p>`:""}
+          </section>
+        `;
+      }
+
       function renderElections(){
         const p=state.politics,el=p.elections,incumbent=el.candidates.find(c=>c.incumbent),leader=el.candidates.slice().sort((a,b)=>b.poll-a.poll)[0];
         const last=el.lastElection;
         return `<section class="grid">
           <div class="metric-grid">
             ${metric("До голосования",`${p.electionInDays} дн.`,el.phase,p.electionInDays<=180?"warn":"good")}
-            ${metric("Рейтинг президента",pct(incumbent?.poll||0,1),`лидер: ${leader?.name||"нет"}`,leader?.incumbent?"good":"bad")}
+            ${metric(incumbent?.isSuccessor?"Кандидат власти":"Рейтинг президента",pct(incumbent?.poll||0,1),`лидер: ${leader?.name||"нет"}`,leader?.incumbent?"good":"bad")}
             ${metric("Не определились",pct(el.undecided,1),`прогноз явки ${pct(el.turnoutForecast,1)}`,el.undecided<12?"good":"warn")}
             ${metric("Главная тема",esc(el.issue),`тур ${el.round}`,"warn")}
           </div>
+          ${renderSuccessionPanel()}
           <section class="panel pad"><div class="panel-section-head"><span><h3 class="section-title">Президентская кампания</h3><p class="subtle">Опросы учитывают результаты управления, кандидатов, ресурсы штабов, общественные группы и положение в каждом регионе.</p></span><span class="pill">${el.active?"кампания активна":"межвыборный период"}</span></div>
-            <div class="bill-grid" style="margin-top:12px;">${el.candidates.map(candidate=>`<article class="bill-card ${candidate.incumbent?"good":""}"><header><span><strong>${esc(candidate.name)}</strong><small>${esc(candidate.party)} · ${esc(candidate.ideology)}${candidate.incumbent?" · действующий президент":""}</small></span><span class="pill">${pct(candidate.poll,1)}</span></header><div class="progress"><i style="--w:${candidate.poll}%"></i></div><div class="bill-kpis"><div><span>Харизма</span><strong>${pct(candidate.charisma,0)}</strong></div><div><span>Компетентность</span><strong>${pct(candidate.competence,0)}</strong></div><div><span>Организация</span><strong>${pct(candidate.organization,0)}</strong></div><div><span>Фонд</span><strong>${money(candidate.funds)}</strong></div></div><p class="subtle" style="margin:8px 0 0;">Импульс ${candidate.momentum>=0?"+":""}${candidate.momentum.toFixed(1)} · репутационные эпизоды ${candidate.scandals} · обещания: ${candidate.promises.join(", ")||"не опубликованы"}</p></article>`).join("")}</div>
+            <div class="bill-grid" style="margin-top:12px;">${el.candidates.map(candidate=>`<article class="bill-card ${candidate.incumbent?"good":""}"><header><span><strong>${esc(candidate.name)}</strong><small>${esc(candidate.party)} · ${esc(candidate.ideology)}${candidate.isSuccessor?" · кандидат преемственности":candidate.incumbent?" · действующий президент":""}</small></span><span class="pill">${pct(candidate.poll,1)}</span></header><div class="progress"><i style="--w:${candidate.poll}%"></i></div><div class="bill-kpis"><div><span>Харизма</span><strong>${pct(candidate.charisma,0)}</strong></div><div><span>Компетентность</span><strong>${pct(candidate.competence,0)}</strong></div><div><span>Организация</span><strong>${pct(candidate.organization,0)}</strong></div><div><span>Фонд</span><strong>${money(candidate.funds)}</strong></div></div><p class="subtle" style="margin:8px 0 0;">Импульс ${candidate.momentum>=0?"+":""}${candidate.momentum.toFixed(1)} · репутационные эпизоды ${candidate.scandals} · обещания: ${candidate.promises.join(", ")||"не опубликованы"}</p></article>`).join("")}</div>
           </section>
           <section class="panel pad"><h3 class="section-title">Решения штаба президента</h3><p class="subtle" style="margin:8px 0 0;">Действия доступны во время официальной кампании. Деньги расходуются из прозрачного избирательного фонда, а не напрямую из государственного бюджета.</p><div class="policy-action-grid compact" style="margin-top:12px;">
             ${renderActionCard({title:"Региональный тур",category:"полевой штаб",desc:"Поездка в регион с самой слабой поддержкой.",signal:`организация ${pct(incumbent?.organization||0,0)}`,when:"Для выравнивания территориальной поддержки.",effect:"Повышает импульс, организацию и лояльность региона.",risk:"Расходует фонд и имеет недельную подготовку.",cta:"Провести тур",tone:"good"},{"data-action":"campaign-action","data-mode":"rally"},{compact:true})}
@@ -8241,7 +9233,7 @@
             ${renderActionCard({title:"Информационная кампания",category:"медиа",desc:"Отчеты о сроке и программные материалы.",signal:`доверие СМИ ${pct(state.governance.media.trust,0)}`,when:"Когда нужен быстрый охват неопределившихся.",effect:"Повышает импульс кампании.",risk:"Усиливает поляризацию общества.",cta:"Разместить",tone:"warn"},{"data-action":"campaign-action","data-mode":"ads"},{compact:true})}
             ${renderActionCard({title:"Наблюдатели и волонтеры",category:"организация",desc:"Юристы, наблюдатели и региональные координаторы.",signal:`организация ${pct(incumbent?.organization||0,0)}`,when:"Перед голосованием и при слабой сети штаба.",effect:"Повышает качество мобилизации и контроля выборов.",risk:"Требует времени и средств фонда.",cta:"Развернуть сеть",tone:"good"},{"data-action":"campaign-action","data-mode":"ground"},{compact:true})}
           </div></section>
-          ${last?`<section class="panel pad"><h3 class="section-title">Последние выборы</h3><div class="decision-banner ${last.won?"good":"warn"}" style="margin-top:12px;"><strong>${esc(last.winner)} · ${pct(last.share,1)}</strong><span class="subtle">${esc(last.date)} · ${esc(last.party)} · явка ${pct(last.turnout,1)} · результат прежнего президента ${pct(last.incumbentResult,1)}</span></div><div class="signal-grid" style="margin-top:12px;">${(last.regionalResults||[]).slice(0,8).map(r=>`<div class="signal-card"><header><strong>${esc(r.region)}</strong><span>${pct(r.turnout,0)}</span></header><p class="subtle" style="margin:0;">Победитель: ${esc(r.winner)}</p></div>`).join("")}</div></section>`:""}
+          ${last?`<section class="panel pad"><h3 class="section-title">Последние выборы</h3><div class="decision-banner ${last.administrationWon||last.won?"good":"warn"}" style="margin-top:12px;"><strong>${esc(last.winner)} · ${pct(last.share,1)}</strong><span class="subtle">${esc(last.date)} · ${esc(last.party)} · явка ${pct(last.turnout,1)} · результат кандидата действующей власти ${pct(last.incumbentResult,1)}</span></div><div class="signal-grid" style="margin-top:12px;">${(last.regionalResults||[]).slice(0,8).map(r=>`<div class="signal-card"><header><strong>${esc(r.region)}</strong><span>${pct(r.turnout,0)}</span></header><p class="subtle" style="margin:0;">Победитель: ${esc(r.winner)}</p></div>`).join("")}</div></section>`:""}
           <section class="panel pad"><h3 class="section-title">Лента кампании</h3><div class="list" style="margin-top:12px;">${el.log.length?el.log.slice(0,16).map(item=>`<div class="row"><span><strong>${esc(item.title)}</strong><br><small class="subtle">${esc(item.date)} · ${esc(item.text)}</small></span></div>`).join(""):`<div class="row"><span>Официальная кампания еще не началась</span></div>`}</div></section>
         </section>`;
       }
@@ -8307,6 +9299,7 @@
 
       function renderChronicle() {
         const c = state.chronicle;
+        const succession = state.succession;
         const legacy = calcPresidentialLegacy();
         const dimensions = [["Экономика",legacy.economy],["Общество",legacy.society],["Институты",legacy.institutions],["Безопасность",legacy.security],["Мир",legacy.world],["Территории",legacy.territorial]];
         return `
@@ -8316,6 +9309,10 @@
               <aside class="command-side"><span>Индекс наследия</span><strong>${Math.round(legacy.total)}</strong><small>${legacy.total >= 72 ? "государство заметно укреплено" : legacy.total >= 52 ? "срок имеет смешанные, но устойчивые итоги" : "наследие пока остается спорным"}</small></aside>
             </section>
             <section class="panel pad"><h3 class="section-title">Баланс президентского наследия</h3><div class="signal-grid" style="margin-top:12px;">${dimensions.map(([name,value]) => `<div class="signal-card"><header><strong>${name}</strong><span>${pct(value,0)}</span></header><div class="progress"><i style="--w:${value}%"></i></div></div>`).join("")}</div></section>
+            <section class="panel pad"><div class="panel-section-head"><span><h3 class="section-title">Политические эпохи</h3><p class="subtle">Каждый президентский срок сохраняется отдельно: мандат, длительность, способ завершения, ключевые события и измеримый итог.</p></span><span class="pill">завершено ${succession.eras.length}</span></div>
+              <div class="decision-banner good" style="margin-top:12px;"><strong>${esc(succession.currentEra.name)}</strong><span class="subtle">${esc(succession.currentEra.president)} · срок ${succession.currentEra.termNumber} · ${succession.currentEra.days} дней · действующая администрация</span></div>
+              ${succession.eras.length?`<div class="bill-grid" style="margin-top:12px;">${succession.eras.map(era=>`<article class="bill-card"><header><span><strong>${esc(era.name)}</strong><small>${esc(era.president)} · ${esc(era.party)} · срок ${era.termNumber}</small></span><span class="pill ${era.legacyScore>=65?"good":era.legacyScore<45?"bad":"warn"}">${Math.round(era.legacyScore)}/100</span></header><div class="bill-kpis"><div><span>Начало</span><strong>${esc(era.startDate)}</strong></div><div><span>Завершение</span><strong>${esc(era.endDate||"-")}</strong></div><div><span>Дней</span><strong>${era.days}</strong></div><div><span>Исход</span><strong>${esc(era.outcome)}</strong></div></div>${era.highlights.length?`<p class="subtle" style="margin:8px 0 0;">Главные события: ${esc(era.highlights.join(" · "))}</p>`:""}${era.nextPresident?`<p class="subtle" style="margin:6px 0 0;">Следующий президент: ${esc(era.nextPresident)}</p>`:""}</article>`).join("")}</div>`:`<p class="subtle" style="margin:12px 0 0;">Первая эпоха еще продолжается. Ее итог будет зафиксирован после выборов и инаугурации.</p>`}
+            </section>
             ${c.yearlyReports.length ? `<section class="panel pad"><h3 class="section-title">Годовые отчеты</h3><div class="fiscal-ledger" style="margin-top:12px;">${c.yearlyReports.map(y => `<div><span>${y.year}</span><strong>${y.score}/100</strong><small>${esc(y.summary)} · рейтинг ${pct(y.popularity,0)}</small></div>`).join("")}</div></section>` : ""}
             <section class="panel pad"><div class="panel-section-head"><span><h3 class="section-title">Летопись срока</h3><p class="subtle">Наиболее значимые государственные события сохраняются автоматически.</p></span><span class="pill">важные решения</span></div><div class="news-feed" style="margin-top:12px;">${c.entries.map(entry => `<article class="news-card"><div class="news-meta"><span>${esc(entry.category)}</span><time>${esc(entry.date)}</time></div><h4>${esc(entry.title)}</h4><p>${esc(entry.text)}</p><div class="resource-line">${Array.from({length:entry.importance},() => `<span class="resource-badge">государственное значение</span>`).join("")}</div></article>`).join("")}</div></section>
           </section>`;
@@ -10246,9 +11243,60 @@
 
       function companyTone(company){return company.status==="банкротство"||company.status==="кризис"?"bad":company.status==="под наблюдением"||company.profitMargin<3?"warn":"good";}
 
+      function worldMarketTone(value, inverse = false) {
+        const good = inverse ? value <= 35 : value >= 65;
+        const bad = inverse ? value >= 65 : value <= 38;
+        return good ? "good" : bad ? "bad" : "warn";
+      }
+
+      function renderWorldMarketPanel() {
+        const market = state.worldMarket;
+        const commodities = market.commodities.slice().sort((a,b) => Math.abs(b.trend) - Math.abs(a.trend));
+        const routes = market.routes.slice().sort((a,b) => tradeRouteEfficiency(a) - tradeRouteEfficiency(b));
+        const priceIndex = commodityPriceIndex(state);
+        return `
+          <section class="panel pad">
+            <div class="panel-section-head"><span><h3 class="section-title">Мировой рынок и международная логистика</h3><p class="subtle">Цены формируются глобальным спросом, предложением, войнами и климатическими рисками. Доступ к товарам зависит от конкретных коридоров, отношений с партнерами и стоимости страхования.</p></span><span class="pill">обновлено ${esc(market.lastUpdate)}</span></div>
+            <div class="metric-grid compact-metrics" style="margin-top:12px;">
+              ${metric("Мировые цены",pct(priceIndex,1),`фрахт ${pct(market.freightIndex,0)}`,worldMarketTone(priceIndex > 100 ? 200-priceIndex : 100))}
+              ${metric("Надежность логистики",pct(market.logisticsReliability,0),`страховой риск ${pct(market.insuranceRisk,0)}`,worldMarketTone(market.logisticsReliability))}
+              ${metric("Импортная зависимость",pct(market.importDependency,0),`резерв ${pct(market.reserveCoverage,0)}`,worldMarketTone(market.importDependency,true))}
+              ${metric("Торговый баланс",money(market.tradeBalance),`диверсификация ${pct(market.exportDiversity,0)}`,market.tradeBalance >= 0 ? "good" : "warn")}
+            </div>
+            <div class="decision-banner ${market.logisticsReliability >= 65 ? "good" : market.logisticsReliability < 42 ? "bad" : "warn"}" style="margin-top:12px;"><strong>${esc(market.lastBriefing)}</strong><span class="subtle">Таможня ${pct(market.customsEfficiency,0)} · дипломатия коридоров ${pct(market.corridorDiplomacy,0)} · средний тариф ${pct(market.tariffAverage,1)}</span></div>
+            <div class="policy-action-grid compact" style="margin-top:12px;">
+              ${renderActionCard({title:"Стратегические резервы",category:"устойчивость",desc:"Закупка топлива, продовольствия и компонентов в защищенные хранилища.",signal:`покрытие ${pct(market.reserveCoverage,0)}`,when:"Перед кризисом, войной или при нарушении поставок.",effect:"Повышает запас критических товаров и снижает импортную уязвимость.",risk:"Закупка на пике цен обходится бюджету дороже.",cta:"Пополнить",tone:"good"},{"data-action":"world-market-action","data-mode":"reserves"},{compact:true})}
+              ${renderActionCard({title:"Новые рынки и поставщики",category:"диверсификация",desc:"Экспортное агентство ищет покупателей, а импортеры заключают альтернативные контракты.",signal:`разнообразие ${pct(market.exportDiversity,0)}`,when:"При зависимости от одного направления или партнера.",effect:"Снижает зависимость и уменьшает последствия эмбарго.",risk:"Новые рынки требуют сертификации и дипломатических уступок.",cta:"Диверсифицировать",tone:"institution"},{"data-action":"world-market-action","data-mode":"diversify"},{compact:true})}
+              ${renderActionCard({title:"Цифровая таможня",category:"граница",desc:"Единое окно, электронные декларации и досмотр по профилю риска.",signal:`эффективность ${pct(market.customsEfficiency,0)}`,when:"При очередях, контрабанде и дорогом транзите.",effect:"Ускоряет легальные грузы и повышает надежность коридоров.",risk:"Снижение среднего тарифа временно ограничивает сборы.",cta:"Модернизировать",tone:"good"},{"data-action":"world-market-action","data-mode":"customs"},{compact:true})}
+              ${renderActionCard({title:"Страхование экспорта",category:"финансовая защита",desc:"Пул покрывает политические, военные и транспортные риски поставок.",signal:`риск ${pct(market.insuranceRisk,0)}`,when:"Когда перевозчики повышают ставки или отказываются от маршрутов.",effect:"Снижает страховые расходы и защищает все коридоры на 120 дней.",risk:"Государство принимает часть убытков на свой баланс.",cta:"Создать пул",tone:"warn"},{"data-action":"world-market-action","data-mode":"insurance"},{compact:true})}
+            </div>
+          </section>
+          <section class="panel pad">
+            <div class="panel-section-head"><span><h3 class="section-title">Котировки стратегических товаров</h3><p class="subtle">Индекс 100 соответствует базовой мировой цене. Изменение цены постепенно переносится в инфляцию, себестоимость отраслей и состояние запасов.</p></span><span class="pill">${commodities.length} рынков</span></div>
+            <div class="scroll" style="margin-top:12px;">
+              <table class="table world-market-table"><thead><tr><th>Товар</th><th>Цена</th><th>Тренд</th><th>Спрос</th><th>Предложение</th><th>Статус</th></tr></thead><tbody>
+                ${commodities.map(item => { const index=item.price/item.basePrice*100, shortage=item.demand-item.supply; return `<tr><td><strong>${esc(item.name)}</strong><br><small class="subtle">${item.strategic?"стратегический":"биржевой"}</small></td><td>${pct(index,1)}</td><td class="delta ${item.trend>1?"bad":item.trend<-1?"good":"warn"}">${item.trend>=0?"+":""}${pct(item.trend,1)}</td><td>${pct(item.demand,0)}</td><td>${pct(item.supply,0)}</td><td><span class="pill delta ${shortage>12?"bad":shortage<-6?"good":"warn"}">${shortage>12?"дефицит":shortage<-6?"избыток":"баланс"}</span></td></tr>`; }).join("")}
+              </tbody></table>
+            </div>
+          </section>
+          <section class="panel pad">
+            <div class="panel-section-head"><span><h3 class="section-title">Международные торговые коридоры</h3><p class="subtle">Мощность сама по себе недостаточна: реальный поток ограничивают износ, безопасность, перегрузка, дипломатический доступ и нарушения.</p></span><span class="pill">${routes.filter(route=>route.status!=="работает").length} требуют внимания</span></div>
+            <div class="bill-grid" style="margin-top:12px;">${routes.map(route => { const efficiency=tradeRouteEfficiency(route)*100; return `
+              <article class="bill-card ${route.status==="остановлен"?"bad":route.status!=="работает"?"warn":"good"}">
+                <header><span><strong>${esc(route.name)}</strong><small>${esc(route.type)} · ${esc(route.partnerName)} · ${compact(route.distance)} км</small></span><span class="pill">${esc(route.status)}</span></header>
+                <div class="progress"><i style="--w:${efficiency}%"></i></div>
+                <div class="bill-kpis"><div><span>Эффективность</span><strong>${pct(efficiency,0)}</strong></div><div><span>Мощность</span><strong>${pct(route.capacity,0)}</strong></div><div><span>Безопасность</span><strong>${pct(route.security,0)}</strong></div><div><span>Нарушение</span><strong>${pct(route.disruption,0)}</strong></div></div>
+                <details class="action-fold"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Поток ${pct(route.volume,0)} · страхование ${pct(route.insurance,0)}</strong><small>${esc(route.lastEvent)}</small></span></summary><div class="action-fold-body"><p class="subtle" style="margin:0;">Товары: ${route.commodityIds.map(id=>market.commodities.find(item=>item.id===id)?.name||id).map(esc).join(", ")}. Состояние ${pct(route.condition,0)}, перегрузка ${pct(route.congestion,0)}.</p><div class="actions"><button data-action="trade-route-action" data-route="${esc(route.id)}" data-mode="repair">Ремонт</button><button data-action="trade-route-action" data-route="${esc(route.id)}" data-mode="secure">Охрана</button><button data-action="trade-route-action" data-route="${esc(route.id)}" data-mode="expand"${route.expansionDays>0?" disabled":""}>${route.expansionDays>0?`Строится ${route.expansionDays} дн.`:"Расширить"}</button></div></div></details>
+              </article>`; }).join("")}</div>
+          </section>
+          <section class="panel pad"><h3 class="section-title">Международная торговая сводка</h3><div class="list" style="margin-top:12px;">${market.incidents.length?market.incidents.slice(0,16).map(item=>`<div class="row"><span><strong>${esc(item.title)}</strong><br><small class="subtle">${esc(item.date)} · ${esc(item.text)}</small></span><span class="pill">${esc(item.type)}</span></div>`).join(""):`<div class="row"><span>Серьезных нарушений международной логистики пока нет</span><span class="pill">штатно</span></div>`}</div></section>
+        `;
+      }
+
       function renderMarkets(){
         const e=state.economy,ps=e.privateSector,companies=ps.companies.slice().sort((a,b)=>b.capitalization-a.capitalization),active=companies.filter(c=>c.status!=="банкротство");
         return `<section class="grid"><div class="metric-grid">${metric("Деловое доверие",pct(ps.businessConfidence,0),`потребители ${pct(ps.consumerConfidence,0)}`,infrastructureTone(ps.businessConfidence))}${metric("Конкуренция",pct(ps.competition,0),`монопольный риск ${pct(ps.monopolyRisk,0)}`,ps.monopolyRisk<40?"good":"warn")}${metric("Частная занятость",compact(ps.privateEmployment),`спрос на труд ${pct(ps.laborDemand,0)}`,"good")}${metric("Прибыльная база",money(ps.taxBase),`несостоятельность ${pct(ps.insolvencyRate,1)}`,ps.insolvencyRate<12?"good":"bad")}</div>
+          ${renderWorldMarketPanel()}
           <section class="panel pad"><div class="panel-section-head"><span><h3 class="section-title">Рынки и правила частного сектора</h3><p class="subtle">Президент задаёт право, конкуренцию, закупки и инвестиционный климат. Прибыль и банкротство компаний определяются спросом, кредитом, инфраструктурой и качеством управления.</p></span><span class="pill">${active.length} действующих компаний</span></div><div class="kpi-strip" style="margin-top:12px;"><div class="kpi"><span>Венчурный капитал</span><strong>${pct(ps.ventureCapital,0)}</strong></div><div class="kpi"><span>Иностранные инвестиции</span><strong>${pct(ps.foreignInvestment,0)}</strong></div><div class="kpi"><span>Защита собственности</span><strong>${pct(ps.propertyRights,0)}</strong></div><div class="kpi"><span>Регулирование</span><strong>${pct(ps.regulation,0)}</strong></div><div class="kpi"><span>Прозрачность закупок</span><strong>${pct(ps.procurementTransparency,0)}</strong></div></div><div class="policy-action-grid compact" style="margin-top:12px;">
             ${renderActionCard({title:"Антимонопольная политика",category:"конкуренция",desc:"Контроль слияний, картелей и дискриминационного доступа к инфраструктуре.",signal:`монопольный риск ${pct(ps.monopolyRisk,0)}`,when:"Когда крупнейшие компании подавляют рынок.",effect:"Повышает конкуренцию и снижает ценовую власть.",risk:"Крупный бизнес сокращает часть инвестиций и усиливает лоббизм.",cta:"Усилить контроль",tone:"good"},{"data-action":"market-action","data-mode":"antitrust"},{compact:true})}
             ${renderActionCard({title:"Регуляторная гильотина",category:"деловой климат",desc:"Удаление устаревших разрешений с сохранением безопасности и трудовых норм.",signal:`регулирование ${pct(ps.regulation,0)}`,when:"При низком деловом доверии.",effect:"Ускоряет инвестиции и открытие предприятий.",risk:"Слишком быстрое упрощение снижает соблюдение норм.",cta:"Пересмотреть нормы",tone:"warn"},{"data-action":"market-action","data-mode":"deregulation"},{compact:true})}
@@ -10421,6 +11469,41 @@
                 "Модернизация повышает мощность и эффективность, резерв сглаживает дефицит, а экстренный импорт быстро помогает ценой бюджета и торгового баланса.",
                 "Высокие налоги, инфляция, войны и коррупция тормозят рост.",
                 "Низкое обеспечение производственных цепочек повышает импорт, инфляцию, безработицу и замедляет рост."
+              ])}
+              ${manualCard("Мировой рынок и логистика", [
+                "Нефть, газ, продовольствие, металлы, компоненты, удобрения, оборудование и оборонная продукция имеют собственные мировые цены, спрос, предложение и волатильность.",
+                "Цена меняется постепенно под влиянием дефицита, войн, климата и глобальной напряженности; она передается во внутреннюю инфляцию, импорт, экспорт и отраслевые запасы.",
+                "Торговый поток идет по конкретным морским, железнодорожным, автомобильным, воздушным и энергетическим коридорам. Износ, перегрузка, санкции и плохие отношения снижают реальную пропускную способность.",
+                "Резервы защищают от краткого разрыва, диверсификация уменьшает зависимость от одного поставщика, а страхование снижает коммерческий риск без восстановления самого маршрута.",
+                "Инфраструктура коридора расширяется не мгновенно: проект требует бюджета и выполняется по дням."
+              ])}
+              ${manualCard("Влиятельные люди и элиты", [
+                "Промышленники, банкиры, губернаторы, генералы, аппарат, профсоюзы, медиавладельцы, технологическое сообщество и спецслужбы представлены конкретными самостоятельными фигурами.",
+                "У каждого человека есть влияние, ресурсы, доступ, лояльность, амбиции, добросовестность, давление и сеть связей. Их позиция меняется от реальных результатов политики.",
+                "Если давление растет, элита может сама заморозить инвестиции, мобилизовать профсоюзы, затянуть решения аппарата, начать медиакомпанию или потребовать военный бюджет.",
+                "Открытая консультация снимает напряжение без обязательств; политическая сделка дает сильную поддержку ценой будущей услуги и лоббизма.",
+                "Аудит и прозрачные правила уменьшают риск захвата государства, но ухудшают отношения с затронутым центром влияния."
+              ])}
+              ${manualCard("Достоверность статистики", [
+                "Официальный отчет является измерением реальности, а не точным знанием: каждый показатель публикуется с диапазоном возможной ошибки.",
+                "Качество, независимость, охват, методология, своевременность, аудит и открытые данные сужают погрешность; административное давление создает систематическое искажение.",
+                "После новых налоговых, банковских, региональных данных или переписи прошлые значения могут быть пересмотрены.",
+                "Независимый аудит повышает точность, но способен обнаружить неудобную ошибку. Открытые данные позволяют науке, СМИ и бизнесу проверять ряды.",
+                "Приукрашивание временно делает выпуск благоприятнее, однако повышает коррупцию, недоверие и вероятность тяжелого будущего пересмотра."
+              ])}
+              ${manualCard("Идентичность и федерация", [
+                "У регионов есть собственная идентичность, язык, религиозная традиция, доля меньшинств, культурные права, представительство и желаемый уровень автономии.",
+                "Претензии растут из экономического отставания, плохих услуг, военного ущерба, слабого представительства, культурных ограничений и разрыва между желаемыми и реальными полномочиями.",
+                "Федеральный совет снижает общее напряжение, выравнивающий пакет помогает бедному региону, а культурные гарантии укрепляют интеграцию без принуждения.",
+                "Автономия полезна при дееспособной местной власти. Жесткая централизация быстро повышает управляемость, но увеличивает отчуждение и сепаратизм.",
+                "Открытый спор можно передать федеративному суду; устойчивость решения зависит от независимости суда и верховенства права."
+              ])}
+              ${manualCard("Преемственность и эпохи", [
+                "Конституционное ограничение сроков действует персонально: достигший лимита президент не участвует в следующих выборах, но коалиция может выдвинуть кандидата преемственности.",
+                "Преемник не назначается автоматически. Он проходит ту же конкурентную региональную кампанию и может проиграть оппозиции.",
+                "План передачи дел, нейтральность госаппарата, президентский архив и институциональная память снижают риск кризиса власти после голосования.",
+                "Слабая готовность, борьба элит, протесты и федеративное напряжение повышают риск транзита и могут парализовать кабинет перед выборами.",
+                "Каждый завершенный срок становится отдельной политической эпохой с датами, исходом, важными событиями и оценкой наследия; симуляция продолжается при новом президенте."
               ])}
               ${manualCard("Годовой бюджет", [
                 "Доходы и расходы учитываются ежедневно внутри финансового года, а 31 декабря год закрывается с фактическим балансом и долгом.",
@@ -10651,7 +11734,7 @@
               </div>
             </section>
             <section class="panel pad">
-              <h3 class="section-title">Информация, разведка и климат</h3>
+              <h3 class="section-title">Информация, институты и риски</h3>
               <p class="subtle" style="margin:8px 0 0;">Расширенные показатели новых систем доступны для создания пользовательских сценариев.</p>
               <div class="form-grid narrow" style="margin-top:12px;">
                 ${editorInput("information.governmentCredibility","Доверие к официальной информации",state.information.governmentCredibility,"number")}
@@ -10666,6 +11749,16 @@
                 ${editorInput("climate.adaptation","Адаптация",state.climate.adaptation,"number")}
                 ${editorInput("climate.preparedness","Готовность к ЧС",state.climate.preparedness,"number")}
                 ${editorInput("climate.waterStress","Водный стресс",state.climate.waterStress,"number")}
+                ${editorInput("worldMarket.tariffAverage","Средняя импортная пошлина",state.worldMarket.tariffAverage,"number")}
+                ${editorInput("worldMarket.reserveCoverage","Торговые резервы",state.worldMarket.reserveCoverage,"number")}
+                ${editorInput("elites.transparency","Прозрачность влияния элит",state.elites.transparency,"number")}
+                ${editorInput("elites.pluralism","Плюрализм центров влияния",state.elites.pluralism,"number")}
+                ${editorInput("statistics.quality","Качество статистики",state.statistics.quality,"number")}
+                ${editorInput("statistics.independence","Независимость статистики",state.statistics.independence,"number")}
+                ${editorInput("statistics.manipulation","Искажение статистики",state.statistics.manipulation,"number")}
+                ${editorInput("federation.fiscalSolidarity","Федеральная солидарность",state.federation.fiscalSolidarity,"number")}
+                ${editorInput("succession.institutionalMemory","Институциональная память",state.succession.institutionalMemory,"number")}
+                ${editorInput("succession.caretakerNeutrality","Нейтральность аппарата",state.succession.caretakerNeutrality,"number")}
               </div>
             </section>
             <div class="grid two">
@@ -10686,6 +11779,9 @@
                   ${region ? editorInput("selectedRegion.name", "Название региона", region.name) : ""}
                   ${region ? editorInput("selectedRegion.population", "Население региона", region.population, "number") : ""}
                   ${region ? editorInput("selectedRegion.budget", "Бюджет региона", region.budget, "number") : ""}
+                  ${region ? editorInput("selectedRegion.identity.centerTrust", "Доверие региона центру", region.identity.centerTrust, "number") : ""}
+                  ${region ? editorInput("selectedRegion.identity.culturalRights", "Культурные права региона", region.identity.culturalRights, "number") : ""}
+                  ${region ? editorInput("selectedRegion.identity.desiredAutonomy", "Запрос автономии", region.identity.desiredAutonomy, "number") : ""}
                   <label>Страна<select data-action="editor-country">${state.diplomacy.countries.map(c => `<option value="${c.id}" ${c.id === selectedCountryId ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>
                   ${selectedCountry ? editorInput("selectedCountry.relations", "Отношения", selectedCountry.relations, "number") : ""}
                   ${selectedCountry ? editorInput("selectedCountry.trade", "Торговля", selectedCountry.trade, "number") : ""}
@@ -11158,22 +12254,28 @@
         else if (action === "emergency-action") emergencyAction(actionEl.dataset.emergency, actionEl.dataset.mode);
         else if (action === "region-recovery") regionRecoveryAction(actionEl.dataset.region, actionEl.dataset.mode);
         else if (action === "region-admin") regionAdministrationAction(actionEl.dataset.region, actionEl.dataset.mode);
+        else if (action === "federal-action") federalAction(actionEl.dataset.mode, actionEl.dataset.region);
         else if (action === "region-program") startRegionalProgram(actionEl.dataset.region);
         else if (action === "policy") policyAction(actionEl.dataset.policy);
         else if (action === "gov-action") governanceAction(actionEl.dataset.gov);
+        else if (action === "statistics-action") statisticsAction(actionEl.dataset.mode);
         else if (action === "crisis-action") crisisAction(actionEl.dataset.crisis, actionEl.dataset.mode);
         else if (action === "project-action") projectAction(actionEl.dataset.project, actionEl.dataset.mode);
         else if (action === "econ-action") economyAction(actionEl.dataset.econ);
         else if (action === "cb-action") centralBankAction(actionEl.dataset.mode, actionEl.dataset.bank);
         else if (action === "market-action") marketAction(actionEl.dataset.mode);
+        else if (action === "world-market-action") worldMarketAction(actionEl.dataset.mode);
+        else if (action === "trade-route-action") tradeRouteAction(actionEl.dataset.route, actionEl.dataset.mode);
         else if (action === "company-action") companyAction(actionEl.dataset.company, actionEl.dataset.mode);
         else if (action === "industry-action") industryAction(actionEl.dataset.id, actionEl.dataset.mode);
         else if (action === "budget-action") fiscalBudgetAction(actionEl.dataset.mode);
         else if (action === "politics-action") politicsAction(actionEl.dataset.politics);
         else if (action === "campaign-action") campaignAction(actionEl.dataset.mode);
+        else if (action === "succession-action") successionAction(actionEl.dataset.mode);
         else if (action === "law-package") lawPackageAction(actionEl.dataset.law);
         else if (action === "bill-action") legislationAction(actionEl.dataset.id, actionEl.dataset.mode);
         else if (action === "force-action") politicalForceAction(actionEl.dataset.id, actionEl.dataset.mode);
+        else if (action === "elite-action") eliteAction(actionEl.dataset.id, actionEl.dataset.mode);
         else if (action === "replace-minister") replaceMinister(num(actionEl.dataset.index));
         else if (action === "cabinet-action") cabinetAction(actionEl.dataset.mode);
         else if (action === "minister-action") ministerAction(num(actionEl.dataset.index), actionEl.dataset.mode);
@@ -11696,19 +12798,24 @@
         advanceDate(game.date);
         simulateClimateSystem(game);
         simulateInfrastructure(game);
+        simulateWorldMarket(game);
         simulateEconomy(game);
         simulatePrivateSector(game);
         simulatePolitics(game);
+        simulateEliteSystem(game);
+        simulateSuccessionSystem(game);
         simulateJusticeSystem(game);
         simulateCabinet(game);
         simulatePopulation(game);
         simulateTech(game);
         simulateRegions(game);
+        simulateFederationSystem(game);
         simulateDiplomacy(game);
         simulateIntelligenceSystem(game);
         simulateMilitary(game);
         simulateGovernance(game);
         simulateInformationSpace(game);
+        simulateStatisticsSystem(game);
         simulateChronicle(game);
         if (Math.random() < .18) generateDailyNews(game);
         if (Math.random() < .018) triggerRandomEvent(game);
@@ -12201,8 +13308,10 @@
 
       function finalizeElection(game,results,early=false) {
         const p=game.politics,el=p.elections,winner=results.national[0],incumbent=el.candidates.find(c=>c.incumbent),incumbentResult=results.national.find(x=>x.candidate.id===incumbent?.id)?.share||0;
-        const won=!!winner.candidate.incumbent;
+        const administrationWon=!!winner.candidate.incumbent,successorWon=administrationWon&&!!winner.candidate.isSuccessor,won=administrationWon&&!successorWon;
         const previousPresident=game.country.president.name;
+        const succession=game.succession||migrateSuccessionSystem(game);
+        closePoliticalEra(game,won?"переизбрание":successorWon?"плановая передача власти преемнику":"мирная передача власти оппозиции",winner.candidate.name);
         if(!won){
           game.country.president.name=winner.candidate.name;
           game.country.president.party=winner.candidate.party;
@@ -12212,15 +13321,22 @@
           p.cabinet.cohesion=clamp(p.cabinet.cohesion-12,0,100);
           applyGroupApprovalImpact(game,{all:2},"мирная передача власти");
         }else applyGroupApprovalImpact(game,{all:3.2},"переизбрание президента");
+        if(won){succession.termsServed+=1;succession.termNumber+=1;succession.transitionRisk=clamp(succession.transitionRisk-4,0,100);}
+        else{
+          succession.peacefulTransfers+=1;if(succession.transitionRisk>72&&!succession.transitionPlan)succession.contestedTransfers+=1;
+          succession.termsServed=1;succession.termNumber=1;succession.designatedSuccessor=null;succession.transitionRisk=clamp((100-succession.readiness)*.34+(succession.transitionPlan?-8:5),0,100);
+        }
         p.coalition=clamp(winner.share+rnd(4,14),25,85);
         p.opposition=clamp(100-winner.share+rnd(-5,6),15,90);
         p.electionInDays=game.politics.constitution.termYears*365;
-        el.lastElection={date:formatDate(game.date),winner:winner.candidate.name,party:winner.candidate.party,share:winner.share,turnout:results.turnout,incumbentResult,won,previousPresident,regionalResults:results.regional};
+        el.lastElection={date:formatDate(game.date),winner:winner.candidate.name,party:winner.candidate.party,share:winner.share,turnout:results.turnout,incumbentResult,won,administrationWon,successorWon,previousPresident,regionalResults:results.regional};
         el.regionalResults=results.regional;el.status="cycle";el.phase="управление";el.active=false;el.round=1;el.runoffIds=[];el.daysUntil=p.electionInDays;
-        const title=won?"Президент переизбран":"Состоялась передача президентской власти";
-        const text=won?`${winner.candidate.name} получает новый мандат с результатом ${pct(winner.share,1)} при явке ${pct(results.turnout,1)}.`:`${previousPresident} завершает срок. Президентом становится ${winner.candidate.name} (${winner.candidate.party}) с результатом ${pct(winner.share,1)}.`;
+        startPoliticalEra(game,won?"переизбрание действующего президента":successorWon?"победа кандидата преемственности на выборах":"победа оппозиции и мирная передача полномочий");
+        const title=won?"Президент переизбран":successorWon?"Состоялась плановая передача президентской власти":"Состоялась передача президентской власти";
+        const text=won?`${winner.candidate.name} получает новый мандат с результатом ${pct(winner.share,1)} при явке ${pct(results.turnout,1)}.`:`${previousPresident} завершает срок. Президентом становится ${winner.candidate.name} (${winner.candidate.party}) с результатом ${pct(winner.share,1)}. Передача дел ${succession.transitionPlan?"идет по утвержденному плану":"потребует срочной межведомственной координации"}.`;
         pushNews(game,"Выборы",title,text);
         el.candidates=createElectionCandidates(game);
+        syncSuccessionCandidate(game);
         return {result:incumbentResult,won,winner:winner.candidate.name,share:winner.share,turnout:results.turnout,pending:false};
       }
 
@@ -15207,6 +16323,11 @@
         if (!state.information?.outlets || !state.information?.narratives) migrateInformationSystem(state);
         if (!state.intelligence?.dossiers || !state.intelligence?.operations) migrateIntelligenceSystem(state);
         if (!state.climate?.resources || state.regions.some(region => !region.climate)) migrateClimateSystem(state);
+        if (!state.worldMarket?.commodities || !state.worldMarket?.routes) migrateWorldMarketSystem(state);
+        if (!state.elites?.actors) migrateEliteSystem(state);
+        if (!state.statistics?.observed) migrateStatisticsSystem(state);
+        if (!state.federation || state.regions.some(region => !region.identity)) migrateFederationSystem(state);
+        if (!state.succession?.currentEra) migrateSuccessionSystem(state);
         if (!p.elections?.candidates) migrateElectionSystem(state);
         if (!p.justice?.cases) migrateJusticeSystem(state);
         if (!state.diplomacy?.law) migrateInternationalLaw(state);
@@ -15227,6 +16348,9 @@
         const information=state.information;["publicMood","governmentCredibility","pluralism","misinformation","mediaLiteracy","transparency","pressAccess","crisisCommunication","echoChambers","factChecking"].forEach(key=>information[key]=clamp(num(information[key]),0,100));information.briefingCooldown=Math.max(0,Math.round(num(information.briefingCooldown)));information.outlets=information.outlets.map((item,index)=>normalizeInformationOutlet(item,null,index)).slice(0,18);information.narratives=information.narratives.map((item,index)=>normalizeInformationNarrative(item,null,index)).slice(0,16);information.history=(information.history||[]).slice(0,70);syncLegacyInformation(state);
         const intelligence=state.intelligence;["humint","sigint","cyber","analysis","counterIntel","covertAction","oversight","secrecy","foreignNetworks","domesticRisk","cyberThreat","threatLevel"].forEach(key=>intelligence[key]=clamp(num(intelligence[key]),0,100));intelligence.budget=Math.max(0,num(intelligence.budget));intelligence.operations=(intelligence.operations||[]).map(normalizeIntelligenceOperation).slice(0,24);intelligence.dossiers=(intelligence.dossiers||[]).map(item=>{const country=state.diplomacy.countries.find(country=>country.id===item.countryId);return country?normalizeIntelligenceDossier(item,country,state):null;}).filter(Boolean).slice(0,36);intelligence.reports=(intelligence.reports||[]).slice(0,70);state.governance.intelligence.counterIntel=intelligence.counterIntel;state.governance.intelligence.foreignNetworks=intelligence.foreignNetworks;state.governance.intelligence.domesticRisk=intelligence.domesticRisk;state.governance.intelligence.cyberThreat=intelligence.cyberThreat;
         const climate=state.climate;["emissions","resilience","preparedness","adaptation","mitigation","waterStress","biodiversity","airQuality","responseCapacity"].forEach(key=>climate[key]=clamp(num(climate[key]),0,100));climate.temperatureAnomaly=clamp(num(climate.temperatureAnomaly,1.18),.2,4.8);climate.emissionsTrend=clamp(num(climate.emissionsTrend),-5,5);climate.emergencyReserve=Math.max(0,num(climate.emergencyReserve));["fossil","nuclear","renewable"].forEach(key=>climate.energyMix[key]=clamp(num(climate.energyMix[key]),0,100));const energyTotal=climate.energyMix.fossil+climate.energyMix.nuclear+climate.energyMix.renewable||100;["fossil","nuclear","renewable"].forEach(key=>climate.energyMix[key]=climate.energyMix[key]/energyTotal*100);climate.resources=(climate.resources||[]).map((item,index)=>normalizeClimateResource(item,null,index)).slice(0,18);climate.emergencies=(climate.emergencies||[]).map(normalizeClimateEmergency).slice(0,18);climate.history=(climate.history||[]).slice(0,70);
+        const worldMarket=state.worldMarket;["tariffAverage","logisticsReliability","importDependency","exportDiversity","insuranceRisk","reserveCoverage","customsEfficiency","corridorDiplomacy"].forEach(key=>worldMarket[key]=clamp(num(worldMarket[key]),0,100));worldMarket.freightIndex=clamp(num(worldMarket.freightIndex,100),20,300);worldMarket.tradeBalance=num(worldMarket.tradeBalance);const commodityDefaults=new Map(worldCommodityCatalog().map(item=>[item.id,item]));worldMarket.commodities=worldMarket.commodities.map(item=>normalizeWorldCommodity(item,commodityDefaults.get(item.id)||worldCommodityCatalog()[0])).slice(0,16);worldMarket.routes=worldMarket.routes.map((item,index)=>normalizeTradeRoute(item,null,index)).slice(0,16);
+        const elites=state.elites;["captureRisk","pluralism","transparency","networkStability","presidentialAuthority"].forEach(key=>elites[key]=clamp(num(elites[key]),0,100));elites.actors=elites.actors.map((actor,index)=>normalizeEliteActor(actor,null,index)).slice(0,24);elites.unresolvedFavors=Math.max(0,Math.round(num(elites.unresolvedFavors)));elites.log=(elites.log||[]).slice(0,36);
+        const statistics=state.statistics;["quality","independence","coverage","timeliness","methodology","auditCapacity","openData","manipulation","publicTrust","revisionRisk"].forEach(key=>statistics[key]=clamp(num(statistics[key]),0,100));statistics.daysUntilRelease=Math.max(0,Math.round(num(statistics.daysUntilRelease)));statistics.reports=(statistics.reports||[]).map(normalizeStatisticsRecord).filter(Boolean).slice(0,36);statistics.revisions=(statistics.revisions||[]).slice(0,36);
         p.popularity = clamp(p.popularity, 0, 100);
         p.corruption = clamp(p.corruption, 0, 100);
         p.lobbyism = clamp(p.lobbyism, 0, 100);
@@ -15284,7 +16408,9 @@
         normalizeMilitaryStocks(m);
         m.wars = (m.wars || []).map(war => normalizeWar(war, state));
         state.regions = (state.regions || []).map(ensureRegionDefaults);
-        state.regions.forEach((region,index)=>{region.demography=Object.assign(defaultRegionDemography(region,index),region.demography||{});const rd=region.demography;["urbanShare","housingPressure","attractiveness"].forEach(key=>rd[key]=clamp(num(rd[key]),0,key==="housingPressure"?120:100));rd.housingCapacity=Math.max(1000,num(rd.housingCapacity,region.population*1.04));rd.workers=Math.max(0,num(rd.workers));region.climate=Object.assign(defaultRegionClimate(region,index),region.climate||{});const rc=region.climate;["floodRisk","droughtRisk","fireRisk","heatRisk","stormRisk","vulnerability","preparedness"].forEach(key=>rc[key]=clamp(num(rc[key]),0,100));rc.displaced=Math.max(0,Math.round(num(rc.displaced)));});
+        state.regions.forEach((region,index)=>{region.demography=Object.assign(defaultRegionDemography(region,index),region.demography||{});const rd=region.demography;["urbanShare","housingPressure","attractiveness"].forEach(key=>rd[key]=clamp(num(rd[key]),0,key==="housingPressure"?120:100));rd.housingCapacity=Math.max(1000,num(rd.housingCapacity,region.population*1.04));rd.workers=Math.max(0,num(rd.workers));region.climate=Object.assign(defaultRegionClimate(region,index),region.climate||{});const rc=region.climate;["floodRisk","droughtRisk","fireRisk","heatRisk","stormRisk","vulnerability","preparedness"].forEach(key=>rc[key]=clamp(num(rc[key]),0,100));rc.displaced=Math.max(0,Math.round(num(rc.displaced)));region.identity=normalizeRegionIdentity(region.identity,defaultRegionIdentity(state,region,index));});
+        const federation=state.federation;["cohesion","centerLegitimacy","autonomyBalance","culturalPluralism","fiscalSolidarity","separatismRisk"].forEach(key=>federation[key]=clamp(num(federation[key]),0,100));federation.councilCooldown=Math.max(0,Math.round(num(federation.councilCooldown)));federation.disputes=(federation.disputes||[]).slice(0,18);federation.log=(federation.log||[]).slice(0,32);
+        const succession=state.succession;["readiness","continuity","transitionRisk","institutionalMemory","caretakerNeutrality","archiveQuality"].forEach(key=>succession[key]=clamp(num(succession[key]),0,100));succession.termsServed=Math.max(1,Math.round(num(succession.termsServed,1)));succession.termNumber=Math.max(1,Math.round(num(succession.termNumber,1)));succession.currentEra=normalizePoliticalEra(succession.currentEra);succession.eras=(succession.eras||[]).map(item=>normalizePoliticalEra(item)).slice(0,24);succession.log=(succession.log||[]).slice(0,40);
         const infrastructure=state.infrastructure;["reliability","maintenanceBacklog","freightIndex","digitalCoverage","outageRisk","investmentEfficiency"].forEach(key=>infrastructure[key]=clamp(num(infrastructure[key]),0,key==="freightIndex"?110:100));infrastructure.powerReserve=clamp(num(infrastructure.powerReserve),-45,55);infrastructure.waterReserve=clamp(num(infrastructure.waterReserve),-45,55);infrastructure.maintenanceBudget=Math.max(0,num(infrastructure.maintenanceBudget));infrastructure.edges=infrastructure.edges.map(edge=>normalizeInfrastructureEdge(edge)).slice(0,160);infrastructure.history=(infrastructure.history||[]).slice(0,60);
         state.diplomacy.countries = (state.diplomacy.countries || []).map(country => ensureDiplomaticAI(ensureCountryAssets(country)));
         state.diplomacy.pressureLog ||= [];
@@ -15298,12 +16424,24 @@
         const final = asNumber ? num(value) : value;
         if (path.startsWith("selectedRegion.")) {
           const r = state.regions.find(x => x.id === selectedRegionId);
-          if (r) r[path.split(".")[1]] = final;
+          const parts = path.split(".").slice(1);
+          if (r) {
+            let obj = r;
+            for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
+            obj[parts[parts.length - 1]] = final;
+            normalizeCore();
+          }
           return;
         }
         if (path.startsWith("selectedCountry.")) {
           const c = state.diplomacy.countries.find(x => x.id === selectedCountryId);
-          if (c) c[path.split(".")[1]] = final;
+          const parts = path.split(".").slice(1);
+          if (c) {
+            let obj = c;
+            for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
+            obj[parts[parts.length - 1]] = final;
+            normalizeCore();
+          }
           return;
         }
         const parts = path.split(".");
