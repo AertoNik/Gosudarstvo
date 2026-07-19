@@ -3888,7 +3888,7 @@
         loaded.country.flag.image = sanitizeImageData(loaded.country.flag.image);
         loaded.country.coatImage = sanitizeImageData(loaded.country.coatImage);
         loaded.country.president.photo = sanitizeImageData(loaded.country.president.photo);
-        loaded.version = 14;
+        loaded.version = 15;
         loaded.news = Array.isArray(loaded.news)
           ? loaded.news.filter(item => item && typeof item === "object" && !Array.isArray(item)).slice(0, 240)
           : [];
@@ -4100,7 +4100,55 @@
         }
         fiscal.activeYear = year;
         e.fiscal = fiscal;
+        repairEconomicScale(game);
         refreshFiscalProjections(game);
+      }
+
+      function repairEconomicScale(game) {
+        const e = game.economy;
+        const gdp = Math.max(1000, num(e.gdp, 642000));
+        e.gdp = gdp;
+        const repaired = [];
+        const resetIfAbove = (key, maximumShare, targetShare) => {
+          const rawValue = Number(e[key]);
+          const value = num(e[key], 0);
+          if (!Number.isFinite(rawValue) || value > gdp * maximumShare) {
+            e[key] = gdp * targetShare;
+            repaired.push(key);
+          }
+        };
+        if (num(e.modelVersion, 0) < 2) {
+          resetIfAbove("exports", .72, .18);
+          resetIfAbove("imports", .72, .16);
+          resetIfAbove("investments", .48, .085);
+          resetIfAbove("budget", .65, .12);
+          resetIfAbove("reserves", 1.2, .16);
+          resetIfAbove("debt", 5, .82);
+          if (!Number.isFinite(Number(e.inflation)) || e.inflation > 35) {
+            e.inflation = 12;
+            repaired.push("inflation");
+          }
+          if (!Number.isFinite(Number(e.stockIndex)) || e.stockIndex > 250000) {
+            e.stockIndex = 4200;
+            repaired.push("stockIndex");
+          }
+        }
+        e.modelVersion = 2;
+        e.macro = Object.assign({
+          structuralGrowth: clamp(num(e.growth, 2), -8, 8),
+          inflationTarget: clamp(num(e.inflation, 5), .5, 30),
+          exportTarget: gdp * .17,
+          importTarget: gdp * .15,
+          tradeAccess: 50
+        }, e.macro || {});
+        e.macro.structuralGrowth = clamp(num(e.macro.structuralGrowth, e.growth), -8, 8);
+        e.macro.inflationTarget = clamp(num(e.macro.inflationTarget, e.inflation), .5, 30);
+        e.macro.exportTarget = Math.max(0, num(e.macro.exportTarget, gdp * .17));
+        e.macro.importTarget = Math.max(0, num(e.macro.importTarget, gdp * .15));
+        e.macro.tradeAccess = clamp(num(e.macro.tradeAccess, 50), 0, 100);
+        if (repaired.length) {
+          e.lastScaleRepair = `Исправлены несоразмерные показатели старой модели: ${repaired.join(", ")}.`;
+        } else e.lastScaleRepair ||= "";
       }
 
       function defaultFinancialSystem() {
@@ -4183,6 +4231,7 @@
 
       function defaultEconomy() {
         return {
+          modelVersion: 2,
           gdp: 642000,
           inflation: 5.7,
           unemployment: 6.2,
@@ -4204,6 +4253,8 @@
           bankruptcies: 1.3,
           growth: 2.4,
           emission: 0,
+          macro: { structuralGrowth: 2.4, inflationTarget: 5.7, exportTarget: 110000, importTarget: 97000, tradeAccess: 50 },
+          lastScaleRepair: "",
           taxes: { income: 15, vat: 18, corporate: 20, property: 2.2, export: 4 },
           spending: { defense: 14, health: 13, education: 14, infrastructure: 15, welfare: 18, science: 8, security: 8 },
           industries: defaultIndustries(),
@@ -6770,7 +6821,12 @@
         market.reserveCoverage = clamp(market.reserveCoverage - Math.max(0, 55 - market.logisticsReliability) * .0014 + (game.economy.supply?.food > 80 ? .003 : -.001), 0, 100);
         market.corridorDiplomacy = clamp(market.corridorDiplomacy + (avg(game.diplomacy.countries.filter(country => market.routes.some(route => route.partnerId === country.id)), "relations") - market.corridorDiplomacy) * .0008, 0, 100);
         const pricePressure = Math.max(0, commodityPriceIndex(game) - 100);
-        game.economy.inflation = clamp(game.economy.inflation + pricePressure * market.importDependency / 100 * .000012 + Math.max(0, 62 - market.logisticsReliability) * .00008, -5, 80);
+        market.inflationPressure = clamp(
+          pricePressure * market.importDependency / 100 * .04
+          + Math.max(0, 62 - market.logisticsReliability) * .035,
+          0,
+          18
+        );
         game.economy.supplyShock = clamp(game.economy.supplyShock + Math.max(0, 65 - market.logisticsReliability) * .0012 - market.reserveCoverage * .00022, 0, 100);
         const supply = game.economy.supply || (game.economy.supply = defaultSupplyStocks());
         for (const item of market.commodities) {
@@ -6898,7 +6954,7 @@
         const population = defaultPopulation(populationTotal);
         const diplomacy = { countries: createWorldCountries(country.neighbors), organizations: defaultOrganizations(), inbox: [], pressureLog: [], worldLog: [], globalTension: 34 };
         const game = {
-          version: 14,
+          version: 15,
           createdAt: new Date().toISOString(),
           lastSaved: new Date().toISOString(),
           theme: "dark",
@@ -7069,10 +7125,48 @@
         return game.economy.fiscal?.years?.find(item => item.year === year) || null;
       }
 
+      function effectiveDebtRate(game = state) {
+        const e = game.economy;
+        const debtRatio = num(e.debt) / Math.max(1, num(e.gdp));
+        return clamp(2 + num(e.keyRate, 8) * .55 + Math.max(0, debtRatio - .75) * 3.2, 2, 22);
+      }
+
+      function externalSectorTargets(game, industryHealth = calcIndustryHealth(game)) {
+        const e = game.economy;
+        const countries = game.diplomacy?.countries || [];
+        const openPartners = countries.filter(country => country.relations > 35 && !country.sanctions && !country.embargo && !country.war);
+        const relationScore = openPartners.length
+          ? openPartners.reduce((sum, country) => sum + num(country.relations, 40), 0) / openPartners.length
+          : 28;
+        const partnerBreadth = countries.length ? openPartners.length / countries.length : .3;
+        const tradeAccess = clamp(relationScore * .55 + partnerBreadth * 45, 0, 100);
+        const market = game.worldMarket || {};
+        const resources = calcResourceBase(game);
+        const regionCount = Math.max(1, game.regions?.length || 1);
+        const resourceIntensity = clamp(resourceValue(resources) / (regionCount * 420), 0, 1.5);
+        const logistics = clamp(num(market.logisticsReliability, 65), 0, 100);
+        const sanctionsShare = countries.length ? countries.filter(country => country.sanctions || country.embargo).length / countries.length : 0;
+        const exportShare = clamp(
+          .115 + resourceIntensity * .055 + totalBuildings("ports", game) * .003
+          + (logistics - 60) * .0012 + (tradeAccess - 50) * .0007
+          + (industryHealth - .88) * .08 - sanctionsShare * .09,
+          .07,
+          .48
+        );
+        const importShare = clamp(
+          .105 + num(market.importDependency, 42) * .00075
+          + num(e.supplyShock) * .0009 + Math.max(0, .9 - industryHealth) * .09
+          - totalBuildings("farms", game) * .0015 - resourceIntensity * .012,
+          .07,
+          .45
+        );
+        return { exports: e.gdp * exportShare, imports: e.gdp * importShare, tradeAccess };
+      }
+
       function projectedExpensesFor(game, allocations) {
         const e = game.economy;
         const spend = Object.values(allocations || e.spending).reduce((a, b) => a + num(b), 0) / 100;
-        return e.gdp * spend * .23 + e.debt * (e.keyRate / 100) / 12 + e.pensions * game.population.total / 1000000 * .09;
+        return e.gdp * spend * .23 + e.debt * effectiveDebtRate(game) / 100 + e.pensions * game.population.total / 1000000 * .09;
       }
 
       function refreshFiscalProjections(game = state) {
@@ -7096,8 +7190,17 @@
           const previous = fiscalYearFor(game, fiscal.activeYear);
           if (previous) {
             previous.status = "closed";
-            previous.closingBalance = e.budget;
             previous.deficit = previous.actualExpense - previous.actualRevenue;
+            const protectedCash = e.gdp * (.075 + clamp(num(fiscal.reserveRule, 6), 0, 20) * .0025);
+            const excessCash = Math.max(0, e.budget - protectedCash);
+            const debtPayment = Math.min(e.debt, excessCash * .58);
+            e.budget -= debtPayment;
+            e.debt -= debtPayment;
+            const reserveRoom = Math.max(0, e.gdp * .35 - e.reserves);
+            const reserveTransfer = Math.min(reserveRoom, Math.max(0, e.budget - protectedCash) * .35);
+            e.budget -= reserveTransfer;
+            e.reserves += reserveTransfer;
+            previous.closingBalance = e.budget;
             previous.debtEnd = e.debt;
             fiscal.lastClosing = previous.closingBalance;
             pushNews(game, "Экономика", `Бюджет ${previous.year} года закрыт`, `${previous.deficit <= 0 ? "Профицит" : "Дефицит"} составил ${money(Math.abs(previous.deficit))}. Госдолг на конец года: ${money(e.debt)}.`);
@@ -7134,7 +7237,7 @@
       function calcIncome(game = state) {
         const e = game.economy;
         const t = e.taxes;
-        const base = e.gdp * ((t.income * .19 + t.vat * .23 + t.corporate * .18 + t.property * .05 + t.export * .04) / 100);
+        const base = e.gdp * ((t.income * .36 + t.vat * .42 + t.corporate * .12 + t.property * .08 + t.export * .08) / 100);
         const industrialTaxes = (e.industries || []).reduce((sum, sector) => sum + num(sector.output) * (1 + num(sector.stateShare) / 180), 0) * 5.2;
         const privateTaxes = Math.max(0,num(e.privateSector?.taxBase)) * t.corporate / 100;
         const shadow = game.shadowEconomy;
@@ -7145,7 +7248,7 @@
       function calcExpenses(game = state) {
         const e = game.economy;
         const spend = Object.values(e.spending).reduce((a, b) => a + b, 0) / 100;
-        return e.gdp * spend * .23 + e.debt * (e.keyRate / 100) / 12 + e.pensions * game.population.total / 1000000 * .09 + num(game.infrastructure?.maintenanceBudget,0) + num(game.intelligence?.budget,0) + num(game.climate?.emergencyReserve,0) * .08;
+        return e.gdp * spend * .23 + e.debt * effectiveDebtRate(game) / 100 + e.pensions * game.population.total / 1000000 * .09 + num(game.infrastructure?.maintenanceBudget,0) + num(game.intelligence?.budget,0) + num(game.climate?.emergencyReserve,0) * .08;
       }
 
       function calcArmyPower(game = state) {
@@ -8746,6 +8849,13 @@
               ${metric("Госдолг", money(e.debt), `${((e.debt / e.gdp) * 100).toFixed(1)}% ВВП`, e.debt / e.gdp < .6 ? "good" : "warn")}
               ${metric("Резервы", money(e.reserves), `Курс 1$ = ${e.exchangeRate.toFixed(2)} ${esc(state.country.currency)}`, e.reserves > e.imports * .5 ? "good" : "warn")}
               ${metric("Экспорт / импорт", `${money(e.exports)} / ${money(e.imports)}`, `Торговый баланс ${money(e.exports - e.imports)}`, e.exports >= e.imports ? "good" : "bad")}
+            </div>
+            ${e.lastScaleRepair ? `<div class="decision-banner good"><strong>Экономические показатели сохранения восстановлены</strong><span class="subtle">${esc(e.lastScaleRepair)} Новая модель удерживает денежные показатели в пропорции к ВВП.</span></div>` : ""}
+            <div class="kpi-strip">
+              <div class="kpi"><span>Структурный рост</span><strong>${pct(e.macro?.structuralGrowth || 0,1)}</strong><small class="subtle">текущий ${pct(e.growth,1)}</small></div>
+              <div class="kpi"><span>Расчетная инфляция</span><strong>${pct(e.macro?.inflationTarget || 0,1)}</strong><small class="subtle">фактическая ${pct(e.inflation,1)}</small></div>
+              <div class="kpi"><span>Целевой экспорт</span><strong>${money(e.macro?.exportTarget || 0)}</strong><small class="subtle">доступ к рынкам ${pct(e.macro?.tradeAccess || 0,0)}</small></div>
+              <div class="kpi"><span>Стоимость долга</span><strong>${pct(effectiveDebtRate(state),1)}</strong><small class="subtle">эффективная годовая ставка</small></div>
             </div>
             ${renderShadowEconomyPanel()}
             <div class="grid split">
@@ -13182,7 +13292,7 @@
           }
           const domesticDemand = 1 + (e.growth - 2) * .012 + (game.population.happiness - 50) * .0015 + (sector.id === "defense" ? game.military.wars.length * .18 : 0);
           sector.demand = clamp(sector.demand * .996 + sector.capacity * domesticDemand * .004, 18, 220);
-          const efficiencyFactor = .48 + sector.efficiency / 190;
+          const efficiencyFactor = .74 + sector.efficiency / 205;
           const capacityBonus = sector.id === "energy" ? energyBonus : ["machinery", "components", "consumer", "defense"].includes(sector.id) ? factoryBonus : 0;
           const disruption = clamp(1 - warPenalty - e.supplyShock * .0012, .62, 1.05);
           const targetOutput = sector.capacity * efficiencyFactor * clamp(inputFactor + capacityBonus + techBonus, .1, 1.14) * disruption * networkFactor;
@@ -13191,8 +13301,10 @@
           sector.inputFactor = inputFactor;
           sector.bottleneck = inputFactor < .72 ? weakest : "";
           const currentStock = num(supply[sector.product], 75);
-          const marketImport = currentStock < 24 ? .095 : currentStock < 48 ? .038 : 0;
-          const stockDelta = (sector.output / Math.max(1, sector.demand) - 1) * .14 + marketImport;
+          const coverage = sector.output / Math.max(1, sector.demand);
+          const targetStock = clamp(66 + (coverage - .88) * 92 + (game.worldMarket?.logisticsReliability || 60) * .08, 28, 135);
+          const marketImport = currentStock < 30 ? .065 : currentStock < 50 ? .028 : currentStock < 68 ? .007 : 0;
+          const stockDelta = (targetStock - currentStock) * .0032 + marketImport;
           supply[sector.product] = clamp(currentStock + stockDelta, 0, 180);
           if (marketImport > 0) emergencyImports += marketImport;
           shortages += Math.max(0, .78 - Math.min(inputFactor, sector.output / Math.max(1, sector.demand)));
@@ -13362,7 +13474,7 @@
         const critical = surviving.filter(bank=>bank.status==="критический").length;
         f.crisisLevel = clamp(f.crisisLevel+(100-financialHealth(game))*.002+critical*.018-f.supervision*.0008-f.depositConfidence*.00055,0,100);
         f.stability = financialHealth(game);
-        return { growthImpact:clamp((f.creditGrowth-5)*.035-(50-f.stability)*.018,-1.8,1.2), investmentFactor:clamp(1+(f.creditGrowth-5)/9000-(50-f.stability)/12000,.985,1.012) };
+        return { growthImpact:clamp((f.creditGrowth-5)*.035-(50-f.stability)*.018,-1.8,1.2), investmentGrowth:clamp((f.creditGrowth-5)*.35-(50-f.stability)*.18,-18,20) };
       }
 
       function edgeEffectiveScore(edge) {
@@ -13429,7 +13541,7 @@
           const profit=company.revenue*company.profitMargin/100/365,interest=company.debt*(e.keyRate+2.8)/100/365;company.cash=clamp(company.cash+profit-interest,-company.revenue*1.2,company.revenue*2);company.debt=Math.max(0,company.debt+Math.max(0,-profit)*.16-interest*.03-Math.max(0,profit)*.025);
           const invest=Math.max(0,profit)*clamp((ps.businessConfidence+company.innovation)/140,.25,1.35);investment+=invest;company.productivity=clamp(company.productivity+invest/Math.max(500,company.revenue)*.018,5,140);company.innovation=clamp(company.innovation+invest/Math.max(800,company.revenue)*.012,0,100);
           const jobsDelta=clamp((revenueGrowth*company.employees*.3)+(company.profitMargin>8?company.employees*.00003:-company.employees*.000025)-laborTightness*company.employees*.000015,-Math.max(1,company.employees*.003),Math.max(1,company.employees*.003));company.employees=Math.max(0,Math.round(company.employees+jobsDelta));if(jobsDelta>0)hires+=jobsDelta;else layoffs-=jobsDelta;
-          company.wage=Math.max(100,company.wage*(1+(e.inflation/100)/365*.62+(company.productivity-55)/800000+laborTightness*.00008));company.trend=clamp(company.trend*.78+revenueGrowth*36500*.12+company.profitMargin*.025+rnd(-.18,.18),-20,20);company.capitalization=Math.max(1,company.capitalization*(1+company.trend/3650));company.expansionDays=Math.max(0,company.expansionDays-1);
+          company.wage=Math.max(100,company.wage*(1+(e.inflation/100)/365*.62+(company.productivity-55)/800000+laborTightness*.00008));company.trend=clamp(company.trend*.78+revenueGrowth*36500*.12+company.profitMargin*.025+rnd(-.18,.18),-20,20);company.capitalization=clamp(company.capitalization*(1+company.trend/36500),1,Math.max(100,company.revenue*14));company.expansionDays=Math.max(0,company.expansionDays-1);
           company.status=company.cash<-company.revenue*.22||company.debt>company.revenue*1.65||company.profitMargin<-14?"кризис":company.profitMargin<0||company.debt>company.revenue?"под наблюдением":"работает";
           if(company.status==="кризис"&&company.cash<-company.revenue*.55&&Math.random()<.008)triggerCorporateFailure(game,company);
         }
@@ -13456,75 +13568,113 @@
       function simulateEconomy(game) {
         const e = game.economy;
         const pop = game.population;
-        const infra = totalBuildingValue(game, ["roads","ports","airports","plants"]);
-        const plants = totalBuildings("plants", game);
         const factories = totalBuildings("factories", game);
         const farms = totalBuildings("farms", game);
-        const ports = totalBuildings("ports", game);
-        const oil = totalBuildings("oil", game);
-        const gas = totalBuildings("gas", game);
-        const resources = calcResourceBase(game);
         const industryHealth = simulateProductionChains(game);
         const finance = simulateFinancialSystem(game);
         const privateSector = game.economy.privateSector || defaultPrivateSector(game);
         const education = pop.education / 100;
         const taxLoad = (e.taxes.income + e.taxes.vat + e.taxes.corporate + e.taxes.export) / 100;
         const stability = (game.politics.popularity + 100 - game.politics.corruption + pop.happiness) / 300;
+        const infrastructure = infrastructureEfficiency(game);
+        const privateImpact = clamp((privateSector.businessConfidence - 50) * .012 + (infrastructure - 1) * 1.1 - privateSector.insolvencyRate * .035, -1.4, 1.3);
+        const debtRatio = e.debt / Math.max(1, e.gdp);
         const targetAnnualGrowth = clamp(
-          e.growth
-          + infra * .035
-          + calcProjectEffect(game) * .015
-          + (calcServiceScore(game) - 55) * .018
-          + (education - .55) * 1.8
-          + (stability - .5) * 2.5
-          + (industryHealth - .82) * 4.2
-          + finance.growthImpact
-          + clamp((privateSector.businessConfidence-50)*.012+(infrastructureEfficiency(game)-1)*1.1-privateSector.insolvencyRate*.035,-1.4,1.3)
-          - Math.max(0, taxLoad - .38) * 3.5
-          - Math.max(0, e.inflation - 4) * .18
-          - game.military.wars.length * 2.5,
+          1.15
+          + clamp(calcProjectEffect(game), 0, 100) * .012
+          + (calcServiceScore(game) - 55) * .012
+          + (education - .55) * 1.5
+          + (stability - .55) * 1.8
+          + (industryHealth - .9) * 3.2
+          + (infrastructure - 1) * 1.35
+          + finance.growthImpact * .55
+          + privateImpact * .55
+          - Math.max(0, taxLoad - .68) * 2.2
+          - Math.max(0, e.inflation - 6) * .12
+          - e.supplyShock * .018
+          - Math.max(0, debtRatio - .75) * .38
+          - game.military.wars.length * 2.2,
           -8,
-          10
+          8
         );
-        const growthDaily = targetAnnualGrowth / 100 / DAYS_PER_YEAR;
+        e.growth = clamp(e.growth + (targetAnnualGrowth - e.growth) * .006 + rnd(-.004, .004), -10, 10);
+        e.macro ||= {};
+        e.macro.structuralGrowth = targetAnnualGrowth;
+        const growthDaily = e.growth / 100 / DAYS_PER_YEAR;
         e.gdp = Math.max(1000, e.gdp * (1 + growthDaily));
-        const income = calcIncome(game) / 365;
-        const expenses = calcExpenses(game) / 365;
-        e.budget += income - expenses;
-        if (e.budget < -e.gdp * .08) {
-          e.debt += Math.abs(e.budget);
-          e.budget = 0;
-          e.inflation += .08;
-          game.politics.popularity -= .04;
+        const income = calcIncome(game) / DAYS_PER_YEAR;
+        const expenses = calcExpenses(game) / DAYS_PER_YEAR;
+        const fiscalBalance = income - expenses;
+        if (fiscalBalance >= 0) e.budget += fiscalBalance;
+        else {
+          const financingNeed = -fiscalBalance;
+          const liquidityFloor = e.gdp * .03;
+          const cashUse = Math.min(financingNeed, Math.max(0, e.budget - liquidityFloor));
+          e.budget -= cashUse;
+          e.debt += financingNeed - cashUse;
         }
-        e.debt = Math.max(0, e.debt + Math.max(0, expenses - income) * .18 - Math.max(0, income - expenses) * .05);
+        e.budget = Math.max(0, e.budget);
+        e.debt = clamp(e.debt, 0, e.gdp * 6);
         simulateFiscalPolicy(game, income, expenses);
-        e.reserves = Math.max(0, e.reserves + (e.exports - e.imports) / DAYS_PER_YEAR * .12 - Math.max(0, e.emission) * .006);
-        const ratePressure = clamp((e.inflation - e.keyRate) * .00045, -.003, .003);
-        const welfarePressure = Math.max(0, e.spending.welfare - 24) * .00022;
-        e.inflation = clamp(e.inflation + (e.emission * .000002) + ratePressure + welfarePressure + e.supplyShock * .00022 - plants * .00012, -2, 80);
-        e.unemployment = clamp(
-          e.unemployment
-          - e.growth * .00055
-          + Math.max(0, e.taxes.corporate - 18) * .00028
-          + Math.max(0, .82 - industryHealth) * .0035
-          - factories * .00022
-          - farms * .0001,
-          1,
-          45
+
+        const external = externalSectorTargets(game, industryHealth);
+        const exportGap = clamp(external.exports / Math.max(100, e.exports) - 1, -.75, 1.5);
+        const importGap = clamp(external.imports / Math.max(100, e.imports) - 1, -.75, 1.5);
+        const insuranceRisk = num(game.worldMarket?.insuranceRisk, 30);
+        const exportAnnual = clamp(e.growth * .35 + exportGap * 14 + (external.tradeAccess - 50) * .025 - Math.max(0, insuranceRisk - 35) * .025, -14, 16);
+        const importAnnual = clamp(e.growth * .28 + importGap * 14 + e.supplyShock * .025, -12, 18);
+        e.exports = clamp(e.exports * (1 + exportAnnual / 100 / DAYS_PER_YEAR), e.gdp * .04, e.gdp * .6);
+        e.imports = clamp(e.imports * (1 + importAnnual / 100 / DAYS_PER_YEAR), e.gdp * .04, e.gdp * .58);
+        e.macro.exportTarget = external.exports;
+        e.macro.importTarget = external.imports;
+        e.macro.tradeAccess = external.tradeAccess;
+
+        e.reserves = clamp(e.reserves + (e.exports - e.imports) / DAYS_PER_YEAR * .12 - Math.max(0, e.emission) * .006, 0, e.gdp * .65);
+        const centralTarget = clamp(num(e.financial?.centralBank?.inflationTarget, 4), .5, 12);
+        const importedInflation = num(game.worldMarket?.inflationPressure, 0);
+        const emissionPressure = clamp(e.emission / Math.max(1, e.gdp) * 150, 0, 12);
+        const realRate = clamp(e.keyRate - e.inflation, -12, 18);
+        const inflationTarget = clamp(
+          centralTarget + importedInflation + e.supplyShock * .065
+          + Math.max(0, e.spending.welfare - 24) * .04 + emissionPressure
+          + Math.max(0, e.growth - 2.5) * .18 - realRate * .18,
+          .5,
+          30
         );
+        e.inflation = clamp(e.inflation + (inflationTarget - e.inflation) * .006 + rnd(-.002, .002), -2, 45);
+        e.macro.inflationTarget = inflationTarget;
+
+        const unemploymentTarget = clamp(
+          7.3 - e.growth * .48 - factories * .08 - farms * .025
+          + Math.max(0, e.taxes.corporate - 20) * .08
+          + Math.max(0, .9 - industryHealth) * 8 + e.bankruptcies * .04,
+          2.5,
+          24
+        );
+        e.unemployment = clamp(e.unemployment + (unemploymentTarget - e.unemployment) * .004 + rnd(-.0015, .0015), 1, 45);
         e.avgSalary = Math.max(e.minSalary, e.avgSalary * (1 + growthDaily * .55 + (e.inflation / 100) / DAYS_PER_YEAR * .6));
-        e.exchangeRate = clamp(e.exchangeRate * (1 + (e.inflation - e.keyRate) / 52000 - (e.reserves / Math.max(1, e.gdp)) * .00018 + e.financial.exchangePressure / 900000), 0.1, 5000);
-        e.exports = Math.max(100, e.exports * (1 + growthDaily * .35 + ports * .00002 + oil * .000025 + gas * .000022 + resourceValue(resources) * .00000008 + Math.max(0, industryHealth - .88) * .00012));
-        e.imports = Math.max(100, e.imports * (1 + pop.life * .0000007 + e.growth * .000003 - farms * .000012 - resources.agriculture * .00000004 + e.supplyShock * .000003));
-        e.investments = Math.max(0, e.investments * (1 + growthDaily * .8 + (100 - game.politics.corruption) * .000001 + (e.keyRate < 8 ? .00008 : -.000045)) * finance.investmentFactor);
-        e.smallBusiness = clamp(e.smallBusiness + (e.taxes.corporate < 18 ? .002 : -.001) + (e.unemployment < 7 ? .0008 : -.0008), 0, 100);
-        e.bankruptcies = clamp(e.bankruptcies + (e.keyRate > 13 ? .002 : -.001) + (e.growth < 0 ? .004 : -.0008), 0, 30);
-        e.growth = clamp(targetAnnualGrowth * .008 + e.growth * .992, -12, 12);
-        e.stockIndex = Math.max(100, e.stockIndex * (1 + growthDaily * 3 + (game.politics.popularity - 50) * .00001 - game.military.wars.length * .001));
+        const currentAccountRatio = (e.exports - e.imports) / Math.max(1, e.gdp);
+        const exchangeAnnual = clamp((e.inflation - inflationTarget) * .8 + e.financial.exchangePressure * .035 - currentAccountRatio * 8 - e.reserves / Math.max(1, e.gdp) * 1.1, -12, 20);
+        e.exchangeRate = clamp(e.exchangeRate * (1 + exchangeAnnual / 100 / DAYS_PER_YEAR), .1, 5000);
+
+        const investmentShare = clamp(
+          .075 + (privateSector.businessConfidence - 50) * .00045
+          + (privateSector.foreignInvestment - 50) * .0002
+          + (e.financial.creditGrowth - 5) * .0004 - Math.max(0, e.keyRate - 9) * .0015,
+          .035,
+          .22
+        );
+        const investmentTarget = e.gdp * investmentShare;
+        const investmentAnnual = clamp(num(finance.investmentGrowth) + e.growth * .4, -20, 22);
+        e.investments = clamp(e.investments + (investmentTarget - e.investments) * .0025 + e.investments * investmentAnnual / 100 / DAYS_PER_YEAR, e.gdp * .02, e.gdp * .32);
+        e.smallBusiness = clamp(e.smallBusiness + (privateSector.businessConfidence - 50) * .00008 + (e.taxes.corporate < 18 ? .001 : -.0005) - Math.max(0, e.unemployment - 8) * .00015, 0, 100);
+        const bankruptcyTarget = clamp(1.1 + Math.max(0, e.keyRate - 10) * .18 + Math.max(0, -e.growth) * .55 + e.financial.crisisLevel * .035, .4, 24);
+        e.bankruptcies = clamp(e.bankruptcies + (bankruptcyTarget - e.bankruptcies) * .004, 0, 30);
+        const stockAnnual = clamp(e.growth * 1.7 - Math.max(0, e.inflation - inflationTarget) * .8 + (game.politics.popularity - 50) * .06 - game.military.wars.length * 7 + rnd(-.6, .6), -28, 28);
+        e.stockIndex = clamp(e.stockIndex * (1 + stockAnnual / 100 / DAYS_PER_YEAR), 100, 250000);
         e.companies.forEach(c => {
           c.trend = clamp(c.trend * .7 + e.growth * .08 + rnd(-.45, .45) - e.keyRate * .01, -8, 8);
-          c.value = Math.max(100, c.value * (1 + c.trend / 3650));
+          c.value = clamp(c.value * (1 + c.trend / 36500), 100, e.gdp * .2);
         });
         e.emission *= .995;
       }
@@ -14349,7 +14499,6 @@
       }
 
       function simulateDiplomacy(game) {
-        const e = game.economy;
         game.diplomacy.inbox ||= [];
         for (const offer of game.diplomacy.inbox) offer.daysLeft = Math.max(0, (offer.daysLeft || 0) - 1);
         game.diplomacy.inbox = game.diplomacy.inbox.filter(offer => offer.daysLeft > 0).slice(0, 8);
@@ -14371,8 +14520,6 @@
         simulateStrategicDiplomacy(game);
         simulateInternationalLaw(game);
         simulateWarDiplomaticPressure(game);
-        const tradeBonus = game.diplomacy.countries.reduce((sum, c) => sum + (c.relations > 60 && !c.sanctions && !c.embargo ? c.trade : 0), 0) * .000001;
-        e.exports *= 1 + tradeBonus / 365;
       }
 
       function simulateMilitary(game) {
