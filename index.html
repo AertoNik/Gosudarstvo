@@ -3454,8 +3454,9 @@
 
       const STORAGE_KEY = "aaa_president_sim_state_v4";
       const SLOTS_KEY = "aaa_president_sim_slots_v4";
-      const SAVE_VERSION = 18;
+      const SAVE_VERSION = 19;
       const ECONOMY_MODEL_VERSION = 4;
+      const FOREIGN_STATE_MODEL_VERSION = 1;
       const SAVE_DB_NAME = "aaa_president_sim_storage";
       const SAVE_DB_STORE = "saves";
       const DAY_MS = 1800;
@@ -3893,6 +3894,9 @@
         if (copy.diplomacy?.inbox) copy.diplomacy.inbox = copy.diplomacy.inbox.slice(0, level === "normal" ? 10 : 4);
         if (copy.diplomacy?.pressureLog) copy.diplomacy.pressureLog = copy.diplomacy.pressureLog.slice(0, level === "normal" ? 8 : 3);
         if (copy.diplomacy?.worldLog) copy.diplomacy.worldLog = copy.diplomacy.worldLog.slice(0, level === "normal" ? 18 : 6);
+        if (copy.diplomacy?.worldSystem?.history) copy.diplomacy.worldSystem.history = copy.diplomacy.worldSystem.history.slice(0, level === "normal" ? 24 : 8);
+        if (copy.diplomacy?.worldSystem?.agreements) copy.diplomacy.worldSystem.agreements = copy.diplomacy.worldSystem.agreements.slice(0, level === "normal" ? 28 : 12);
+        if (copy.diplomacy?.worldSystem?.conflicts) copy.diplomacy.worldSystem.conflicts = copy.diplomacy.worldSystem.conflicts.filter(item=>item.status==="active").concat(copy.diplomacy.worldSystem.conflicts.filter(item=>item.status!=="active").slice(0,level==="normal"?6:2)).slice(0,level==="normal"?14:9);
         if (copy.history) {
           for (const key of Object.keys(copy.history)) copy.history[key] = (copy.history[key] || []).slice(-historyLimit);
         }
@@ -6012,7 +6016,7 @@
         const descriptors=new Map(actorSourceDescriptors(game).map(item=>[item.id,item]));
         const environment=actorEnvironment(game);
         for(const actor of system.actors){
-          const live=descriptors.get(actor.id);if(live){actor.name=live.name;actor.role=live.role;actor.influence=clamp(actor.influence*.7+live.influence*.3,0,100);actor.resources=clamp(actor.resources*.8+live.resources*.2,0,100);actor.trust=clamp(actor.trust*.8+live.trust*.2,0,100);}
+          const live=descriptors.get(actor.id);if(live){actor.name=live.name;actor.role=live.role;actor.goals=Array.isArray(live.goals)?live.goals.slice(0,4):actor.goals;actor.influence=clamp(actor.influence*.7+live.influence*.3,0,100);actor.resources=clamp(actor.resources*.8+live.resources*.2,0,100);actor.trust=clamp(actor.trust*.8+live.trust*.2,0,100);}
           actor.cooldown=Math.max(0,actor.cooldown-7);
           const utility=actorUtility(actor,environment);
           const delta=utility-actor.lastUtility;
@@ -6815,6 +6819,121 @@
         };
       }
 
+      function stableCountryFactor(country, salt = 0) {
+        const text = `${country?.name || "state"}:${country?.worldIndex ?? 0}:${salt}`;
+        let hash = 2166136261;
+        for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619);
+        return (hash >>> 0) / 4294967295;
+      }
+
+      function foreignEconomicProfile(country) {
+        const perCapita = num(country.gdp, 10000) * 1000000 / Math.max(100000, num(country.population, 1000000));
+        const resources = country.resources || {};
+        const resourceWeight = num(resources.oil) + num(resources.gas) + num(resources.minerals) + num(resources.metals) * .45;
+        if (num(country.stability, 50) < 38 || perCapita < 2600) return "fragile";
+        if (resourceWeight > 150 && num(country.trade) / Math.max(1, num(country.gdp)) > .045) return "resource";
+        if (perCapita >= 30000) return "advanced";
+        if (perCapita >= 9000) return "emerging";
+        return "developing";
+      }
+
+      function foreignProfileSpec(profileId) {
+        return ({
+          advanced:{name:"развитая",trend:1.65,inflation:2.4,unemployment:5.1,debt:72,reserves:8.5,productivity:74,volatility:.55},
+          emerging:{name:"индустриально развивающаяся",trend:3.05,inflation:5.1,unemployment:7.2,debt:53,reserves:6.2,productivity:58,volatility:.9},
+          developing:{name:"догоняющая",trend:3.35,inflation:7.3,unemployment:9.8,debt:47,reserves:4.4,productivity:43,volatility:1.2},
+          resource:{name:"сырьевая экспортная",trend:2.15,inflation:5.8,unemployment:7.8,debt:44,reserves:9.2,productivity:54,volatility:1.25},
+          fragile:{name:"хрупкая",trend:1.05,inflation:12.5,unemployment:15.2,debt:68,reserves:2.3,productivity:31,volatility:1.75}
+        })[profileId] || foreignProfileSpec("emerging");
+      }
+
+      function foreignPoliticalSystem(country) {
+        const stability = num(country.stability, 50);
+        const ideology = String(country.ideology || "центризм").toLowerCase();
+        if (stability < 34 || ideology.includes("суверен") || ideology.includes("социализм")) return "централизованная";
+        if (stability < 58 || ideology.includes("техно") || ideology.includes("национал")) return "гибридная";
+        return "конкурентная";
+      }
+
+      function foreignPolicyPriority(country) {
+        return ({
+          "торговый":"экспорт и логистика", "осторожный":"устойчивость и баланс сил", "силовой":"безопасность и влияние",
+          "изоляционный":"самодостаточность и границы", "реформистский":"модернизация и инвестиции"
+        })[country.aiMood] || "экономическая устойчивость";
+      }
+
+      function foreignGovernmentLabel(country, system = foreignPoliticalSystem(country)) {
+        if (system === "конкурентная") return `Коалиционное правительство: ${country.ideology}`;
+        if (system === "гибридная") return `Президентская администрация: ${country.ideology}`;
+        return `Государственный совет: ${country.ideology}`;
+      }
+
+      function defaultForeignState(country) {
+        const profileId = foreignEconomicProfile(country);
+        const spec = foreignProfileSpec(profileId);
+        const seed = stableCountryFactor(country, 11);
+        const system = foreignPoliticalSystem(country);
+        const tradeShare = clamp(num(country.trade) / Math.max(1, num(country.gdp)) * 100, 1.5, 62);
+        return {
+          modelVersion:FOREIGN_STATE_MODEL_VERSION,
+          economy:{profileId,profileName:spec.name,trendGrowth:spec.trend,growth:spec.trend+(seed-.5)*1.2,inflation:spec.inflation+(seed-.5)*2.2,unemployment:spec.unemployment+(stableCountryFactor(country,12)-.5)*3,debtRatio:clamp(spec.debt+(stableCountryFactor(country,13)-.5)*34,8,145),fiscalBalance:clamp(-2+(seed-.5)*6,-12,8),reserveMonths:clamp(spec.reserves+(stableCountryFactor(country,14)-.5)*5,.4,20),tradeShare,productivity:clamp(spec.productivity+(stableCountryFactor(country,15)-.5)*18,15,95),stress:clamp(52-num(country.stability,50)*.35+spec.inflation*.8,4,88)},
+          politics:{system,government:foreignGovernmentLabel(country,system),approval:clamp(num(country.stability,50)*.58+28+(seed-.5)*18,12,88),opposition:clamp(48-num(country.stability,50)*.25+(stableCountryFactor(country,16)-.5)*20,8,88),legitimacy:clamp(num(country.stability,50)*.72+18+(seed-.5)*12,10,95),corruption:clamp(68-num(country.stability,50)*.48+(stableCountryFactor(country,17)-.5)*22,6,88),polarization:clamp(46-num(country.stability,50)*.18+(stableCountryFactor(country,18)-.5)*24,8,92),electionDays:Math.round(system==="конкурентная"?360+seed*1260:system==="гибридная"?720+seed*1680:1440+seed*2160),term:1,turnovers:0,lastChange:"действующее правительство сохраняет полномочия"},
+          demography:{annualGrowth:clamp(profileId==="advanced"?-.15+(seed-.5)*.8:profileId==="fragile"?1.65+(seed-.5)*1.3:.7+(seed-.5)*1.2,-2.2,3.4),urbanization:clamp(profileId==="advanced"?78+seed*14:profileId==="emerging"?58+seed*22:34+seed*34,18,98),workforceShare:clamp(profileId==="advanced"?53+(seed-.5)*7:49+(seed-.5)*11,35,66)},
+          defense:{spendingShare:clamp(1.2+num(country.military,40)*.035+(country.aiMood==="силовой"?1.8:0),.5,9),readiness:clamp(num(country.military,40)*.72+num(country.stability,50)*.18,8,96),stock:clamp(38+num(country.military,40)*.52+(seed-.5)*18,10,100),exhaustion:0,externalConflicts:0},
+          policy:{priority:foreignPolicyPriority(country),course:country.aiMood || "осторожный",monthsInCourse:0},
+          shock:{type:"",severity:0,monthsLeft:0},
+          lastUpdate:"",lastReport:"Внутренние ведомства работают в штатном режиме."
+        };
+      }
+
+      function normalizeForeignState(country) {
+        const base = defaultForeignState(country);
+        const incoming = country.domestic && typeof country.domestic === "object" ? country.domestic : {};
+        const domestic = Object.assign(base, incoming);
+        const nested=value=>value&&typeof value==="object"&&!Array.isArray(value)?value:{};
+        domestic.economy = Object.assign(base.economy, nested(incoming.economy));
+        domestic.politics = Object.assign(base.politics, nested(incoming.politics));
+        domestic.demography = Object.assign(base.demography, nested(incoming.demography));
+        domestic.defense = Object.assign(base.defense, nested(incoming.defense));
+        domestic.policy = Object.assign(base.policy, nested(incoming.policy));
+        domestic.shock = Object.assign(base.shock, nested(incoming.shock));
+        domestic.modelVersion = FOREIGN_STATE_MODEL_VERSION;
+        const profile = foreignProfileSpec(domestic.economy.profileId);
+        domestic.economy.profileName = profile.name;
+        ["growth","inflation","unemployment","debtRatio","fiscalBalance","reserveMonths","tradeShare","productivity","stress"].forEach(key=>domestic.economy[key]=num(domestic.economy[key],base.economy[key]));
+        domestic.economy.growth=clamp(domestic.economy.growth,-18,14);domestic.economy.inflation=clamp(domestic.economy.inflation,-3,90);domestic.economy.unemployment=clamp(domestic.economy.unemployment,1,48);domestic.economy.debtRatio=clamp(domestic.economy.debtRatio,0,240);domestic.economy.fiscalBalance=clamp(domestic.economy.fiscalBalance,-30,20);domestic.economy.reserveMonths=clamp(domestic.economy.reserveMonths,0,36);domestic.economy.tradeShare=clamp(domestic.economy.tradeShare,1,80);domestic.economy.productivity=clamp(domestic.economy.productivity,10,100);domestic.economy.stress=clamp(domestic.economy.stress,0,100);
+        ["approval","opposition","legitimacy","corruption","polarization"].forEach(key=>domestic.politics[key]=clamp(num(domestic.politics[key],base.politics[key]),0,100));
+        domestic.politics.electionDays=Math.max(0,Math.round(num(domestic.politics.electionDays,base.politics.electionDays)));domestic.politics.term=Math.max(1,Math.round(num(domestic.politics.term,1)));domestic.politics.turnovers=Math.max(0,Math.round(num(domestic.politics.turnovers)));
+        domestic.demography.annualGrowth=clamp(num(domestic.demography.annualGrowth,base.demography.annualGrowth),-4,5);domestic.demography.urbanization=clamp(num(domestic.demography.urbanization,base.demography.urbanization),5,100);domestic.demography.workforceShare=clamp(num(domestic.demography.workforceShare,base.demography.workforceShare),25,75);
+        ["spendingShare","readiness","stock","exhaustion"].forEach(key=>domestic.defense[key]=clamp(num(domestic.defense[key],base.defense[key]),0,key==="spendingShare"?15:100));domestic.defense.externalConflicts=Math.max(0,Math.round(num(domestic.defense.externalConflicts)));
+        domestic.policy.monthsInCourse=Math.max(0,Math.round(num(domestic.policy.monthsInCourse)));domestic.shock.severity=clamp(num(domestic.shock.severity),0,100);domestic.shock.monthsLeft=Math.max(0,Math.round(num(domestic.shock.monthsLeft)));
+        country.domestic = domestic;
+        country.gdp=Math.max(100,num(country.gdp,10000));country.population=Math.max(50000,Math.round(num(country.population,1000000)));country.trade=Math.max(0,num(country.trade,country.gdp*domestic.economy.tradeShare/100));
+        return country;
+      }
+
+      function defaultForeignStateSystem() {
+        return {modelVersion:FOREIGN_STATE_MODEL_VERSION,lastMonth:"",monthIndex:0,diplomaticDays:0,globalGrowth:2.5,globalInflation:5.2,globalUnemployment:7.4,worldRisk:34,tradeMomentum:0,leadershipChanges:0,elections:0,crises:0,agreements:[],conflicts:[],history:[],lastBriefing:"Мировая система начала самостоятельный экономический и политический цикл."};
+      }
+
+      function normalizeWorldAgreement(item, game) {
+        const value=item||{};value.id||=uid("world_agreement");value.type||="trade";value.actorId||="";value.targetId||="";value.actorName||=game.diplomacy.countries.find(country=>country.id===value.actorId)?.name||"Государство";value.targetName||=game.diplomacy.countries.find(country=>country.id===value.targetId)?.name||"Государство";value.monthsLeft=Math.max(0,Math.round(num(value.monthsLeft,36)));value.strength=clamp(num(value.strength,50),0,100);value.started||=formatDate(game.date);return value;
+      }
+
+      function normalizeWorldConflict(item, game) {
+        const value=item||{};value.id||=uid("world_conflict");value.actorId||="";value.targetId||="";value.actorName||=game.diplomacy.countries.find(country=>country.id===value.actorId)?.name||"Государство";value.targetName||=game.diplomacy.countries.find(country=>country.id===value.targetId)?.name||"Государство";value.cause||="пограничный и политический спор";value.status||="active";value.months=Math.max(0,Math.round(num(value.months)));value.intensity=clamp(num(value.intensity,35),5,100);value.control=clamp(num(value.control,50),0,100);value.actorLosses=Math.max(0,Math.round(num(value.actorLosses)));value.targetLosses=Math.max(0,Math.round(num(value.targetLosses)));value.displaced=Math.max(0,Math.round(num(value.displaced)));value.outcome||="боевые действия продолжаются";value.started||=formatDate(game.date);value.ended||="";return value;
+      }
+
+      function migrateForeignStateSystem(game) {
+        game.diplomacy ||= {countries:createWorldCountries([]),organizations:defaultOrganizations()};
+        game.diplomacy.countries=(game.diplomacy.countries||[]).map(country=>normalizeForeignState(country));
+        const base=defaultForeignStateSystem(),incoming=game.diplomacy.worldSystem&&typeof game.diplomacy.worldSystem==="object"?game.diplomacy.worldSystem:{};
+        const system=Object.assign(base,incoming);system.modelVersion=FOREIGN_STATE_MODEL_VERSION;system.monthIndex=Math.max(0,Math.round(num(system.monthIndex)));system.diplomaticDays=Math.max(0,Math.round(num(system.diplomaticDays)));
+        ["globalGrowth","globalInflation","globalUnemployment","worldRisk","tradeMomentum"].forEach(key=>system[key]=num(system[key],base[key]));system.globalGrowth=clamp(system.globalGrowth,-12,10);system.globalInflation=clamp(system.globalInflation,-2,45);system.globalUnemployment=clamp(system.globalUnemployment,1,35);system.worldRisk=clamp(system.worldRisk,0,100);system.tradeMomentum=clamp(system.tradeMomentum,-20,20);
+        ["leadershipChanges","elections","crises"].forEach(key=>system[key]=Math.max(0,Math.round(num(system[key]))));system.agreements=(Array.isArray(incoming.agreements)?incoming.agreements:[]).filter(item=>item&&typeof item==="object"&&!Array.isArray(item)).map(item=>normalizeWorldAgreement(item,game)).filter(item=>item.monthsLeft>0).slice(0,36);system.conflicts=(Array.isArray(incoming.conflicts)?incoming.conflicts:[]).filter(item=>item&&typeof item==="object"&&!Array.isArray(item)).map(item=>normalizeWorldConflict(item,game)).slice(0,16);system.history=(Array.isArray(incoming.history)?incoming.history:[]).filter(item=>item&&typeof item==="object"&&!Array.isArray(item)).slice(0,36);system.lastBriefing||=base.lastBriefing;
+        game.diplomacy.worldSystem=system;return system;
+      }
+
       function defaultInternationalLaw() {
         return {
           reputation: 64,
@@ -6823,6 +6942,7 @@
           humanitarianStanding: 61,
           sanctionsExposure: 12,
           ratificationCooldown: 0,
+          maintenanceDays: 0,
           violations: [],
           resolutions: [],
           cases: []
@@ -6856,6 +6976,7 @@
         const law = game.diplomacy.law;
         ["reputation","legalStanding","treatyReliability","humanitarianStanding","sanctionsExposure"].forEach(key => law[key] = clamp(num(law[key], defaultInternationalLaw()[key]), 0, 100));
         law.ratificationCooldown = Math.max(0, Math.round(num(law.ratificationCooldown)));
+        law.maintenanceDays = Math.max(0, Math.round(num(law.maintenanceDays)));
         law.violations = Array.isArray(law.violations) ? law.violations.slice(0, 20) : [];
         law.resolutions = Array.isArray(law.resolutions) ? law.resolutions.slice(0, 16) : [];
         law.cases = Array.isArray(law.cases) ? law.cases.slice(0, 16) : [];
@@ -6928,10 +7049,11 @@
 
       function migrateStrategicDiplomacy(game) {
         game.diplomacy ||= { countries: createWorldCountries([]), organizations: defaultOrganizations() };
-        game.diplomacy.countries = (game.diplomacy.countries || []).map(ensureDiplomaticAI);
+        game.diplomacy.countries = (game.diplomacy.countries || []).map(country=>normalizeForeignState(ensureDiplomaticAI(country)));
         game.diplomacy.worldLog = Array.isArray(game.diplomacy.worldLog) ? game.diplomacy.worldLog.slice(0, 24) : [];
         game.diplomacy.globalTension = clamp(num(game.diplomacy.globalTension, 34), 0, 100);
         game.diplomacy.lastStrategicDay ||= "";
+        migrateForeignStateSystem(game);
       }
 
       function diplomaticIntent(country) {
@@ -6948,6 +7070,155 @@
         game.diplomacy.worldLog ||= [];
         game.diplomacy.worldLog.unshift({ id: uid("world"), date: formatDate(game.date), actor, target, action, tone });
         game.diplomacy.worldLog = game.diplomacy.worldLog.slice(0, 24);
+      }
+
+      function foreignStatePower(country) {
+        const domestic=normalizeForeignState(country).domestic,d=domestic.defense,e=domestic.economy;
+        return Math.max(10,num(country.military,40)*(0.55+d.readiness/180)*(0.58+d.stock/210)*(0.72+Math.log10(Math.max(100,country.gdp))/8)*(0.86+e.productivity/500));
+      }
+
+      function registerWorldAgreement(game, actor, target, type = "trade", months = 48) {
+        const system=game.diplomacy.worldSystem||migrateForeignStateSystem(game);
+        if(type!=="ceasefire"&&system.conflicts.some(item=>item.status==="active"&&((item.actorId===actor.id&&item.targetId===target.id)||(item.actorId===target.id&&item.targetId===actor.id))))return null;
+        const duplicate=system.agreements.find(item=>item.type===type&&((item.actorId===actor.id&&item.targetId===target.id)||(item.actorId===target.id&&item.targetId===actor.id)));
+        if(duplicate){duplicate.monthsLeft=Math.max(duplicate.monthsLeft,months);duplicate.strength=clamp(duplicate.strength+4,0,100);return duplicate;}
+        const agreement=normalizeWorldAgreement({type,actorId:actor.id,targetId:target.id,actorName:actor.name,targetName:target.name,monthsLeft:months,strength:type==="security"?62:56},game);system.agreements.unshift(agreement);system.agreements=system.agreements.slice(0,36);return agreement;
+      }
+
+      function startWorldConflict(game, actor, target, cause = "пограничный и политический спор") {
+        const system=game.diplomacy.worldSystem||migrateForeignStateSystem(game);
+        if(!actor||!target||actor.id===target.id||actor.war||target.war||system.conflicts.filter(item=>item.status==="active").length>=8)return null;
+        if(system.agreements.some(item=>item.type==="ceasefire"&&item.monthsLeft>0&&((item.actorId===actor.id&&item.targetId===target.id)||(item.actorId===target.id&&item.targetId===actor.id))))return null;
+        const existing=system.conflicts.find(item=>item.status==="active"&&((item.actorId===actor.id&&item.targetId===target.id)||(item.actorId===target.id&&item.targetId===actor.id)));
+        if(existing)return existing;
+        normalizeForeignState(actor);normalizeForeignState(target);
+        const intensity=clamp(22+num(actor.aggression,25)*.38+Math.max(0,45-(actor.strategy?.links?.[target.id]?.relation??40))*.32+rnd(-8,12),12,76);
+        const conflict=normalizeWorldConflict({actorId:actor.id,targetId:target.id,actorName:actor.name,targetName:target.name,cause,intensity,control:50+rnd(-4,4)},game);
+        system.conflicts.unshift(conflict);actor.domestic.defense.externalConflicts++;target.domestic.defense.externalConflicts++;
+        actor.domestic.defense.exhaustion=clamp(actor.domestic.defense.exhaustion+5,0,100);target.domestic.defense.exhaustion=clamp(target.domestic.defense.exhaustion+4,0,100);
+        actor.domestic.economy.tradeShare=clamp(actor.domestic.economy.tradeShare-1.4,1,80);target.domestic.economy.tradeShare=clamp(target.domestic.economy.tradeShare-1.1,1,80);
+        const actorLink=actor.strategy.links[target.id]||{relation:20,status:"конфликт"},targetLink=target.strategy.links[actor.id]||{relation:20,status:"конфликт"};actorLink.relation=clamp(actorLink.relation-18,0,100);targetLink.relation=clamp(targetLink.relation-18,0,100);actorLink.status="вооружённый конфликт";targetLink.status="вооружённый конфликт";actor.strategy.links[target.id]=actorLink;target.strategy.links[actor.id]=targetLink;
+        game.diplomacy.globalTension=clamp(game.diplomacy.globalTension+4+intensity*.05,0,100);system.worldRisk=clamp(system.worldRisk+5,0,100);system.lastBriefing=`${actor.name} начала вооружённый конфликт с ${target.name}: ${cause}.`;
+        pushWorldDiplomacyLog(game,actor.name,target.name,`начала вооружённый конфликт: ${cause}`,"конфликт");
+        const unlawfulPressure=clamp(num(actor.aggression,35)*.62+(100-actor.domestic.politics.legitimacy)*.38,0,100);
+        if(unlawfulPressure>56){
+          const responders=game.diplomacy.countries.filter(country=>country.id!==actor.id&&country.id!==target.id&&country.greatPower&&!country.war).sort((a,b)=>(b.strategy?.leverage||0)-(a.strategy?.leverage||0)).slice(0,Math.min(4,Math.max(1,Math.round((unlawfulPressure-45)/16))));
+          for(const responder of responders){ensureDiplomaticAI(responder);const link=responder.strategy.links[actor.id]||{relation:42,status:"контакт"};link.relation=clamp(link.relation-rnd(5,11),0,100);link.status="санкционное давление";responder.strategy.links[actor.id]=link;}
+          actor.domestic.economy.tradeShare=clamp(actor.domestic.economy.tradeShare-responders.length*.75,1,80);actor.domestic.politics.legitimacy=clamp(actor.domestic.politics.legitimacy-responders.length*1.4,0,100);actor.strategy.threat=clamp(actor.strategy.threat+responders.length*2,0,100);
+          if(responders.length)pushWorldDiplomacyLog(game,responders.map(country=>country.name).join(", "),actor.name,"объявили координированное дипломатическое и экономическое давление на инициатора конфликта","санкции");
+        }
+        if(actor.greatPower||target.greatPower||actor.relations>62||target.relations>62)pushNews(game,"Мир","Новый межгосударственный конфликт",`${actor.name} и ${target.name} вступили в вооружённую фазу спора. Интенсивность ${Math.round(intensity)}/100; рынки оценивают риск для торговли и безопасности.`);
+        return conflict;
+      }
+
+      function foreignMoodForIdeology(ideology) {
+        const text=String(ideology||"").toLowerCase();
+        if(text.includes("либерал")||text.includes("зел")||text.includes("федера"))return "реформистский";
+        if(text.includes("консер")||text.includes("национал"))return "осторожный";
+        if(text.includes("сувер")||text.includes("социализм"))return "силовой";
+        if(text.includes("техно"))return "торговый";
+        return "осторожный";
+      }
+
+      function resolveForeignPoliticalCycle(game, country) {
+        const system=game.diplomacy.worldSystem,p=country.domestic.politics,e=country.domestic.economy;
+        p.term++;system.elections++;
+        const incumbentScore=clamp(p.approval*.52+p.legitimacy*.22+country.stability*.16+e.growth*2-e.inflation*.55-e.unemployment*.35-p.polarization*.12,5,92);
+        const turnover=p.system==="централизованная"?p.approval<30&&simulationRandom()<.38:simulationRandom()*100>incumbentScore;
+        if(turnover){
+          const previousCourse=country.aiMood,previousLinks=country.strategy?.links||{},newIdeology=pick(ideologies.filter(item=>item!==country.ideology));country.ideology=newIdeology;country.aiMood=foreignMoodForIdeology(newIdeology);p.turnovers++;system.leadershipChanges++;p.approval=clamp(42+rnd(-8,12),12,82);p.opposition=clamp(p.opposition-rnd(5,14),5,90);p.legitimacy=clamp(p.legitimacy+rnd(-3,10),8,96);p.government=foreignGovernmentLabel(country,p.system);p.lastChange=`власть сменилась; курс «${previousCourse}» заменён на «${country.aiMood}»`;country.domestic.policy.course=country.aiMood;country.domestic.policy.priority=foreignPolicyPriority(country);country.domestic.policy.monthsInCourse=0;country.strategy=defaultDiplomaticStrategy(country);country.strategy.links=previousLinks;
+          pushWorldDiplomacyLog(game,country.name,"внутренняя политика",p.lastChange,"смена власти");
+          if(country.greatPower||country.relations>65)pushNews(game,"Выборы",`Смена курса: ${country.name}`,`${country.name}: ${p.lastChange}. МИД пересматривает прогноз отношений и договорных обязательств.`);
+        }else{
+          p.approval=clamp(p.approval+1.2,0,100);p.legitimacy=clamp(p.legitimacy+(p.system==="конкурентная"?2.4:.7),0,100);p.lastChange=p.system==="централизованная"?"руководство продлило мандат без смены курса":"действующее правительство сохранило мандат";
+        }
+        p.electionDays=Math.round(p.system==="конкурентная"?1260+rnd(0,720):p.system==="гибридная"?1620+rnd(0,900):2160+rnd(0,1260));
+      }
+
+      function spawnForeignCrisis(game, country) {
+        const domestic=country.domestic,e=domestic.economy,p=domestic.politics;
+        let type="социально-политический кризис";
+        if(e.inflation>18||e.reserveMonths<2)type="валютный кризис";
+        else if(e.debtRatio>105||e.fiscalBalance<-8)type="долговой кризис";
+        else if(p.legitimacy<35||p.polarization>72)type="кризис легитимности";
+        else if(country.stability<38)type="кризис безопасности";
+        else if(stableCountryFactor(country,game.diplomacy.worldSystem.monthIndex)%1>.72)type="стихийное бедствие";
+        const severity=clamp(28+e.stress*.42+rnd(-8,14),20,86);domestic.shock={type,severity,monthsLeft:Math.round(rnd(5,20))};domestic.lastReport=`Начался ${type}, тяжесть ${Math.round(severity)}/100.`;game.diplomacy.worldSystem.crises++;
+        pushWorldDiplomacyLog(game,country.name,"внутренняя устойчивость",domestic.lastReport,"кризис");
+        if(country.greatPower||country.relations>68)pushNews(game,"Мир",`${country.name}: ${type}`,`Внутренний кризис влияет на экономику, устойчивость и внешнеполитические решения государства.`);
+      }
+
+      function simulateForeignCountryMonth(game, country) {
+        normalizeForeignState(country);const system=game.diplomacy.worldSystem,d=country.domestic,e=d.economy,p=d.politics,dem=d.demography,def=d.defense,spec=foreignProfileSpec(e.profileId);
+        d.policy.monthsInCourse++;p.electionDays=Math.max(0,p.electionDays-30);
+        const activeConflict=system.conflicts.filter(item=>item.status==="active"&&(item.actorId===country.id||item.targetId===country.id)).length+(country.war?1:0);def.externalConflicts=activeConflict;
+        const shockPenalty=d.shock.monthsLeft>0?d.shock.severity*.035:0;
+        const institutional=(p.legitimacy-50)*.012-(p.corruption-40)*.009;
+        const debtPenalty=Math.max(0,e.debtRatio-(e.profileId==="advanced"?105:75))*.018;
+        const tradeImpulse=(e.tradeShare-18)*.018+system.tradeMomentum*.035;
+        const conflictPenalty=activeConflict*(.9+def.exhaustion*.012);
+        const targetGrowth=clamp(spec.trend+(system.globalGrowth-2.5)*.44+institutional+tradeImpulse+(e.productivity-50)*.009-debtPenalty-shockPenalty-conflictPenalty,-14,10);
+        e.growth=clamp(e.growth+(targetGrowth-e.growth)*.22+rnd(-.16,.16)*spec.volatility,-18,14);
+        country.gdp=Math.max(100,country.gdp*(1+e.growth/1200));
+        const inflationTarget=clamp(spec.inflation+(system.globalInflation-5)*.36+Math.max(0,-e.fiscalBalance)*.16+Math.max(0,4-e.reserveMonths)*1.15+shockPenalty*.8+activeConflict*1.4-(e.productivity-50)*.025,.2,55);
+        e.inflation=clamp(e.inflation+(inflationTarget-e.inflation)*.16+rnd(-.12,.12)*spec.volatility,-3,90);
+        const unemploymentTarget=clamp(spec.unemployment-e.growth*.32+shockPenalty*.45+activeConflict*.7+(p.corruption-45)*.018,1.5,36);
+        e.unemployment=clamp(e.unemployment+(unemploymentTarget-e.unemployment)*.14+rnd(-.08,.08),1,48);
+        const fiscalTarget=clamp(-1.6+e.growth*.18-e.inflation*.08-p.corruption*.018-def.spendingShare*.22-activeConflict*1.15,-18,8);
+        e.fiscalBalance=clamp(e.fiscalBalance+(fiscalTarget-e.fiscalBalance)*.18,-30,20);
+        const nominalGrowth=e.growth+e.inflation;e.debtRatio=clamp(e.debtRatio+(-e.fiscalBalance+Math.max(0,e.debtRatio-90)*.018-nominalGrowth*e.debtRatio/100)/12,0,240);
+        e.reserveMonths=clamp(e.reserveMonths+(e.fiscalBalance>0?.025:-.012)-activeConflict*.04-(d.shock.type==="валютный кризис"?.12:0),0,36);
+        e.productivity=clamp(e.productivity+(spec.trend+(p.legitimacy-50)*.01-p.corruption*.008-e.productivity*.002)/12,10,100);
+        e.stress=clamp(e.inflation*.85+e.unemployment*1.2+Math.max(0,e.debtRatio-60)*.22+Math.max(0,-e.fiscalBalance)*1.4+activeConflict*14+d.shock.severity*.35+(100-p.legitimacy)*.16,0,100);
+        const populationGrowth=clamp(dem.annualGrowth-Math.max(0,e.unemployment-12)*.035-Math.max(0,e.stress-65)*.018-activeConflict*.16,-4,5);country.population=Math.max(50000,Math.round(country.population*(1+populationGrowth/1200)));dem.urbanization=clamp(dem.urbanization+(e.profileId==="advanced"?.012:.035)-activeConflict*.008,5,100);
+        const approvalTarget=clamp(52+e.growth*2.1-e.inflation*.72-e.unemployment*.55-e.stress*.18+(p.legitimacy-50)*.2-activeConflict*4,4,92);p.approval=clamp(p.approval+(approvalTarget-p.approval)*.12+rnd(-.35,.35),0,100);p.opposition=clamp(p.opposition+(55-p.approval+p.polarization*.15-p.opposition)*.055,0,100);p.legitimacy=clamp(p.legitimacy+(p.approval+(p.system==="конкурентная"?8:p.system==="гибридная"?0:-6)-p.corruption*.24-p.legitimacy)*.035,0,100);p.polarization=clamp(p.polarization+(p.opposition+e.stress*.3-country.stability*.25-p.polarization)*.025,0,100);
+        const stabilityTarget=clamp(p.legitimacy*.38+p.approval*.18+(100-p.polarization)*.15+(100-e.stress)*.2+def.readiness*.09-activeConflict*5,4,96);country.stability=clamp(country.stability+(stabilityTarget-country.stability)*.08,0,100);
+        const readinessTarget=clamp(26+def.stock*.28+def.spendingShare*5.2+country.stability*.16-def.exhaustion*.32,8,96);def.readiness=clamp(def.readiness+(readinessTarget-def.readiness)*.1-activeConflict*.18,0,100);def.stock=clamp(def.stock+(def.spendingShare*1.35-4.2)/12-activeConflict*.62,0,100);def.exhaustion=clamp(def.exhaustion+(activeConflict?1.15:-1.8),0,100);country.military=clamp(country.military+(def.readiness*.52+def.stock*.28+def.spendingShare*3.2-country.military)*.06,0,100);
+        const tradeShock=(d.shock.type==="валютный кризис"||d.shock.type==="кризис безопасности")?-.08:0;e.tradeShare=clamp(e.tradeShare+(system.tradeMomentum*.008+(country.aiMood==="торговый"?.025:country.aiMood==="изоляционный"?-.025:0)+tradeShock-activeConflict*.06),1,80);country.trade=Math.max(0,country.gdp*e.tradeShare/100);
+        country.relations=clamp(country.relations+(country.alliance?.22:0)-(country.sanctions?.4:0)-(country.embargo?.35:0)-(country.war?.9:0)+(p.legitimacy-50)*.002+rnd(-.18,.18),0,100);
+        if(d.shock.monthsLeft>0){d.shock.monthsLeft--;if(!d.shock.monthsLeft){d.lastReport=`Кризис «${d.shock.type}» перешёл в фазу восстановления.`;d.shock={type:"",severity:0,monthsLeft:0};}}
+        else if((e.stress>62&&simulationRandom()<.035)||simulationRandom()<.0035)spawnForeignCrisis(game,country);
+        if(p.electionDays<=0)resolveForeignPoliticalCycle(game,country);
+        d.lastUpdate=formatDate(game.date);d.lastReport=d.shock.monthsLeft?`${d.shock.type}: тяжесть ${Math.round(d.shock.severity)}/100, осталось около ${d.shock.monthsLeft} мес.`:`Рост ${e.growth.toFixed(1)}%, инфляция ${e.inflation.toFixed(1)}%, поддержка правительства ${Math.round(p.approval)}%.`;
+        country.greatPower=!!(country.greatPower||country.military>=82||country.gdp>=3000000);
+      }
+
+      function simulateWorldAgreements(game) {
+        const system=game.diplomacy.worldSystem;
+        for(const agreement of system.agreements){
+          agreement.monthsLeft=Math.max(0,agreement.monthsLeft-1);const actor=game.diplomacy.countries.find(item=>item.id===agreement.actorId),target=game.diplomacy.countries.find(item=>item.id===agreement.targetId);if(!actor||!target)continue;
+          if(agreement.type==="trade"){actor.domestic.economy.tradeShare=clamp(actor.domestic.economy.tradeShare+.025,1,80);target.domestic.economy.tradeShare=clamp(target.domestic.economy.tradeShare+.025,1,80);actor.trade*=1.0008;target.trade*=1.0008;}
+          if(agreement.type==="security"){actor.domestic.defense.readiness=clamp(actor.domestic.defense.readiness+.025,0,100);target.domestic.defense.readiness=clamp(target.domestic.defense.readiness+.025,0,100);}
+          agreement.strength=clamp(agreement.strength+(actor.stability+target.stability-100)*.002,0,100);
+        }
+        system.agreements=system.agreements.filter(item=>item.monthsLeft>0&&item.strength>8).slice(0,36);
+      }
+
+      function finishWorldConflict(game, conflict) {
+        const system=game.diplomacy.worldSystem,actor=game.diplomacy.countries.find(item=>item.id===conflict.actorId),target=game.diplomacy.countries.find(item=>item.id===conflict.targetId);if(!actor||!target)return;
+        conflict.status="ended";conflict.ended=formatDate(game.date);conflict.outcome=conflict.control>=66?`${actor.name} добилась ограниченного преимущества`:conflict.control<=34?`${target.name} отразила наступление`:`стороны заключили перемирие без решающего результата`;
+        actor.domestic.defense.externalConflicts=Math.max(0,actor.domestic.defense.externalConflicts-1);target.domestic.defense.externalConflicts=Math.max(0,target.domestic.defense.externalConflicts-1);actor.domestic.politics.approval=clamp(actor.domestic.politics.approval+(conflict.control-50)*.08,0,100);target.domestic.politics.approval=clamp(target.domestic.politics.approval+(50-conflict.control)*.08,0,100);const actorLink=actor.strategy.links[target.id]||{relation:18},targetLink=target.strategy.links[actor.id]||{relation:18};actorLink.relation=clamp(actorLink.relation+8,0,100);targetLink.relation=clamp(targetLink.relation+8,0,100);actorLink.status="перемирие";targetLink.status="перемирие";actor.strategy.links[target.id]=actorLink;target.strategy.links[actor.id]=targetLink;registerWorldAgreement(game,actor,target,"ceasefire",24);
+        system.lastBriefing=`${actor.name} и ${target.name}: ${conflict.outcome}. Потери ${compact(conflict.actorLosses)} / ${compact(conflict.targetLosses)}.`;pushWorldDiplomacyLog(game,actor.name,target.name,system.lastBriefing,"перемирие");game.diplomacy.globalTension=clamp(game.diplomacy.globalTension-3,0,100);
+        if(actor.greatPower||target.greatPower)pushNews(game,"Мир","Межгосударственное перемирие",system.lastBriefing);
+      }
+
+      function simulateWorldConflicts(game) {
+        const system=game.diplomacy.worldSystem;
+        for(const conflict of system.conflicts.filter(item=>item.status==="active")){
+          const actor=game.diplomacy.countries.find(item=>item.id===conflict.actorId),target=game.diplomacy.countries.find(item=>item.id===conflict.targetId);if(!actor||!target){conflict.status="ended";conflict.outcome="конфликт закрыт из-за утраты данных сторон";continue;}
+          conflict.months++;const actorPower=foreignStatePower(actor),targetPower=foreignStatePower(target),ratio=actorPower/Math.max(1,targetPower);const initiative=clamp(Math.log(ratio)*9+rnd(-3.2,3.2),-7,7)*conflict.intensity/50;conflict.control=clamp(conflict.control+initiative,0,100);conflict.intensity=clamp(conflict.intensity+rnd(-3,3)+(Math.abs(conflict.control-50)>28?-.8:.2),8,92);
+          const base=Math.max(30,Math.sqrt(actor.population+target.population)*.13*conflict.intensity/45);const actorLoss=Math.round(base*clamp(1/Math.max(.45,ratio),.45,2.3)*rnd(.72,1.3)),targetLoss=Math.round(base*clamp(ratio,.45,2.3)*rnd(.72,1.3));conflict.actorLosses+=actorLoss;conflict.targetLosses+=targetLoss;conflict.displaced+=Math.round((actorLoss+targetLoss)*rnd(2.2,6.5));actor.population=Math.max(50000,actor.population-actorLoss);target.population=Math.max(50000,target.population-targetLoss);
+          actor.domestic.defense.stock=clamp(actor.domestic.defense.stock-conflict.intensity*.012*(targetPower/Math.max(1,actorPower)),0,100);target.domestic.defense.stock=clamp(target.domestic.defense.stock-conflict.intensity*.012*(actorPower/Math.max(1,targetPower)),0,100);actor.domestic.defense.exhaustion=clamp(actor.domestic.defense.exhaustion+conflict.intensity*.035,0,100);target.domestic.defense.exhaustion=clamp(target.domestic.defense.exhaustion+conflict.intensity*.035,0,100);actor.gdp=Math.max(100,actor.gdp*(1-conflict.intensity*.000035));target.gdp=Math.max(100,target.gdp*(1-conflict.intensity*.000045));actor.trade*=1-conflict.intensity*.00009;target.trade*=1-conflict.intensity*.00011;
+          const exhaustion=(actor.domestic.defense.exhaustion+target.domestic.defense.exhaustion)/2,decisive=conflict.control>=86||conflict.control<=14,peaceChance=conflict.months<5?0:.025+Math.max(0,exhaustion-55)*.004+Math.max(0,conflict.months-24)*.005+(decisive?.2:0);if(simulationRandom()<peaceChance)finishWorldConflict(game,conflict);
+        }
+        system.conflicts=system.conflicts.filter(item=>item.status==="active").concat(system.conflicts.filter(item=>item.status!=="active").slice(0,6)).slice(0,16);
+      }
+
+      function simulateForeignStateSystem(game) {
+        const system=game.diplomacy.worldSystem||migrateForeignStateSystem(game),monthKey=`${game.date.year}-${game.date.month}`;if(system.lastMonth===monthKey)return false;system.lastMonth=monthKey;system.monthIndex++;
+        const activeConflicts=system.conflicts.filter(item=>item.status==="active").length,cycle=Math.sin(system.monthIndex/22)*.42+Math.sin(system.monthIndex/61)*.28;const marketPressure=num(game.worldMarket?.inflationPressure);const growthTarget=clamp(2.65+cycle-activeConflicts*.16-game.diplomacy.globalTension*.006-marketPressure*.035,-4.5,5.5);system.globalGrowth=clamp(system.globalGrowth+(growthTarget-system.globalGrowth)*.12+rnd(-.05,.05),-12,10);const inflationTarget=clamp(3.8+marketPressure*.45+game.diplomacy.globalTension*.025+activeConflicts*.32,1,24);system.globalInflation=clamp(system.globalInflation+(inflationTarget-system.globalInflation)*.1,0,45);system.tradeMomentum=clamp(system.globalGrowth*.55-game.diplomacy.globalTension*.035-activeConflicts*.4+(num(game.worldMarket?.logisticsReliability,60)-60)*.025,-12,12);
+        simulateWorldAgreements(game);for(const country of game.diplomacy.countries)simulateForeignCountryMonth(game,country);simulateWorldConflicts(game);
+        const totalGdp=game.diplomacy.countries.reduce((sum,country)=>sum+country.gdp,0)||1;system.globalUnemployment=clamp(game.diplomacy.countries.reduce((sum,country)=>sum+country.domestic.economy.unemployment*country.gdp,0)/totalGdp,1,35);const weightedInflation=game.diplomacy.countries.reduce((sum,country)=>sum+country.domestic.economy.inflation*country.gdp,0)/totalGdp;system.globalInflation=clamp(system.globalInflation*.65+weightedInflation*.35,0,45);const crisisCount=game.diplomacy.countries.filter(country=>country.domestic.shock.monthsLeft>0).length;system.worldRisk=clamp(game.diplomacy.globalTension*.42+activeConflicts*5.5+crisisCount*.22+Math.max(0,system.globalInflation-5)*1.1+Math.max(0,-system.globalGrowth)*4,0,100);system.history.unshift({date:formatDate(game.date),growth:system.globalGrowth,inflation:system.globalInflation,unemployment:system.globalUnemployment,risk:system.worldRisk,conflicts:system.conflicts.filter(item=>item.status==="active").length,agreements:system.agreements.length});system.history=system.history.slice(0,36);system.lastBriefing=`Мировой рост ${system.globalGrowth.toFixed(1)}%, инфляция ${system.globalInflation.toFixed(1)}%, активных конфликтов ${system.conflicts.filter(item=>item.status==="active").length}, соглашений ${system.agreements.length}.`;return true;
       }
 
       function createWorldCountries(neighbors) {
@@ -7002,7 +7273,7 @@
         const profile = profiles[country.name];
         if (profile) Object.assign(country, profile, { greatPower: profile.military >= 82 || profile.gdp >= 3000000 });
         else country.greatPower = !!(country.greatPower || country.military >= 82 || country.gdp >= 3000000);
-        return ensureDiplomaticAI(ensureCountryAssets(country));
+        return normalizeForeignState(ensureDiplomaticAI(ensureCountryAssets(country)));
       }
 
       function politicalEraSnapshot(game) {
@@ -11038,6 +11309,57 @@
         return clamp(base + modifier + 8, 12, 92);
       }
 
+      function foreignStateTone(country) {
+        const d=normalizeForeignState(country).domestic;
+        if(d.shock.monthsLeft||d.economy.stress>68||country.stability<35)return "bad";
+        if(d.economy.stress>46||d.politics.legitimacy<48)return "warn";
+        return "good";
+      }
+
+      function renderForeignStatePanel(country) {
+        const d=normalizeForeignState(country).domestic,e=d.economy,p=d.politics,dem=d.demography,def=d.defense,tone=foreignStateTone(country);
+        return `<details class="action-fold" style="margin-top:12px;">
+          <summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Внутреннее состояние государства</strong><small>${esc(p.government)} · ${esc(d.lastReport)}</small></span><span class="pill ${tone}">${d.shock.monthsLeft?esc(d.shock.type):`стресс ${pct(e.stress,0)}`}</span></summary>
+          <div class="action-fold-body">
+            <div class="kpi-strip">
+              <div class="kpi"><span>Тип экономики</span><strong>${esc(e.profileName)}</strong></div>
+              <div class="kpi"><span>Рост ВВП</span><strong class="delta ${e.growth>=1?"good":e.growth<0?"bad":"warn"}">${e.growth>=0?"+":""}${e.growth.toFixed(1)}%</strong></div>
+              <div class="kpi"><span>Инфляция</span><strong>${pct(e.inflation,1)}</strong></div>
+              <div class="kpi"><span>Безработица</span><strong>${pct(e.unemployment,1)}</strong></div>
+              <div class="kpi"><span>Госдолг</span><strong>${pct(e.debtRatio,0)} ВВП</strong></div>
+              <div class="kpi"><span>Баланс бюджета</span><strong class="delta ${e.fiscalBalance>=-3?"good":"bad"}">${e.fiscalBalance>=0?"+":""}${e.fiscalBalance.toFixed(1)}% ВВП</strong></div>
+              <div class="kpi"><span>Резервы</span><strong>${e.reserveMonths.toFixed(1)} мес. импорта</strong></div>
+              <div class="kpi"><span>Производительность</span><strong>${pct(e.productivity,0)}</strong></div>
+            </div>
+            <div class="decision-grid" style="margin-top:10px;">
+              <div class="kpi"><span>Политическая система</span><strong>${esc(p.system)}</strong></div>
+              <div class="kpi"><span>Поддержка правительства</span><strong>${pct(p.approval,0)}</strong></div>
+              <div class="kpi"><span>Оппозиция</span><strong>${pct(p.opposition,0)}</strong></div>
+              <div class="kpi"><span>Легитимность</span><strong>${pct(p.legitimacy,0)}</strong></div>
+              <div class="kpi"><span>Коррупционный риск</span><strong>${pct(p.corruption,0)}</strong></div>
+              <div class="kpi"><span>Следующий цикл власти</span><strong>≈${Math.ceil(p.electionDays/30)} мес.</strong></div>
+              <div class="kpi"><span>Рост населения</span><strong>${dem.annualGrowth>=0?"+":""}${dem.annualGrowth.toFixed(2)}% в год</strong></div>
+              <div class="kpi"><span>Урбанизация</span><strong>${pct(dem.urbanization,0)}</strong></div>
+            </div>
+            <div class="fiscal-ledger" style="margin-top:10px;">
+              <span><small>Военные расходы</small><strong>${pct(def.spendingShare,1)} ВВП</strong></span><span><small>Готовность</small><strong>${pct(def.readiness,0)}</strong></span><span><small>Запасы</small><strong>${pct(def.stock,0)}</strong></span><span><small>Истощение</small><strong>${pct(def.exhaustion,0)}</strong></span><span><small>Приоритет курса</small><strong>${esc(d.policy.priority)}</strong></span>
+            </div>
+            ${d.shock.monthsLeft?`<article class="strategy-card bad" style="margin-top:10px;"><header><strong>${esc(d.shock.type)}</strong><span class="pill">тяжесть ${pct(d.shock.severity,0)}</span></header><p class="intent-line">Оценочный срок активной фазы: ${d.shock.monthsLeft} мес. Кризис уже влияет на рост, бюджет, легитимность и внешнюю политику.</p></article>`:""}
+          </div>
+        </details>`;
+      }
+
+      function renderWorldStatePanel() {
+        const world=state.diplomacy.worldSystem||migrateForeignStateSystem(state),active=world.conflicts.filter(item=>item.status==="active"),crises=state.diplomacy.countries.filter(country=>country.domestic?.shock?.monthsLeft>0).length;
+        return `<section class="panel pad">
+          <div class="panel-section-head"><span><h3 class="section-title">Самостоятельная мировая система</h3><p class="subtle">Экономики, правительства, выборы, кризисы, соглашения и конфликты других государств развиваются без команды игрока.</p></span><span class="pill ${world.worldRisk>65?"bad":world.worldRisk>42?"warn":"good"}">риск ${pct(world.worldRisk,0)}</span></div>
+          <div class="kpi-strip" style="margin-top:12px;"><div class="kpi"><span>Мировой рост</span><strong>${world.globalGrowth>=0?"+":""}${world.globalGrowth.toFixed(1)}%</strong></div><div class="kpi"><span>Мировая инфляция</span><strong>${pct(world.globalInflation,1)}</strong></div><div class="kpi"><span>Безработица</span><strong>${pct(world.globalUnemployment,1)}</strong></div><div class="kpi"><span>Торговый импульс</span><strong>${world.tradeMomentum>=0?"+":""}${world.tradeMomentum.toFixed(1)}</strong></div><div class="kpi"><span>Активные кризисы</span><strong>${crises}</strong></div><div class="kpi"><span>Смен власти</span><strong>${world.leadershipChanges}</strong></div></div>
+          <p class="subtle" style="margin:10px 0 0;">${esc(world.lastBriefing)}</p>
+          <details class="action-fold" style="margin-top:10px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Межгосударственные конфликты</strong><small>потери, интенсивность и изменение положения сторон</small></span><span class="pill">${active.length}</span></summary><div class="action-fold-body"><div class="list">${active.length?active.slice(0,8).map(item=>`<div class="row"><span><strong>${esc(item.actorName)} → ${esc(item.targetName)}</strong><br><small class="subtle">${esc(item.cause)} · ${item.months} мес. · контроль наступающей стороны ${pct(item.control,0)}<br>потери ${compact(item.actorLosses)} / ${compact(item.targetLosses)} · перемещено ${compact(item.displaced)}</small></span><span class="pill ${item.intensity>65?"bad":"warn"}">интенсивность ${pct(item.intensity,0)}</span></div>`).join(""):`<div class="row"><span>Активных войн между иностранными государствами нет</span><span class="pill good">мир</span></div>`}</div></div></details>
+          <details class="action-fold" style="margin-top:8px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Действующие соглашения</strong><small>торговые коридоры, соглашения безопасности и перемирия</small></span><span class="pill">${world.agreements.length}</span></summary><div class="action-fold-body"><div class="list">${world.agreements.length?world.agreements.slice(0,10).map(item=>`<div class="row"><span><strong>${esc(item.actorName)} ↔ ${esc(item.targetName)}</strong><br><small class="subtle">${item.type==="trade"?"торговый коридор":item.type==="security"?"соглашение безопасности":"перемирие"} · действует ещё ${item.monthsLeft} мес.</small></span><span class="pill">прочность ${pct(item.strength,0)}</span></div>`).join(""):`<div class="row"><span>Крупных двусторонних соглашений пока нет</span><span class="pill">дипломатия</span></div>`}</div></div></details>
+        </section>`;
+      }
+
       function renderDiplomacy() {
         const list = state.diplomacy.countries;
         const selected = list.find(c => c.id === selectedCountryId) || list[0];
@@ -11085,6 +11407,7 @@
                   <div class="resource-line">${strategy.interests.map(item => `<span class="resource-badge">${esc(item)}</span>`).join("")}</div>
                   <p class="intent-line"><strong>Вероятный следующий шаг:</strong> ${esc(diplomaticIntent(selected))}.<br><strong>Последнее действие:</strong> ${esc(strategy.recentAction)}.</p>
                 </article>
+                ${renderForeignStatePanel(selected)}
                 <div class="resource-line" style="margin-top: 10px;">${renderResourceBadges(selected.resources || {}, 6)}</div>
                 <div class="decision-grid" style="margin-top: 12px;">
                   <div class="kpi"><span>Наша военная мощь</span><strong>${powerIndex(assessment.ownPower)}</strong></div>
@@ -11108,6 +11431,7 @@
                 <p class="subtle" style="margin: 12px 0 0;">Дипломатические действия меняют отношения, торговлю, санкционный режим, разведку и риск войны. Карточка войны сначала откроет предвоенную оценку, а не начнет конфликт сразу.</p>
                 ${actionCardGrid(["relations","trade","alliance","sanctions","embargo","milAid","humanAid","spy","visa","war","peace"].map(id => renderActionCard(diplomacyDecisionMeta(id, selected), { "data-action": "diplo", "data-diplo": id }, { compact: true })), true)}
               </section>` : ""}
+              ${renderWorldStatePanel()}
               <section class="panel pad">
                 <div class="panel-section-head"><span><h3 class="section-title">Репутация и международное право</h3><p class="subtle">Договоры, доказательства, мандаты и нарушения меняют доверие государств, санкционный риск и допустимость применения силы.</p></span><span class="pill">репутация ${pct(law.reputation,0)}</span></div>
                 <div class="kpi-strip" style="margin-top:12px;">
@@ -11191,6 +11515,8 @@
       function countryStatus(c) {
         const bits = [];
         if (c.war) bits.push("война");
+        if (c.domestic?.defense?.externalConflicts) bits.push("внешний конфликт");
+        if (c.domestic?.shock?.monthsLeft) bits.push("внутренний кризис");
         if (c.alliance) bits.push("союз");
         if (c.sanctions) bits.push("санкции");
         if (c.embargo) bits.push("эмбарго");
@@ -12989,6 +13315,14 @@
                 "Раз в семь дней ИИ пересматривает стратегию. Действия ограничены паузами, поэтому политическая жизнь развивается без событийного шума.",
                 "Недовольная партия может выйти из коалиции, губернатор организовать давление регионов, министр затянуть решение, а иностранное государство направить собственную инициативу.",
                 "Совет интересов снижает напряжение и фиксирует позиции, но не отменяет реальные противоречия и не создает скрытых уступок."
+              ])}
+              ${manualCard("Самостоятельная мировая система", [
+                "Каждое иностранное государство имеет собственные рост, инфляцию, безработицу, долг, бюджет, резервы, производительность и торговую открытость.",
+                "Правительства обладают поддержкой, оппозицией, легитимностью, коррупционным риском и сроком следующего политического цикла. Выборы или смена руководства способны изменить идеологию и внешнеполитический курс.",
+                "Демография, военные расходы, готовность, запасы и истощение меняются ежемесячно. Кризис или война больше не оставляют показатели страны неизменными.",
+                "Государства заключают между собой торговые коридоры и соглашения безопасности. Договор постепенно усиливает торговлю или готовность и может прекратиться при потере прочности.",
+                "Конфликты между ИИ-государствами рассчитывают соотношение сил, инициативу, интенсивность, потери, перемещение населения, истощение запасов и экономический ущерб до перемирия.",
+                "Мировая модель обновляется раз в месяц, а дипломатические стратегии раз в семь дней. Это сохраняет долгую причинность без нагрузки ежедневного пересчета сотен государств."
               ])}
               ${manualCard("Мировой рынок и логистика", [
                 "Нефть, газ, продовольствие, металлы, компоненты, удобрения, оборудование и оборонная продукция имеют собственные мировые цены, спрос, предложение и волатильность.",
@@ -15640,7 +15974,7 @@
         pushNews(game, "Скандалы", "Скандал в правительстве", `${minister.post} ${minister.name} оказался в центре проверки государственных контрактов.`);
       }
 
-      function updateCountryStrategy(game, country, playerPower = calcArmyPower(game) / 4.2) {
+      function updateCountryStrategy(game, country, playerPower = calcArmyPower(game) / 4.2, elapsedDays = 1) {
         const s = country.strategy || ensureDiplomaticAI(country).strategy;
         const reputation = game.diplomacy.law?.reputation ?? 60;
         const treatyReliability = game.diplomacy.law?.treatyReliability ?? 60;
@@ -15651,7 +15985,7 @@
         s.threat = clamp(s.threat * .985 + threatTarget * .015, 0, 100);
         s.dependence = clamp(s.dependence * .99 + dependenceTarget * .01, 0, 100);
         s.leverage = clamp(country.gdp / 90000 + country.military * .42 + country.intelligence * .18 + (country.greatPower ? 12 : 0), 5, 100);
-        s.cooldown = Math.max(0, s.cooldown - 1);
+        s.cooldown = Math.max(0, s.cooldown - elapsedDays);
         s.stance = country.war ? "война" : s.trust >= 66 && country.relations >= 58 ? "партнерство" : s.threat >= 65 || country.relations <= 27 ? "давление" : "наблюдение";
         s.goal = s.threat >= 70 ? "сдерживание" : s.dependence >= 38 ? "рынки" : s.interests[0];
       }
@@ -15697,38 +16031,58 @@
       }
 
       function simulateWorldDiplomaticAction(game, actor) {
-        const others = game.diplomacy.countries.filter(country => country.id !== actor.id && !country.war);
+        const activeOpponents=new Set((game.diplomacy.worldSystem?.conflicts||[]).filter(item=>item.status==="active"&&(item.actorId===actor.id||item.targetId===actor.id)).map(item=>item.actorId===actor.id?item.targetId:item.actorId));
+        const others = game.diplomacy.countries.filter(country => country.id !== actor.id && !country.war && !activeOpponents.has(country.id));
         if (!others.length) return false;
         const target = pick(others);
+        normalizeForeignState(actor);normalizeForeignState(target);ensureDiplomaticAI(target);
         const s = actor.strategy;
         const link = s.links[target.id] || { relation: clamp(48 + (actor.stability - target.stability) * .08 + rnd(-8, 8), 8, 90), status: "контакт" };
+        const reverse = target.strategy.links[actor.id] || { relation: clamp(link.relation + rnd(-5,5), 0, 100), status: link.status };
         let action = "";
         let tone = "переговоры";
         if ((actor.aiMood === "силовой" || s.threat > 68) && link.relation < 42) {
           action = `усиливает военное и санкционное давление на ${target.name}`;
           link.relation = clamp(link.relation - rnd(4, 9), 0, 100);
+          reverse.relation = clamp(reverse.relation - rnd(3, 8), 0, 100);
           link.status = "соперничество";
+          reverse.status = "соперничество";
           target.strategy.threat = clamp(target.strategy.threat + 3, 0, 100);
           game.diplomacy.globalTension = clamp(game.diplomacy.globalTension + 1.2, 0, 100);
           tone = "давление";
+          const aggression=clamp(num(actor.aggression,actor.aiMood==="силовой"?48:24)+(100-actor.domestic.politics.legitimacy)*.18,0,100);
+          const securityPact=game.diplomacy.worldSystem.agreements.some(item=>item.type==="security"&&item.monthsLeft>0&&(item.actorId===target.id||item.targetId===target.id));
+          if(link.relation<24&&aggression>58&&!securityPact&&simulationRandom()<clamp((aggression-50)*.012,0,.28)){
+            actor.strategy.links[target.id]=link;target.strategy.links[actor.id]=reverse;
+            return !!startWorldConflict(game,actor,target,`эскалация соперничества вокруг цели «${s.goal}»`);
+          }
         } else if (actor.aiMood === "торговый" || s.dependence > 34) {
           action = `согласовывает с ${target.name} промышленный и логистический коридор`;
           link.relation = clamp(link.relation + rnd(2, 6), 0, 100);
+          reverse.relation = clamp(reverse.relation + rnd(2,5),0,100);
           link.status = "торговое партнерство";
+          reverse.status = "торговое партнерство";
           actor.trade *= 1.002;
           target.trade *= 1.0015;
+          registerWorldAgreement(game,actor,target,"trade",Math.round(rnd(30,84)));
           game.diplomacy.globalTension = clamp(game.diplomacy.globalTension - .35, 0, 100);
         } else if (link.relation > 62 || actor.aiMood === "осторожный") {
           action = `проводит с ${target.name} консультации по безопасности и балансу сил`;
           link.relation = clamp(link.relation + rnd(1, 4), 0, 100);
+          reverse.relation = clamp(reverse.relation + rnd(1,4),0,100);
           link.status = "координация";
+          reverse.status = "координация";
+          if(link.relation>72&&reverse.relation>68&&simulationRandom()<.22)registerWorldAgreement(game,actor,target,"security",Math.round(rnd(36,96)));
           game.diplomacy.globalTension = clamp(game.diplomacy.globalTension - .18, 0, 100);
         } else {
           action = `открывает с ${target.name} переговоры по теме «${s.goal}»`;
           link.relation = clamp(link.relation + rnd(-1, 4), 0, 100);
+          reverse.relation = clamp(reverse.relation + rnd(-1,3),0,100);
           link.status = "переговоры";
+          reverse.status = "переговоры";
         }
         s.links[target.id] = link;
+        target.strategy.links[actor.id] = reverse;
         s.recentAction = action;
         s.cooldown = Math.round(rnd(38, 115));
         pushWorldDiplomacyLog(game, actor.name, target.name, action, tone);
@@ -15737,15 +16091,19 @@
       }
 
       function simulateStrategicDiplomacy(game) {
+        const worldSystem=game.diplomacy.worldSystem||migrateForeignStateSystem(game);
+        worldSystem.diplomaticDays=Math.max(0,worldSystem.diplomaticDays-1);
+        if(worldSystem.diplomaticDays>0)return;
+        worldSystem.diplomaticDays=7;
         if (!Array.isArray(game.diplomacy.worldLog) || game.diplomacy.countries.some(country => !country.strategy)) migrateStrategicDiplomacy(game);
         const playerPower = calcArmyPower(game) / 4.2;
-        for (const country of game.diplomacy.countries) updateCountryStrategy(game, country, playerPower);
+        for (const country of game.diplomacy.countries) updateCountryStrategy(game, country, playerPower, 7);
         const sanctionCount=game.diplomacy.countries.filter(country=>country.sanctions||country.embargo).length;
         const hostility=avg(game.diplomacy.countries.map(country=>({value:Math.max(0,45-country.relations)})),"value");
         const strategicThreat=avg(game.diplomacy.countries.map(country=>({value:num(country.strategy?.threat,35)})),"value");
         const tensionTarget=clamp(22+hostility*.28+strategicThreat*.16+sanctionCount*2.5+game.military.wars.length*14,12,92);
-        game.diplomacy.globalTension=clamp(game.diplomacy.globalTension+(tensionTarget-game.diplomacy.globalTension)*.0012+rnd(-.003,.003),0,100);
-        if (simulationRandom() >= .17) return;
+        game.diplomacy.globalTension=clamp(game.diplomacy.globalTension+(tensionTarget-game.diplomacy.globalTension)*.008+rnd(-.02,.02),0,100);
+        if (simulationRandom() >= .62) return;
         const ready = game.diplomacy.countries.filter(country => !country.war && country.strategy.cooldown <= 0);
         if (!ready.length) return;
         const actor = pick(ready);
@@ -15760,21 +16118,24 @@
         const law = game.diplomacy.law;
         if (!law) return;
         if (law.ratificationCooldown > 0) law.ratificationCooldown--;
+        law.maintenanceDays=Math.max(0,num(law.maintenanceDays)-1);
+        if(law.maintenanceDays>0)return;
+        law.maintenanceDays=7;
         game.diplomacy.countries.forEach(country => {
           const profile = ensureCountryLegalProfile(country);
-          if (profile.mandateDays > 0) profile.mandateDays--;
-          profile.intelAge = Math.min(999, profile.intelAge + 1);
-          profile.evidence = clamp(profile.evidence - .004 + game.governance.intelligence.foreignNetworks * .00004, 0, 100);
+          if (profile.mandateDays > 0) profile.mandateDays=Math.max(0,profile.mandateDays-7);
+          profile.intelAge = Math.min(999, profile.intelAge + 7);
+          profile.evidence = clamp(profile.evidence - .028 + game.governance.intelligence.foreignNetworks * .00028, 0, 100);
         });
         const sanctionCount = game.diplomacy.countries.filter(country => country.sanctions || country.embargo).length;
         const activeIllegalWars = game.military.wars.filter(war => war.aggressor === "player" && war.legitimacy < 45).length;
         const exposureTarget=clamp(sanctionCount*7+activeIllegalWars*24,0,100);
-        law.sanctionsExposure=clamp(law.sanctionsExposure+(exposureTarget-law.sanctionsExposure)*.003,0,100);
+        law.sanctionsExposure=clamp(law.sanctionsExposure+(exposureTarget-law.sanctionsExposure)*.0208,0,100);
         const violationSeverity=(law.violations||[]).slice(0,8).reduce((sum,item)=>sum+num(item.severity),0)/8;
         const reputationTarget=clamp(42+law.treatyReliability*.2+law.humanitarianStanding*.15-law.sanctionsExposure*.22-activeIllegalWars*16-violationSeverity*.08,5,92);
-        law.reputation=clamp(law.reputation+(reputationTarget-law.reputation)*.001,0,100);
+        law.reputation=clamp(law.reputation+(reputationTarget-law.reputation)*.007,0,100);
         const standingTarget=clamp(law.treatyReliability*.55+law.humanitarianStanding*.2+law.reputation*.25-activeIllegalWars*18,5,95);
-        law.legalStanding=clamp(law.legalStanding+(standingTarget-law.legalStanding)*.001,0,100);
+        law.legalStanding=clamp(law.legalStanding+(standingTarget-law.legalStanding)*.007,0,100);
       }
 
       function internationalLawAction(mode, countryId = selectedCountryId) {
@@ -15837,22 +16198,13 @@
         game.diplomacy.inbox ||= [];
         for (const offer of game.diplomacy.inbox) offer.daysLeft = Math.max(0, (offer.daysLeft || 0) - 1);
         game.diplomacy.inbox = game.diplomacy.inbox.filter(offer => offer.daysLeft > 0).slice(0, 8);
-        for (const c of game.diplomacy.countries) {
-          const ai = c.aiMood;
-          if (ai === "торговый") c.trade *= 1 + rnd(-.0002, .0009);
-          if (ai === "силовой") c.military = clamp(c.military + rnd(-.01, .04), 0, 100);
-          if (ai === "реформистский") c.stability = clamp(c.stability + rnd(-.02, .04), 0, 100);
-          c.relations = clamp(c.relations + rnd(-.045, .045) + (c.alliance ? .012 : 0) - (c.sanctions ? .035 : 0) - (c.war ? .18 : 0), 0, 100);
-          c.gdp = Math.max(100, c.gdp * (1 + rnd(-.00008, .00016)));
-          if (!c.war && c.relations < 8 && c.military > 70 && simulationRandom() < .0005) {
-            c.war = true;
-            const war = createWar(c, "foreign", game);
-            game.military.wars.push(war);
-            applyAggressionPressure(game, war, c);
-            pushNews(game, "Мир", "Военный конфликт", `${c.name} начала вооружённую фазу конфликта. Генштаб переводит силы в режим высокой готовности.`);
-          }
-        }
+        const worldUpdated=simulateForeignStateSystem(game);
         simulateStrategicDiplomacy(game);
+        if(worldUpdated&&game.military.wars.length<4){
+          const candidates=game.diplomacy.countries.filter(country=>!country.war&&country.relations<9&&country.military>68&&country.strategy.threat>58).sort((a,b)=>(num(b.aggression)+b.strategy.threat)-(num(a.aggression)+a.strategy.threat));
+          const aggressor=candidates[0],warChance=aggressor?clamp((num(aggressor.aggression,35)+aggressor.strategy.threat-105)*.0015,.002,.045):0;
+          if(aggressor&&simulationRandom()<warChance){aggressor.war=true;const war=createWar(aggressor,"foreign",game);game.military.wars.push(war);applyAggressionPressure(game,war,aggressor);pushNews(game,"Мир","Военный конфликт",`${aggressor.name} начала вооружённую фазу конфликта. Генштаб переводит силы в режим высокой готовности.`);}
+        }
         simulateInternationalLaw(game);
         simulateWarDiplomaticPressure(game);
       }
@@ -18250,16 +18602,18 @@
         const federation=state.federation;["cohesion","centerLegitimacy","autonomyBalance","culturalPluralism","fiscalSolidarity","separatismRisk"].forEach(key=>federation[key]=clamp(num(federation[key]),0,100));federation.councilCooldown=Math.max(0,Math.round(num(federation.councilCooldown)));federation.disputes=(federation.disputes||[]).slice(0,18);federation.log=(federation.log||[]).slice(0,32);
         const succession=state.succession;["readiness","continuity","transitionRisk","institutionalMemory","caretakerNeutrality","archiveQuality"].forEach(key=>succession[key]=clamp(num(succession[key]),0,100));succession.termsServed=Math.max(1,Math.round(num(succession.termsServed,1)));succession.termNumber=Math.max(1,Math.round(num(succession.termNumber,1)));succession.currentEra=normalizePoliticalEra(succession.currentEra);succession.eras=(succession.eras||[]).map(item=>normalizePoliticalEra(item)).slice(0,24);succession.log=(succession.log||[]).slice(0,40);
         const infrastructure=state.infrastructure;["reliability","maintenanceBacklog","freightIndex","digitalCoverage","outageRisk","investmentEfficiency"].forEach(key=>infrastructure[key]=clamp(num(infrastructure[key]),0,key==="freightIndex"?110:100));infrastructure.powerReserve=clamp(num(infrastructure.powerReserve),-45,55);infrastructure.waterReserve=clamp(num(infrastructure.waterReserve),-45,55);infrastructure.maintenanceBudget=Math.max(0,num(infrastructure.maintenanceBudget));infrastructure.edges=infrastructure.edges.map(edge=>normalizeInfrastructureEdge(edge)).slice(0,160);infrastructure.history=(infrastructure.history||[]).slice(0,60);
-        state.diplomacy.countries = (state.diplomacy.countries || []).map(country => ensureDiplomaticAI(ensureCountryAssets(country)));
+        state.diplomacy.countries = (state.diplomacy.countries || []).map(country => normalizeForeignState(ensureDiplomaticAI(ensureCountryAssets(country))));
         state.diplomacy.pressureLog ||= [];
         state.diplomacy.worldLog ||= [];
         state.diplomacy.globalTension = clamp(num(state.diplomacy.globalTension, 34), 0, 100);
+        migrateForeignStateSystem(state);
         const shadow=state.shadowEconomy;["informalShare","taxGap","smuggling","laundering","organizedCrime","violence","customsControl","financialIntelligence","witnessProtection","enforcementPressure","formalization"].forEach(key=>shadow[key]=clamp(num(shadow[key]),0,100));shadow.criminalAssets=Math.max(0,num(shadow.criminalAssets));shadow.seizedAssets=Math.max(0,num(shadow.seizedAssets));shadow.recoveredTaxes=Math.max(0,num(shadow.recoveredTaxes));
         const opposition=p.shadowCabinet;["approval","unity","credibility","scrutiny","campaignReadiness"].forEach(key=>opposition[key]=clamp(num(opposition[key]),0,100));opposition.momentum=clamp(num(opposition.momentum),-20,20);opposition.nextActionDays=Math.max(0,Math.round(num(opposition.nextActionDays)));
         const promises=p.promises;["credibility","accountability"].forEach(key=>promises[key]=clamp(num(promises[key]),0,100));promises.reviewDays=Math.max(0,Math.round(num(promises.reviewDays)));
         const softPower=state.softPower;["prestige","culturalReach","educationAttraction","mediaReach","diasporaTrust","humanitarianInfluence","sportsPrestige","tourismAppeal","credibility"].forEach(key=>softPower[key]=clamp(num(softPower[key]),0,100));softPower.budget=Math.max(0,num(softPower.budget));
         const law = state.diplomacy.law;
         ["reputation","legalStanding","treatyReliability","humanitarianStanding","sanctionsExposure"].forEach(key => law[key] = clamp(num(law[key]), 0, 100));
+        law.maintenanceDays=Math.max(0,Math.round(num(law.maintenanceDays)));
       }
 
       function setEditorPath(path, value, asNumber) {
