@@ -3293,6 +3293,39 @@
       margin-top: 8px;
     }
 
+    .world-logistics-map {
+      position: relative;
+      min-height: 360px;
+      overflow: hidden;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      background:
+        linear-gradient(rgba(185, 196, 180, .045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(185, 196, 180, .045) 1px, transparent 1px),
+        color-mix(in oklab, var(--panel) 90%, #1f2b29);
+      background-size: 46px 46px;
+    }
+
+    .world-logistics-map svg { display: block; width: 100%; height: auto; min-height: 360px; }
+    .geo-zone { stroke: color-mix(in oklab, var(--line-strong) 75%, #c8c1a3); stroke-width: 1.2; opacity: .72; }
+    .geo-zone-label { fill: var(--muted); font-size: 11px; font-weight: 750; text-anchor: middle; pointer-events: none; }
+    .world-route-line { fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linecap: round; opacity: .82; }
+    .world-route-line.warn { stroke: var(--warn); stroke-dasharray: 8 6; }
+    .world-route-line.bad { stroke: var(--bad); stroke-dasharray: 5 7; }
+    .world-route-line.rerouted { stroke: #c7a86a; stroke-dasharray: 10 5; }
+    .world-route-node { fill: var(--panel-2); stroke: #d7d0b5; stroke-width: 2; }
+    .world-route-node.home { fill: #b99756; stroke: #f2e4bd; stroke-width: 3; }
+    .world-route-node.choke { fill: #846a47; stroke: #ead8a6; }
+    .world-route-node.bad { fill: #833f48; stroke: #ff9aa8; }
+    .world-route-label { fill: var(--text); font-size: 11px; font-weight: 800; paint-order: stroke; stroke: color-mix(in oklab, var(--panel) 92%, #000); stroke-width: 4px; stroke-linejoin: round; }
+    .world-map-legend { position: absolute; left: 12px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; }
+    .world-map-legend span { padding: 5px 7px; border: 1px solid var(--line-strong); border-radius: 4px; background: color-mix(in oklab, var(--panel) 91%, transparent); color: var(--muted); font-size: 11px; font-weight: 750; }
+    .route-path { margin: 8px 0 0; padding: 8px 10px; border-left: 2px solid #b99756; background: color-mix(in oklab, var(--panel-2) 78%, transparent); color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .geography-chip-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(170px,1fr)); gap: 7px; margin-top: 10px; }
+    .geography-chip-grid > div { padding: 8px 9px; border: 1px solid var(--line); border-radius: 4px; display: grid; gap: 2px; }
+    .geography-chip-grid span { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+    .geography-chip-grid strong { font-size: 14px; }
+
     @media (max-width: 1060px) {
       .shell { grid-template-columns: 1fr; }
       .sidebar {
@@ -3309,6 +3342,7 @@
       .map-layout,
       .command-center { grid-template-columns: 1fr; }
       .command-side { border-left: 0; border-top: 1px solid var(--line); }
+      .world-logistics-map, .world-logistics-map svg { min-height: 300px; }
     }
 
     @media (max-width: 620px) {
@@ -3454,9 +3488,10 @@
 
       const STORAGE_KEY = "aaa_president_sim_state_v4";
       const SLOTS_KEY = "aaa_president_sim_slots_v4";
-      const SAVE_VERSION = 19;
+      const SAVE_VERSION = 20;
       const ECONOMY_MODEL_VERSION = 4;
       const FOREIGN_STATE_MODEL_VERSION = 1;
+      const GEOGRAPHY_MODEL_VERSION = 1;
       const SAVE_DB_NAME = "aaa_president_sim_storage";
       const SAVE_DB_STORE = "saves";
       const DAY_MS = 1800;
@@ -3916,6 +3951,7 @@
         if (copy.worldMarket?.history) copy.worldMarket.history = copy.worldMarket.history.slice(0, level === "normal" ? 36 : 14);
         if (copy.worldMarket?.incidents) copy.worldMarket.incidents = copy.worldMarket.incidents.slice(0, level === "normal" ? 18 : 7);
         if (copy.worldMarket?.contracts) copy.worldMarket.contracts = copy.worldMarket.contracts.slice(0, level === "normal" ? 14 : 6);
+        if (copy.geography?.history) copy.geography.history = copy.geography.history.slice(0, level === "normal" ? 18 : 7);
         if (copy.elites?.log) copy.elites.log = copy.elites.log.slice(0, level === "normal" ? 28 : 12);
         if (copy.statistics?.reports) copy.statistics.reports = copy.statistics.reports.slice(0, level === "normal" ? 24 : 10);
         if (copy.statistics?.revisions) copy.statistics.revisions = copy.statistics.revisions.slice(0, level === "normal" ? 24 : 10);
@@ -4162,6 +4198,7 @@
         migrateChronicle(loaded);
         migrateSuccessionSystem(loaded);
         migrateFederationSystem(loaded);
+        migrateWorldGeography(loaded);
         migrateWorldMarketSystem(loaded);
         migrateEliteSystem(loaded);
         migrateStatisticsSystem(loaded);
@@ -6826,6 +6863,254 @@
         return (hash >>> 0) / 4294967295;
       }
 
+      let geographyReferenceCache = null;
+
+      function geographyReference() {
+        if (geographyReferenceCache) return geographyReferenceCache;
+        const zones = {
+          north_america:{name:"Северная Америка",x:142,y:128,color:"#6d8f72",terrain:"смешанный"},
+          central_america:{name:"Центральная Америка и Карибы",x:205,y:238,color:"#6f9a73",terrain:"тропический"},
+          south_america:{name:"Южная Америка",x:282,y:342,color:"#789568",terrain:"смешанный"},
+          europe:{name:"Европа",x:462,y:118,color:"#82947a",terrain:"равнинный"},
+          north_eurasia:{name:"Северная Евразия",x:596,y:84,color:"#778c76",terrain:"континентальный"},
+          central_asia:{name:"Центральная Азия",x:628,y:182,color:"#918c6d",terrain:"континентальный"},
+          middle_east:{name:"Ближний Восток",x:574,y:225,color:"#9a8866",terrain:"засушливый"},
+          south_asia:{name:"Южная Азия",x:674,y:264,color:"#879267",terrain:"смешанный"},
+          east_asia:{name:"Восточная Азия",x:765,y:168,color:"#738f79",terrain:"смешанный"},
+          southeast_asia:{name:"Юго-Восточная Азия",x:790,y:286,color:"#71977e",terrain:"тропический"},
+          north_africa:{name:"Северная Африка",x:470,y:242,color:"#9a8969",terrain:"засушливый"},
+          west_africa:{name:"Западная Африка",x:425,y:326,color:"#87916a",terrain:"тропический"},
+          east_africa:{name:"Восточная Африка",x:538,y:334,color:"#87906b",terrain:"смешанный"},
+          south_africa:{name:"Южная Африка",x:505,y:410,color:"#758c70",terrain:"смешанный"},
+          oceania:{name:"Океания",x:852,y:380,color:"#6f8f83",terrain:"островной"},
+          arctic:{name:"Арктический пояс",x:450,y:42,color:"#81939a",terrain:"арктический"}
+        };
+        const groups = {
+          north_america:"Канада,США,Гренландия,Бермуды,Сен-Пьер и Микелон",
+          central_america:"Мексика,Белиз,Гватемала,Гондурас,Сальвадор,Никарагуа,Коста-Рика,Панама,Багамы,Куба,Ямайка,Гаити,Доминиканская Республика,Антигуа и Барбуда,Барбадос,Доминика,Гренада,Сент-Китс и Невис,Сент-Люсия,Сент-Винсент и Гренадины,Тринидад и Тобаго,Пуэрто-Рико,Аруба,Кюрасао,Ангилья,Британские Виргинские острова,Каймановы острова,Монтсеррат,Теркс и Кайкос,Виргинские острова США,Мартиника,Гваделупа,Сен-Мартен,Сен-Бартелеми",
+          south_america:"Аргентина,Боливия,Бразилия,Чили,Колумбия,Эквадор,Гайана,Парагвай,Перу,Суринам,Уругвай,Венесуэла,Фолклендские острова,Французская Гвиана",
+          europe:"Албания,Андорра,Австрия,Бельгия,Босния и Герцеговина,Болгария,Хорватия,Кипр,Чехия,Дания,Эстония,Финляндия,Франция,Германия,Греция,Венгрия,Исландия,Ирландия,Италия,Латвия,Лихтенштейн,Литва,Люксембург,Мальта,Молдова,Монако,Черногория,Нидерланды,Северная Македония,Норвегия,Польша,Португалия,Румыния,Сан-Марино,Сербия,Словакия,Словения,Испания,Швеция,Швейцария,Украина,Великобритания,Ватикан,Косово,Гибралтар,Фарерские острова,Гернси,Джерси,Остров Мэн",
+          north_eurasia:"Россия,Беларусь,Армения,Азербайджан,Грузия",
+          central_asia:"Казахстан,Кыргызстан,Таджикистан,Туркменистан,Узбекистан,Монголия",
+          middle_east:"Бахрейн,Иран,Ирак,Израиль,Иордания,Кувейт,Ливан,Оман,Палестина,Катар,Саудовская Аравия,Сирия,Турция,ОАЭ,Йемен,Северный Кипр",
+          south_asia:"Афганистан,Бангладеш,Бутан,Индия,Мальдивы,Непал,Пакистан,Шри-Ланка",
+          east_asia:"Китай,Япония,КНДР,Южная Корея,Тайвань,Гонконг,Макао",
+          southeast_asia:"Бруней,Камбоджа,Индонезия,Лаос,Малайзия,Мьянма,Филиппины,Сингапур,Таиланд,Тимор-Лесте,Вьетнам",
+          north_africa:"Алжир,Египет,Ливия,Марокко,Судан,Тунис,Западная Сахара",
+          west_africa:"Бенин,Буркина-Фасо,Кабо-Верде,Кот-д'Ивуар,Гамбия,Гана,Гвинея,Гвинея-Бисау,Либерия,Мали,Мавритания,Нигер,Нигерия,Сенегал,Сьерра-Леоне,Того",
+          east_africa:"Бурунди,Коморы,Джибути,Эритрея,Эфиопия,Кения,Мадагаскар,Малави,Маврикий,Мозамбик,Руанда,Сейшелы,Сомали,Южный Судан,Танзания,Уганда,Замбия,Зимбабве,Сомалиленд,Реюньон,Майотта",
+          south_africa:"Ангола,Ботсвана,Камерун,ЦАР,Чад,Конго,ДР Конго,Экваториальная Гвинея,Эсватини,Габон,Лесото,Намибия,Сан-Томе и Принсипи,ЮАР,Остров Святой Елены",
+          oceania:"Австралия,Фиджи,Кирибати,Маршалловы Острова,Микронезия,Науру,Новая Зеландия,Палау,Папуа - Новая Гвинея,Самоа,Соломоновы Острова,Тонга,Тувалу,Вануату,Новая Каледония,Французская Полинезия,Острова Кука,Ниуэ,Гуам,Американское Самоа"
+        };
+        const countryZone = new Map();
+        for (const [zoneId, list] of Object.entries(groups)) list.split(",").forEach(name => countryZone.set(name, zoneId));
+        const landlocked = new Set("Афганистан,Андорра,Армения,Австрия,Азербайджан,Беларусь,Боливия,Ботсвана,Буркина-Фасо,Бурунди,Бутан,Ватикан,Венгрия,Замбия,Зимбабве,Казахстан,Кыргызстан,Косово,Лаос,Лесото,Лихтенштейн,Люксембург,Малави,Мали,Молдова,Монголия,Непал,Нигер,Парагвай,Руанда,Сан-Марино,Северная Македония,Сербия,Словакия,Таджикистан,Туркменистан,Уганда,Узбекистан,ЦАР,Чад,Чехия,Швейцария,Эсватини,Эфиопия,Южный Судан".split(","));
+        const islands = new Set("Антигуа и Барбуда,Австралия,Багамы,Бахрейн,Барбадос,Бруней,Великобритания,Гренада,Доминика,Исландия,Ирландия,Кабо-Верде,Кирибати,Коморы,Куба,Кипр,Мадагаскар,Мальдивы,Мальта,Маршалловы Острова,Маврикий,Микронезия,Науру,Новая Зеландия,Палау,Самоа,Сейшелы,Сингапур,Соломоновы Острова,Тайвань,Тимор-Лесте,Тонга,Тувалу,Фиджи,Филиппины,Шри-Ланка,Ямайка,Япония".split(","));
+        const anchors = {
+          "США":[135,145],"Канада":[132,86],"Мексика":[176,211],"Бразилия":[285,350],"Аргентина":[278,421],"Великобритания":[430,105],"Франция":[455,132],"Германия":[482,116],"Испания":[438,160],"Италия":[486,158],"Польша":[510,118],"Украина":[545,134],"Россия":[630,82],"Турция":[555,193],"Египет":[522,243],"Нигерия":[442,332],"ЮАР":[505,420],"Саудовская Аравия":[590,249],"Иран":[622,218],"Индия":[677,270],"Казахстан":[632,157],"Китай":[748,180],"Япония":[826,184],"Южная Корея":[798,194],"Индонезия":[793,324],"Сингапур":[771,300],"Австралия":[850,385],"Новая Зеландия":[890,420]
+        };
+        geographyReferenceCache = {zones,countryZone,landlocked,islands,anchors};
+        return geographyReferenceCache;
+      }
+
+      function inferCountryZone(country, fallback = "europe") {
+        const ref = geographyReference();
+        if (ref.countryZone.has(country?.name)) return ref.countryZone.get(country.name);
+        const continent = String(country?.continent || "").toLowerCase();
+        if (continent.includes("африк")) return "east_africa";
+        if (continent.includes("северн") && continent.includes("амер")) return "north_america";
+        if (continent.includes("южн") && continent.includes("амер")) return "south_america";
+        if (continent.includes("океан") || continent.includes("австрал")) return "oceania";
+        if (continent.includes("аркти")) return "arctic";
+        if (continent.includes("ази")) return "central_asia";
+        return fallback;
+      }
+
+      function countryGeographyProfile(country) {
+        const ref = geographyReference();
+        const zoneId = inferCountryZone(country, "europe");
+        const zone = ref.zones[zoneId] || ref.zones.europe;
+        const anchor = ref.anchors[country?.name];
+        const x = anchor?.[0] ?? clamp(zone.x + (stableCountryFactor(country, 51) - .5) * 58, 35, 885);
+        const y = anchor?.[1] ?? clamp(zone.y + (stableCountryFactor(country, 52) - .5) * 52, 28, 425);
+        const landlocked = ref.landlocked.has(country?.name);
+        const island = ref.islands.has(country?.name) || /остров|аруба|гренланд/i.test(country?.name || "");
+        const perCapita = num(country?.gdp, 10000) * 1000000 / Math.max(100000, num(country?.population, 1000000));
+        const incomeFactor = clamp(Math.log10(Math.max(600, perCapita)) * 18 - 35, 18, 92);
+        const transport = clamp(incomeFactor * .5 + num(country?.stability, 50) * .28 + num(country?.domestic?.economy?.productivity, 50) * .22, 15, 96);
+        const resources = country?.resources || {};
+        const ports = landlocked ? 0 : clamp(24 + num(resources.ports, 12) * .55 + incomeFactor * .34 + (island ? 12 : 0), 12, 98);
+        const rail = clamp(transport + (zoneId === "europe" || zoneId === "east_asia" ? 8 : 0) - (island ? 16 : 0), 8, 98);
+        const road = clamp(transport + (zoneId === "north_america" ? 6 : 0), 10, 98);
+        return {modelVersion:GEOGRAPHY_MODEL_VERSION,zoneId,zoneName:zone.name,x,y,coastal:!landlocked,landlocked,island,terrain:zone.terrain,ports,rail,road,transport,hub:clamp(transport*.45+ports*.28+num(country?.trade)/Math.max(1,num(country?.gdp))*60,8,100),tradeAccess:clamp(transport*.62+ports*.22+num(country?.relations,50)*.16,10,100)};
+      }
+
+      function ensureCountryGeography(country) {
+        const base = countryGeographyProfile(country);
+        const incoming = country.geo && typeof country.geo === "object" && !Array.isArray(country.geo) ? country.geo : {};
+        const geo = Object.assign(base, incoming, {modelVersion:GEOGRAPHY_MODEL_VERSION});
+        geo.zoneId = geographyReference().zones[geo.zoneId] ? geo.zoneId : base.zoneId;
+        geo.zoneName = geographyReference().zones[geo.zoneId].name;
+        ["x","y","ports","rail","road","transport","hub","tradeAccess"].forEach(key => geo[key] = clamp(num(geo[key], base[key]), key === "x" || key === "y" ? 0 : 0, key === "x" ? 920 : key === "y" ? 450 : 100));
+        geo.landlocked = !!geo.landlocked;
+        geo.coastal = !geo.landlocked && geo.coastal !== false;
+        geo.island = !!geo.island;
+        geo.terrain ||= base.terrain;
+        country.geo = geo;
+        country.continent = geo.zoneName;
+        return geo;
+      }
+
+      function playerGeographyProfile(game) {
+        const countries = game?.diplomacy?.countries || [];
+        const neighbors = (game?.country?.neighbors || []).map(name => countries.find(country => country.name === name)).filter(Boolean);
+        const zoneCounts = new Map();
+        neighbors.forEach(country => { const zoneId = ensureCountryGeography(country).zoneId; zoneCounts.set(zoneId, (zoneCounts.get(zoneId) || 0) + 1); });
+        const inferred = [...zoneCounts.entries()].sort((a,b) => b[1] - a[1])[0]?.[0] || inferCountryZone(game?.country, "europe");
+        const zone = geographyReference().zones[inferred] || geographyReference().zones.europe;
+        const neighborX = neighbors.length ? avg(neighbors.map(country => ({value:country.geo.x})), "value") : zone.x;
+        const neighborY = neighbors.length ? avg(neighbors.map(country => ({value:country.geo.y})), "value") : zone.y;
+        const portBuildings = (game?.regions || []).reduce((sum, region) => sum + num(region.buildings?.ports), 0);
+        const airportBuildings = (game?.regions || []).reduce((sum, region) => sum + num(region.buildings?.airports), 0);
+        const explicitlyLandlocked = neighbors.length >= 2 && neighbors.every(country => country.geo.landlocked) && portBuildings === 0;
+        const infrastructure = clamp((num(game?.infrastructure?.freightIndex, 58) + num(game?.infrastructure?.reliability, 62)) / 2, 10, 100);
+        return {modelVersion:GEOGRAPHY_MODEL_VERSION,zoneId:inferred,zoneName:zone.name,x:clamp(neighborX+(stableCountryFactor(game?.country,61)-.5)*34,30,890),y:clamp(neighborY+(stableCountryFactor(game?.country,62)-.5)*28,25,425),coastal:!explicitlyLandlocked,landlocked:explicitlyLandlocked,island:false,terrain:zone.terrain,ports:explicitlyLandlocked?0:clamp(34+portBuildings*8+infrastructure*.28,12,100),rail:clamp(infrastructure+num(game?.regions?.reduce((sum,r)=>sum+num(r.buildings?.roads),0),0)*.35,10,100),road:infrastructure,transport:infrastructure,hub:clamp(infrastructure*.58+portBuildings*5+airportBuildings*3,12,100),tradeAccess:clamp(infrastructure*.68+num(game?.worldMarket?.corridorDiplomacy,58)*.32,10,100)};
+      }
+
+      function defaultGeographicChokepoints() {
+        return [
+          {id:"gibraltar",name:"Гибралтарский пролив",x:449,y:196,controllers:["Испания","Марокко"],capacity:88,security:78,disruption:4},
+          {id:"bosporus",name:"Босфор и Дарданеллы",x:548,y:180,controllers:["Турция"],capacity:74,security:72,disruption:5},
+          {id:"suez",name:"Суэцкий канал",x:529,y:244,controllers:["Египет"],capacity:86,security:70,disruption:6},
+          {id:"hormuz",name:"Ормузский пролив",x:621,y:247,controllers:["Иран","Оман","ОАЭ"],capacity:79,security:62,disruption:8},
+          {id:"bab",name:"Баб-эль-Мандеб",x:568,y:286,controllers:["Джибути","Йемен"],capacity:68,security:52,disruption:12},
+          {id:"malacca",name:"Малаккский пролив",x:778,y:299,controllers:["Сингапур","Малайзия","Индонезия"],capacity:91,security:75,disruption:5},
+          {id:"panama",name:"Панамский канал",x:208,y:254,controllers:["Панама"],capacity:73,security:77,disruption:5},
+          {id:"cape",name:"Маршрут мыса Доброй Надежды",x:500,y:425,controllers:["ЮАР"],capacity:62,security:66,disruption:7}
+        ].map(item => Object.assign(item,{condition:82,status:"открыт",lastEvent:"Судоходство идет в штатном режиме."}));
+      }
+
+      function normalizeGeographicChokepoint(value, fallback) {
+        const item = Object.assign({}, fallback, value || {});
+        item.controllers = Array.isArray(item.controllers) ? item.controllers.slice(0,4) : fallback.controllers;
+        ["capacity","security","disruption","condition"].forEach(key => item[key] = clamp(num(item[key], fallback[key]),0,100));
+        item.status = item.disruption >= 82 ? "закрыт" : item.disruption >= 44 ? "ограничен" : "открыт";
+        item.lastEvent ||= fallback.lastEvent;
+        return item;
+      }
+
+      function defaultWorldGeography(game) {
+        return {modelVersion:GEOGRAPHY_MODEL_VERSION,home:playerGeographyProfile(game),chokepoints:defaultGeographicChokepoints(),networkReliability:72,averageDeliveryDays:14,transitRisk:24,openChokepoints:8,lastUpdate:formatDate(game?.date||currentGameDate()),lastBriefing:"Международные транспортные узлы работают без критических ограничений.",history:[]};
+      }
+
+      function migrateWorldGeography(game) {
+        game.diplomacy ||= {countries:createWorldCountries([]),organizations:defaultOrganizations()};
+        game.diplomacy.countries = (game.diplomacy.countries || []).map(country => { ensureCountryGeography(country); return country; });
+        const base = defaultWorldGeography(game), incoming = game.geography && typeof game.geography === "object" && !Array.isArray(game.geography) ? game.geography : {};
+        const geography = Object.assign(base,incoming,{modelVersion:GEOGRAPHY_MODEL_VERSION});
+        geography.home = Object.assign(base.home, incoming.home || {}, playerGeographyProfile(game));
+        const points = new Map((Array.isArray(incoming.chokepoints)?incoming.chokepoints:[]).map(item=>[item.id,item]));
+        geography.chokepoints = base.chokepoints.map(item=>normalizeGeographicChokepoint(points.get(item.id),item));
+        ["networkReliability","averageDeliveryDays","transitRisk"].forEach(key=>geography[key]=clamp(num(geography[key],base[key]),0,key==="averageDeliveryDays"?180:100));
+        geography.openChokepoints=geography.chokepoints.filter(item=>item.status!=="закрыт").length;
+        geography.history=Array.isArray(incoming.history)?incoming.history.filter(item=>item&&typeof item==="object").slice(0,24):[];
+        geography.lastUpdate ||= base.lastUpdate; geography.lastBriefing ||= base.lastBriefing;
+        game.geography=geography;
+        return geography;
+      }
+
+      function geographicDistance(a,b) {
+        if(!a||!b)return 1800;
+        const dx=Math.abs(num(a.x)-num(b.x)),wrapped=Math.min(dx,920-dx),dy=Math.abs(num(a.y)-num(b.y));
+        return Math.round(Math.sqrt(wrapped*wrapped+dy*dy)*27+180);
+      }
+
+      function geographicRouteBlueprint(home, partner, type = "морской путь") {
+        const mode=String(type).toLowerCase(),sea=mode.includes("мор")||mode.includes("контейнер"),air=mode.includes("авиа"),pipeline=mode.includes("труб");
+        const from=home?.zoneId||"europe",to=partner?.zoneId||"europe",chokepoints=[];
+        if(sea&&!air){
+          const pair=new Set([from,to]);
+          const east=["east_asia","southeast_asia","oceania","south_asia"].some(id=>pair.has(id));
+          const west=["europe","north_eurasia","north_africa","middle_east"].some(id=>pair.has(id));
+          if(east&&west){chokepoints.push("suez");if(["east_asia","southeast_asia","oceania"].includes(to)||["east_asia","southeast_asia","oceania"].includes(from))chokepoints.push("malacca");}
+          if(pair.has("middle_east"))chokepoints.unshift("hormuz");
+          if((pair.has("north_america")||pair.has("central_america"))&&(pair.has("east_asia")||pair.has("southeast_asia")))chokepoints.push("panama");
+          if((pair.has("europe")||pair.has("north_africa"))&&(pair.has("north_america")||pair.has("south_america")))chokepoints.push("gibraltar");
+          if(pair.has("south_africa")&&east)chokepoints.push("cape");
+        }
+        if(pipeline&&new Set([from,to]).has("middle_east")&&from!==to)chokepoints.push("hormuz");
+        const crossings=air?0:from===to?1:sea?2:Math.max(2,Math.round(geographicDistance(home,partner)/1900));
+        return {mode:air?"air":sea?"sea":pipeline?"pipeline":"land",chokepointIds:[...new Set(chokepoints)],borderCrossings:clamp(crossings,0,8)};
+      }
+
+      function routeGeographyLabel(route, game = state) {
+        const geo=route.geography||{},pointNames=(geo.chokepointIds||[]).map(id=>game?.geography?.chokepoints?.find(item=>item.id===id)?.name).filter(Boolean);
+        const nodes=[game?.country?.capital||game?.country?.name||"Столица",...pointNames,route.partnerName||"мировой рынок"];
+        if(route.reroutedDays>0&&pointNames.length)nodes.splice(nodes.length-1,0,"обходной участок");
+        return nodes.join(" → ");
+      }
+
+      function prepareTradeRouteGeography(route, game) {
+        if(!game){route.geographicAccess=clamp(num(route.geographicAccess,72),0,100);route.geography=Object.assign({mode:"land",chokepointIds:[],borderCrossings:1,transitCountryIds:[],access:72,risk:24,deliveryDays:12,path:route.partnerName||"международный рынок",projectionCost:1},route.geography||{});return route;}
+        if(!game.geography||game.geography.modelVersion!==GEOGRAPHY_MODEL_VERSION)migrateWorldGeography(game);
+        const partner=game.diplomacy.countries.find(country=>country.id===route.partnerId)||game.diplomacy.countries.find(country=>country.name===route.partnerName);
+        const home=game.geography.home,partnerGeo=partner?ensureCountryGeography(partner):geographyReference().zones.europe;
+        const blueprint=geographicRouteBlueprint(home,partnerGeo,route.type);
+        const legacyDistance=Math.max(120,num(route.baseDistance,route.distance));
+        const calculated=geographicDistance(home,partnerGeo)*(blueprint.mode==="air"?1:blueprint.mode==="sea"?1.12:1.04);
+        route.baseDistance=Math.round(clamp((legacyDistance+calculated*2)/3,160,24000));
+        route.distance=Math.round(route.baseDistance*(route.reroutedDays>0?1.16:1));
+        route.geography=Object.assign({mode:blueprint.mode,chokepointIds:blueprint.chokepointIds,borderCrossings:blueprint.borderCrossings,transitCountryIds:[],access:72,risk:24,deliveryDays:12,path:"",projectionCost:1},route.geography||{});
+        route.geography.mode=blueprint.mode;route.geography.chokepointIds=blueprint.chokepointIds;route.geography.borderCrossings=blueprint.borderCrossings;
+        if(!Array.isArray(route.geography.transitCountryIds))route.geography.transitCountryIds=[];
+        if(!route.geography.transitCountryIds.length&&["land","pipeline"].includes(blueprint.mode)){
+          route.geography.transitCountryIds=(game.country.neighbors||[]).map(name=>game.diplomacy.countries.find(country=>country.name===name)?.id).filter(id=>id&&id!==route.partnerId).slice(0,2);
+        }
+        route.geography.path=routeGeographyLabel(route,game);
+        return route;
+      }
+
+      function updateTradeRouteGeography(game, route) {
+        prepareTradeRouteGeography(route,game);
+        const geo=route.geography,partner=game.diplomacy.countries.find(country=>country.id===route.partnerId);
+        const transit=geo.transitCountryIds.map(id=>game.diplomacy.countries.find(country=>country.id===id)).filter(Boolean);
+        const partnerAccess=partner?clamp((partner.relations+(partner.alliance?18:0)-(partner.sanctions?28:0)-(partner.embargo?65:0)-(partner.war?35:0)),2,100):64;
+        const transitAccess=transit.length?avg(transit.map(country=>({value:clamp(country.relations-(country.sanctions?22:0)-(country.embargo?55:0),4,100)})),"value"):72;
+        const activePointIds=route.reroutedDays>0&&geo.chokepointIds.length?geo.chokepointIds.filter(id=>id!==geo.chokepointIds.slice().sort((a,b)=>num(game.geography.chokepoints.find(point=>point.id===b)?.disruption)-num(game.geography.chokepoints.find(point=>point.id===a)?.disruption))[0]):geo.chokepointIds;
+        const points=activePointIds.map(id=>game.geography.chokepoints.find(point=>point.id===id)).filter(Boolean);
+        const chokeAccess=points.length?avg(points.map(point=>({value:clamp(point.capacity*.45+point.security*.25+(100-point.disruption)*.3,0,100)})),"value"):82;
+        const homeAccess=game.geography.home.landlocked&&geo.mode==="sea"?42:game.geography.home.tradeAccess;
+        geo.access=clamp(partnerAccess*.34+transitAccess*.18+chokeAccess*.25+homeAccess*.23+(route.transitPermitDays>0?12:0),2,100);
+        geo.risk=clamp((100-partnerAccess)*.26+(100-transitAccess)*.18+(100-chokeAccess)*.34+geo.borderCrossings*2.3+game.diplomacy.globalTension*.12,0,100);
+        const speed=geo.mode==="air"?760:geo.mode==="sea"?610:geo.mode==="pipeline"?950:520;
+        geo.deliveryDays=clamp(Math.ceil(route.distance/speed+geo.borderCrossings*.8+num(route.congestion)*.055+geo.risk*.035),1,120);
+        geo.projectionCost=clamp(1+(route.distance/4800)+geo.risk/130+geo.borderCrossings*.06,1,7);
+        geo.path=routeGeographyLabel(route,game);
+        route.geographicAccess=geo.access;
+        return geo;
+      }
+
+      function foreignProjectionFactor(actor,target) {
+        const a=ensureCountryGeography(actor),t=ensureCountryGeography(target),distance=geographicDistance(a,t),sameZone=a.zoneId===t.zoneId;
+        const adjacency=sameZone&&distance<1700;
+        const transport=clamp(a.transport*.45+a.ports*.2+actor.domestic.defense.readiness*.2+actor.domestic.defense.stock*.15,0,100);
+        const access=adjacency ? .94 : a.landlocked&&t.landlocked ? clamp(.52+transport*.0032,.5,.82) : a.coastal&&t.coastal ? clamp(.44+transport*.0044+(actor.greatPower?.08:0),.45,.91) : clamp(.42+transport*.0036,.42,.84);
+        return {factor:clamp(access-distance/72000,.35,1),distance,mode:adjacency?"приграничный":a.coastal&&t.coastal?"морской экспедиционный":"континентальный транзит",supply:clamp(transport-distance/420,18,96)};
+      }
+
+      function warGeographyAssessment(game, enemy, war = null) {
+        const home=game.geography?.home||migrateWorldGeography(game).home,target=ensureCountryGeography(enemy),distance=geographicDistance(home,target),neighbor=(game.country.neighbors||[]).includes(enemy.name);
+        const routeMode=neighbor?"приграничный театр":home.coastal&&target.coastal?"морской экспедиционный театр":home.landlocked||target.landlocked?"сухопутный транзит":"воздушно-сухопутный театр";
+        const logistics=clamp(game.military.logistics*.35+game.military.airlift*.16+game.military.navalPower*.12+game.military.maintenance*.12+game.infrastructure.reliability*.12+game.geography.networkReliability*.13,0,100);
+        const playerProjection=neighbor?clamp(.88+logistics*.0012,.88,1):home.coastal&&target.coastal?clamp(.42+logistics*.0048-distance/80000,.38,.9):clamp(.46+logistics*.004-distance/70000,.36,.84);
+        const enemyProjectionRaw=clamp(.44+target.transport*.002+target.ports*.0015+enemy.domestic.defense.readiness*.0018+(enemy.greatPower?.08:0)-distance/82000,.36,.91);
+        const playerIsExpeditionary=!war||war.aggressor!=="enemy";
+        const projectionFactor=playerIsExpeditionary?playerProjection:1;
+        const enemyProjection=playerIsExpeditionary?1:enemyProjectionRaw;
+        const supplyCeiling=clamp((playerIsExpeditionary?projectionFactor:1)*72+logistics*.28+(neighbor?8:0),34,96);
+        return {distance,mode:routeMode,neighbor,projectionFactor,enemyProjection,supplyCeiling,logistics,access:clamp(projectionFactor*100,0,100),label:neighbor?"прямая сухопутная граница":`${routeMode}, ${compact(distance)} км`};
+      }
+
       function foreignEconomicProfile(country) {
         const perCapita = num(country.gdp, 10000) * 1000000 / Math.max(100000, num(country.population, 1000000));
         const resources = country.resources || {};
@@ -6921,7 +7206,7 @@
       }
 
       function normalizeWorldConflict(item, game) {
-        const value=item||{};value.id||=uid("world_conflict");value.actorId||="";value.targetId||="";value.actorName||=game.diplomacy.countries.find(country=>country.id===value.actorId)?.name||"Государство";value.targetName||=game.diplomacy.countries.find(country=>country.id===value.targetId)?.name||"Государство";value.cause||="пограничный и политический спор";value.status||="active";value.months=Math.max(0,Math.round(num(value.months)));value.intensity=clamp(num(value.intensity,35),5,100);value.control=clamp(num(value.control,50),0,100);value.actorLosses=Math.max(0,Math.round(num(value.actorLosses)));value.targetLosses=Math.max(0,Math.round(num(value.targetLosses)));value.displaced=Math.max(0,Math.round(num(value.displaced)));value.outcome||="боевые действия продолжаются";value.started||=formatDate(game.date);value.ended||="";return value;
+        const value=item||{};value.id||=uid("world_conflict");value.actorId||="";value.targetId||="";value.actorName||=game.diplomacy.countries.find(country=>country.id===value.actorId)?.name||"Государство";value.targetName||=game.diplomacy.countries.find(country=>country.id===value.targetId)?.name||"Государство";value.cause||="пограничный и политический спор";value.status||="active";value.months=Math.max(0,Math.round(num(value.months)));value.intensity=clamp(num(value.intensity,35),5,100);value.control=clamp(num(value.control,50),0,100);value.actorLosses=Math.max(0,Math.round(num(value.actorLosses)));value.targetLosses=Math.max(0,Math.round(num(value.targetLosses)));value.displaced=Math.max(0,Math.round(num(value.displaced)));value.actorProjection=clamp(num(value.actorProjection,1),.25,1);value.targetProjection=clamp(num(value.targetProjection,1),.25,1);value.distance=Math.max(0,Math.round(num(value.distance)));value.theatre||="региональный театр";value.supply=clamp(num(value.supply,65),0,100);value.outcome||="боевые действия продолжаются";value.started||=formatDate(game.date);value.ended||="";return value;
       }
 
       function migrateForeignStateSystem(game) {
@@ -7092,13 +7377,15 @@
         const existing=system.conflicts.find(item=>item.status==="active"&&((item.actorId===actor.id&&item.targetId===target.id)||(item.actorId===target.id&&item.targetId===actor.id)));
         if(existing)return existing;
         normalizeForeignState(actor);normalizeForeignState(target);
+        const projection=foreignProjectionFactor(actor,target);
+        if(projection.factor<.46&&!actor.greatPower)return null;
         const intensity=clamp(22+num(actor.aggression,25)*.38+Math.max(0,45-(actor.strategy?.links?.[target.id]?.relation??40))*.32+rnd(-8,12),12,76);
-        const conflict=normalizeWorldConflict({actorId:actor.id,targetId:target.id,actorName:actor.name,targetName:target.name,cause,intensity,control:50+rnd(-4,4)},game);
+        const conflict=normalizeWorldConflict({actorId:actor.id,targetId:target.id,actorName:actor.name,targetName:target.name,cause,intensity,control:50+rnd(-4,4),actorProjection:projection.factor,targetProjection:1,distance:projection.distance,theatre:projection.mode,supply:projection.supply},game);
         system.conflicts.unshift(conflict);actor.domestic.defense.externalConflicts++;target.domestic.defense.externalConflicts++;
         actor.domestic.defense.exhaustion=clamp(actor.domestic.defense.exhaustion+5,0,100);target.domestic.defense.exhaustion=clamp(target.domestic.defense.exhaustion+4,0,100);
         actor.domestic.economy.tradeShare=clamp(actor.domestic.economy.tradeShare-1.4,1,80);target.domestic.economy.tradeShare=clamp(target.domestic.economy.tradeShare-1.1,1,80);
         const actorLink=actor.strategy.links[target.id]||{relation:20,status:"конфликт"},targetLink=target.strategy.links[actor.id]||{relation:20,status:"конфликт"};actorLink.relation=clamp(actorLink.relation-18,0,100);targetLink.relation=clamp(targetLink.relation-18,0,100);actorLink.status="вооружённый конфликт";targetLink.status="вооружённый конфликт";actor.strategy.links[target.id]=actorLink;target.strategy.links[actor.id]=targetLink;
-        game.diplomacy.globalTension=clamp(game.diplomacy.globalTension+4+intensity*.05,0,100);system.worldRisk=clamp(system.worldRisk+5,0,100);system.lastBriefing=`${actor.name} начала вооружённый конфликт с ${target.name}: ${cause}.`;
+        game.diplomacy.globalTension=clamp(game.diplomacy.globalTension+4+intensity*.05,0,100);system.worldRisk=clamp(system.worldRisk+5,0,100);system.lastBriefing=`${actor.name} начала вооружённый конфликт с ${target.name}: ${cause}. ${projection.mode}, ${compact(projection.distance)} км; доступная проекция сил ${Math.round(projection.factor*100)}%.`;
         pushWorldDiplomacyLog(game,actor.name,target.name,`начала вооружённый конфликт: ${cause}`,"конфликт");
         const unlawfulPressure=clamp(num(actor.aggression,35)*.62+(100-actor.domestic.politics.legitimacy)*.38,0,100);
         if(unlawfulPressure>56){
@@ -7149,13 +7436,13 @@
       }
 
       function simulateForeignCountryMonth(game, country) {
-        normalizeForeignState(country);const system=game.diplomacy.worldSystem,d=country.domestic,e=d.economy,p=d.politics,dem=d.demography,def=d.defense,spec=foreignProfileSpec(e.profileId);
+        normalizeForeignState(country);const geo=ensureCountryGeography(country),system=game.diplomacy.worldSystem,d=country.domestic,e=d.economy,p=d.politics,dem=d.demography,def=d.defense,spec=foreignProfileSpec(e.profileId);
         d.policy.monthsInCourse++;p.electionDays=Math.max(0,p.electionDays-30);
         const activeConflict=system.conflicts.filter(item=>item.status==="active"&&(item.actorId===country.id||item.targetId===country.id)).length+(country.war?1:0);def.externalConflicts=activeConflict;
         const shockPenalty=d.shock.monthsLeft>0?d.shock.severity*.035:0;
         const institutional=(p.legitimacy-50)*.012-(p.corruption-40)*.009;
         const debtPenalty=Math.max(0,e.debtRatio-(e.profileId==="advanced"?105:75))*.018;
-        const tradeImpulse=(e.tradeShare-18)*.018+system.tradeMomentum*.035;
+        const tradeImpulse=(e.tradeShare-18)*.018+system.tradeMomentum*.035+(geo.tradeAccess-55)*.006;
         const conflictPenalty=activeConflict*(.9+def.exhaustion*.012);
         const targetGrowth=clamp(spec.trend+(system.globalGrowth-2.5)*.44+institutional+tradeImpulse+(e.productivity-50)*.009-debtPenalty-shockPenalty-conflictPenalty,-14,10);
         e.growth=clamp(e.growth+(targetGrowth-e.growth)*.22+rnd(-.16,.16)*spec.volatility,-18,14);
@@ -7174,7 +7461,7 @@
         const approvalTarget=clamp(52+e.growth*2.1-e.inflation*.72-e.unemployment*.55-e.stress*.18+(p.legitimacy-50)*.2-activeConflict*4,4,92);p.approval=clamp(p.approval+(approvalTarget-p.approval)*.12+rnd(-.35,.35),0,100);p.opposition=clamp(p.opposition+(55-p.approval+p.polarization*.15-p.opposition)*.055,0,100);p.legitimacy=clamp(p.legitimacy+(p.approval+(p.system==="конкурентная"?8:p.system==="гибридная"?0:-6)-p.corruption*.24-p.legitimacy)*.035,0,100);p.polarization=clamp(p.polarization+(p.opposition+e.stress*.3-country.stability*.25-p.polarization)*.025,0,100);
         const stabilityTarget=clamp(p.legitimacy*.38+p.approval*.18+(100-p.polarization)*.15+(100-e.stress)*.2+def.readiness*.09-activeConflict*5,4,96);country.stability=clamp(country.stability+(stabilityTarget-country.stability)*.08,0,100);
         const readinessTarget=clamp(26+def.stock*.28+def.spendingShare*5.2+country.stability*.16-def.exhaustion*.32,8,96);def.readiness=clamp(def.readiness+(readinessTarget-def.readiness)*.1-activeConflict*.18,0,100);def.stock=clamp(def.stock+(def.spendingShare*1.35-4.2)/12-activeConflict*.62,0,100);def.exhaustion=clamp(def.exhaustion+(activeConflict?1.15:-1.8),0,100);country.military=clamp(country.military+(def.readiness*.52+def.stock*.28+def.spendingShare*3.2-country.military)*.06,0,100);
-        const tradeShock=(d.shock.type==="валютный кризис"||d.shock.type==="кризис безопасности")?-.08:0;e.tradeShare=clamp(e.tradeShare+(system.tradeMomentum*.008+(country.aiMood==="торговый"?.025:country.aiMood==="изоляционный"?-.025:0)+tradeShock-activeConflict*.06),1,80);country.trade=Math.max(0,country.gdp*e.tradeShare/100);
+        const tradeShock=(d.shock.type==="валютный кризис"||d.shock.type==="кризис безопасности")?-.08:0;e.tradeShare=clamp(e.tradeShare+(system.tradeMomentum*.008+(country.aiMood==="торговый"?.025:country.aiMood==="изоляционный"?-.025:0)+(geo.tradeAccess-55)*.00035+tradeShock-activeConflict*.06),1,80);country.trade=Math.max(0,country.gdp*e.tradeShare/100);
         country.relations=clamp(country.relations+(country.alliance?.22:0)-(country.sanctions?.4:0)-(country.embargo?.35:0)-(country.war?.9:0)+(p.legitimacy-50)*.002+rnd(-.18,.18),0,100);
         if(d.shock.monthsLeft>0){d.shock.monthsLeft--;if(!d.shock.monthsLeft){d.lastReport=`Кризис «${d.shock.type}» перешёл в фазу восстановления.`;d.shock={type:"",severity:0,monthsLeft:0};}}
         else if((e.stress>62&&simulationRandom()<.035)||simulationRandom()<.0035)spawnForeignCrisis(game,country);
@@ -7206,8 +7493,8 @@
         const system=game.diplomacy.worldSystem;
         for(const conflict of system.conflicts.filter(item=>item.status==="active")){
           const actor=game.diplomacy.countries.find(item=>item.id===conflict.actorId),target=game.diplomacy.countries.find(item=>item.id===conflict.targetId);if(!actor||!target){conflict.status="ended";conflict.outcome="конфликт закрыт из-за утраты данных сторон";continue;}
-          conflict.months++;const actorPower=foreignStatePower(actor),targetPower=foreignStatePower(target),ratio=actorPower/Math.max(1,targetPower);const initiative=clamp(Math.log(ratio)*9+rnd(-3.2,3.2),-7,7)*conflict.intensity/50;conflict.control=clamp(conflict.control+initiative,0,100);conflict.intensity=clamp(conflict.intensity+rnd(-3,3)+(Math.abs(conflict.control-50)>28?-.8:.2),8,92);
-          const base=Math.max(30,Math.sqrt(actor.population+target.population)*.13*conflict.intensity/45);const actorLoss=Math.round(base*clamp(1/Math.max(.45,ratio),.45,2.3)*rnd(.72,1.3)),targetLoss=Math.round(base*clamp(ratio,.45,2.3)*rnd(.72,1.3));conflict.actorLosses+=actorLoss;conflict.targetLosses+=targetLoss;conflict.displaced+=Math.round((actorLoss+targetLoss)*rnd(2.2,6.5));actor.population=Math.max(50000,actor.population-actorLoss);target.population=Math.max(50000,target.population-targetLoss);
+          conflict.months++;const projection=foreignProjectionFactor(actor,target);conflict.actorProjection=clamp(conflict.actorProjection*.65+projection.factor*.35,.25,1);conflict.distance=projection.distance;conflict.theatre=projection.mode;conflict.supply=clamp(conflict.supply+(projection.supply-conflict.supply)*.08-conflict.intensity*.018,8,100);const actorPower=foreignStatePower(actor)*conflict.actorProjection*clamp(conflict.supply/72,.45,1.08),targetPower=foreignStatePower(target)*1.06,ratio=actorPower/Math.max(1,targetPower);const initiative=clamp(Math.log(ratio)*9+rnd(-3.2,3.2),-7,7)*conflict.intensity/50;conflict.control=clamp(conflict.control+initiative,0,100);conflict.intensity=clamp(conflict.intensity+rnd(-3,3)+(Math.abs(conflict.control-50)>28?-.8:.2),8,92);
+          const base=Math.max(30,Math.sqrt(actor.population+target.population)*.13*conflict.intensity/45);const actorLoss=Math.round(base*clamp(1/Math.max(.45,ratio),.45,2.3)*clamp(1.22-conflict.actorProjection*.3,.9,1.2)*rnd(.72,1.3)),targetLoss=Math.round(base*clamp(ratio,.45,2.3)*rnd(.72,1.3));conflict.actorLosses+=actorLoss;conflict.targetLosses+=targetLoss;conflict.displaced+=Math.round((actorLoss+targetLoss)*rnd(2.2,6.5));actor.population=Math.max(50000,actor.population-actorLoss);target.population=Math.max(50000,target.population-targetLoss);
           actor.domestic.defense.stock=clamp(actor.domestic.defense.stock-conflict.intensity*.012*(targetPower/Math.max(1,actorPower)),0,100);target.domestic.defense.stock=clamp(target.domestic.defense.stock-conflict.intensity*.012*(actorPower/Math.max(1,targetPower)),0,100);actor.domestic.defense.exhaustion=clamp(actor.domestic.defense.exhaustion+conflict.intensity*.035,0,100);target.domestic.defense.exhaustion=clamp(target.domestic.defense.exhaustion+conflict.intensity*.035,0,100);actor.gdp=Math.max(100,actor.gdp*(1-conflict.intensity*.000035));target.gdp=Math.max(100,target.gdp*(1-conflict.intensity*.000045));actor.trade*=1-conflict.intensity*.00009;target.trade*=1-conflict.intensity*.00011;
           const exhaustion=(actor.domestic.defense.exhaustion+target.domestic.defense.exhaustion)/2,decisive=conflict.control>=86||conflict.control<=14,peaceChance=conflict.months<5?0:.025+Math.max(0,exhaustion-55)*.004+Math.max(0,conflict.months-24)*.005+(decisive?.2:0);if(simulationRandom()<peaceChance)finishWorldConflict(game,conflict);
         }
@@ -7273,7 +7560,10 @@
         const profile = profiles[country.name];
         if (profile) Object.assign(country, profile, { greatPower: profile.military >= 82 || profile.gdp >= 3000000 });
         else country.greatPower = !!(country.greatPower || country.military >= 82 || country.gdp >= 3000000);
-        return normalizeForeignState(ensureDiplomaticAI(ensureCountryAssets(country)));
+        ensureCountryGeography(country);
+        ensureCountryAssets(country);
+        ensureCountryGeography(country);
+        return normalizeForeignState(ensureDiplomaticAI(country));
       }
 
       function politicalEraSnapshot(game) {
@@ -7888,12 +8178,28 @@
           ["energy_line", "Трансграничный энергокоридор", "трубопровод", findCountry("Казахстан", "Россия", "Саудовская Аравия"), 79, 81, 70, 1120, ["oil","gas","fertilizer"]],
           ["air_cargo", "Международный грузовой авиамост", "авиация", findCountry("Германия", "Франция", "Великобритания"), 44, 83, 78, 2860, ["components","defense","machinery"]]
         ];
-        return routes.map((row, index) => ({
+        return routes.map((row, index) => prepareTradeRouteGeography({
           id: row[0], name: row[1], type: row[2], partnerId: row[3]?.id || "", partnerName: row[3]?.name || "международный рынок",
           capacity: row[4], condition: row[5], security: row[6], distance: row[7], commodityIds: row[8],
           disruption: 0, congestion: 38 + index * 6, insurance: 18 + index * 4, volume: row[4] * .58,
-          expansionDays: 0, protectedDays: 0, status: "работает", lastEvent: "Маршрут работает в штатном режиме."
-        }));
+          expansionDays: 0, protectedDays: 0, reroutedDays:0, transitPermitDays:0, geographicAccess:72, status: "работает", lastEvent: "Маршрут работает в штатном режиме."
+        },game));
+      }
+
+      function tradeGoodsForCountry(country) {
+        const r=country?.resources||{};
+        const ranked=[["oil",num(r.oil)],["gas",num(r.gas)],["metals",num(r.minerals)],["food",num(r.agriculture)],["machinery",num(r.industry)],["components",num(r.industry)*.72]].sort((a,b)=>b[1]-a[1]);
+        return [...new Set(ranked.slice(0,3).map(item=>item[0]).concat("machinery"))].slice(0,4);
+      }
+
+      function ensureBilateralTradeRoute(game,country) {
+        const market=game.worldMarket||migrateWorldMarketSystem(game);
+        const existing=market.routes.find(route=>route.partnerId===country.id);
+        if(existing){existing.capacity=clamp(existing.capacity+2,0,100);existing.lastEvent="Новый двусторонний договор увеличил гарантированный поток.";updateTradeRouteGeography(game,existing);return existing;}
+        const home=game.geography?.home||migrateWorldGeography(game).home,target=ensureCountryGeography(country),neighbor=(game.country.neighbors||[]).includes(country.name);
+        const type=neighbor?"железная дорога":home.coastal&&target.coastal?"морской путь":"грузовая авиация";
+        const route=prepareTradeRouteGeography(normalizeTradeRoute({id:`bilateral_${country.id}`,name:`Торговый коридор: ${country.name}`,type,partnerId:country.id,partnerName:country.name,capacity:clamp(38+country.relations*.35,32,78),condition:68,security:clamp(44+country.stability*.32,42,82),distance:geographicDistance(home,target),commodityIds:tradeGoodsForCountry(country),disruption:0,congestion:32,insurance:24,volume:26,expansionDays:0,protectedDays:60,reroutedDays:0,transitPermitDays:240,status:"работает",lastEvent:"Двусторонний договор открыл регулярный грузовой поток."},null,market.routes.length),game);
+        market.routes.push(route);market.routes=market.routes.slice(-12);updateTradeRouteGeography(game,route);return route;
       }
 
       function normalizeTradeRoute(value, fallback, index = 0) {
@@ -7908,6 +8214,9 @@
         route.disruption = clamp(num(route.disruption, 0), 0, 100);
         route.expansionDays = Math.max(0, Math.round(num(route.expansionDays, 0)));
         route.protectedDays = Math.max(0, Math.round(num(route.protectedDays, 0)));
+        route.reroutedDays = Math.max(0, Math.round(num(route.reroutedDays, 0)));
+        route.transitPermitDays = Math.max(0, Math.round(num(route.transitPermitDays, 0)));
+        route.geographicAccess = clamp(num(route.geographicAccess, 72), 0, 100);
         route.commodityIds = Array.isArray(route.commodityIds) ? route.commodityIds.slice(0, 8) : (fallback?.commodityIds || ["food","machinery"]);
         route.status = route.status || "работает";
         route.lastEvent ||= "Маршрут работает в штатном режиме.";
@@ -7932,7 +8241,7 @@
         market.commodities = base.commodities.map(item => normalizeWorldCommodity(incomingCommodities.get(item.id), item));
         const routeFallbacks = defaultTradeRoutes(game);
         const incomingRoutes = new Map((Array.isArray(incoming.routes) ? incoming.routes : []).filter(Boolean).map(item => [item.id, item]));
-        market.routes = routeFallbacks.map((item, index) => normalizeTradeRoute(incomingRoutes.get(item.id), item, index));
+        market.routes = routeFallbacks.map((item, index) => prepareTradeRouteGeography(normalizeTradeRoute(incomingRoutes.get(item.id), item, index),game));
         market.contracts = Array.isArray(incoming.contracts) ? incoming.contracts.filter(item => item && typeof item === "object").slice(0, 20) : [];
         market.incidents = Array.isArray(incoming.incidents) ? incoming.incidents.filter(item => item && typeof item === "object").slice(0, 24) : [];
         market.history = Array.isArray(incoming.history) ? incoming.history.filter(item => item && typeof item === "object").slice(0, 48) : [];
@@ -7947,7 +8256,43 @@
       }
 
       function tradeRouteEfficiency(route) {
-        return clamp((route.capacity * .31 + route.condition * .23 + route.security * .2 + (100 - route.disruption) * .18 + (100 - route.congestion) * .08) / 100, .08, 1.08);
+        return clamp((route.capacity * .25 + route.condition * .18 + route.security * .14 + (100 - route.disruption) * .15 + (100 - route.congestion) * .06 + num(route.geographicAccess,72) * .22) / 100, .04, 1.04);
+      }
+
+      function simulateWorldGeography(game) {
+        const geography=game.geography||migrateWorldGeography(game);
+        if(game.date.day===1)geography.home=playerGeographyProfile(game);
+        const worldConflicts=(game.diplomacy.worldSystem?.conflicts||[]).filter(item=>item.status==="active");
+        let worstPoint=null;
+        for(const point of geography.chokepoints){
+          const previous=point.status;
+          const controllers=point.controllers.map(name=>game.diplomacy.countries.find(country=>country.name===name)).filter(Boolean);
+          const controllerConflict=controllers.some(country=>country.war||worldConflicts.some(conflict=>conflict.actorId===country.id||conflict.targetId===country.id));
+          const regionalConflict=worldConflicts.some(conflict=>{
+            const actor=game.diplomacy.countries.find(country=>country.id===conflict.actorId),target=game.diplomacy.countries.find(country=>country.id===conflict.targetId);
+            return [actor,target].filter(Boolean).some(country=>geographicDistance(ensureCountryGeography(country),point)<1750);
+          });
+          const pressure=(controllerConflict?0.12:0)+(regionalConflict?0.055:0)+game.diplomacy.globalTension*.00035;
+          point.disruption=clamp(point.disruption+pressure-(controllerConflict ? .025 : .075)-point.security*.00018,0,100);
+          point.condition=clamp(point.condition-.0007-point.disruption*.000015,20,100);
+          point.security=clamp(point.security+(controllerConflict?-.006:.002),10,100);
+          if(simulationRandom()<clamp(.00004+pressure*.00008,.00003,.00035)){
+            const impact=rnd(5,15);point.disruption=clamp(point.disruption+impact,0,100);
+            point.lastEvent=pick(["Досмотр и очередь судов замедлили проход.","Военно-политический риск поднял страховые ставки.","Навигационное ограничение сократило пропускную способность.","Инцидент у транспортного узла потребовал усиленной охраны."]);
+          }
+          point.status=point.disruption>=82?"закрыт":point.disruption>=44?"ограничен":"открыт";
+          if(previous!==point.status&&game.worldMarket)recordWorldMarket(game,`${point.name}: ${point.status}`,point.lastEvent,"узкое место");
+          if(!worstPoint||point.disruption>worstPoint.disruption)worstPoint=point;
+        }
+        for(const route of game.worldMarket?.routes||[]){route.reroutedDays=Math.max(0,num(route.reroutedDays)-1);route.transitPermitDays=Math.max(0,num(route.transitPermitDays)-1);updateTradeRouteGeography(game,route);}
+        const routes=game.worldMarket?.routes||[];
+        geography.networkReliability=routes.length?avg(routes.map(route=>({value:num(route.geographicAccess,72)})),"value"):72;
+        geography.averageDeliveryDays=routes.length?avg(routes.map(route=>({value:num(route.geography?.deliveryDays,12)})),"value"):12;
+        geography.transitRisk=routes.length?avg(routes.map(route=>({value:num(route.geography?.risk,24)})),"value"):24;
+        geography.openChokepoints=geography.chokepoints.filter(point=>point.status!=="закрыт").length;
+        geography.lastBriefing=worstPoint&&worstPoint.disruption>=44?`${worstPoint.name}: движение ${worstPoint.status}, нарушение ${Math.round(worstPoint.disruption)}%.`:`${geography.openChokepoints} из ${geography.chokepoints.length} глобальных узлов открыты; средняя доставка ${geography.averageDeliveryDays.toFixed(1)} дн.`;
+        geography.lastUpdate=formatDate(game.date);
+        if(game.date.day===1){geography.history.unshift({date:formatDate(game.date),reliability:geography.networkReliability,delivery:geography.averageDeliveryDays,risk:geography.transitRisk,open:geography.openChokepoints});geography.history=geography.history.slice(0,24);}
       }
 
       function recordWorldMarket(game, title, text, type = "рынок") {
@@ -7965,6 +8310,7 @@
 
       function simulateWorldMarket(game) {
         const market = game.worldMarket || migrateWorldMarketSystem(game);
+        simulateWorldGeography(game);
         const tension = num(game.diplomacy?.globalTension, 30);
         const warLoad = (game.military?.wars?.length || 0) * 4.5;
         const climateLoad = num(game.climate?.temperatureAnomaly, 0) * 2 + (game.climate?.emergencies || []).filter(item => item.status !== "закрыта").length * 1.4;
@@ -8001,9 +8347,10 @@
           route.insurance = clamp(12 + tension * .34 + route.disruption * .42 + (100 - route.security) * .2 - route.protectedDays * .05, 4, 100);
           const partner = game.diplomacy?.countries?.find(country => country.id === route.partnerId);
           const diplomaticAccess = partner ? clamp((partner.relations + (partner.embargo ? 0 : 45) - (partner.sanctions ? 24 : 0)) / 100, .12, 1.15) : .72;
-          const efficiency = tradeRouteEfficiency(route) * diplomaticAccess;
+          const geographicAccess = clamp(num(route.geographicAccess,72)/100,.04,1.04);
+          const efficiency = tradeRouteEfficiency(route) * diplomaticAccess * geographicAccess;
           route.volume = clamp(route.volume * .94 + route.capacity * efficiency * .06, 0, 160);
-          route.status = route.disruption > 65 ? "остановлен" : route.disruption > 28 || route.condition < 38 ? "нарушен" : route.congestion > 82 ? "перегружен" : "работает";
+          route.status = route.geographicAccess < 18 || route.disruption > 72 ? "остановлен" : route.geographicAccess < 45 || route.disruption > 28 || route.condition < 38 ? "нарушен" : route.congestion > 82 ? "перегружен" : route.reroutedDays>0?"обходной":"работает";
           const incidentChance = clamp(.00018 + tension * .000003 + warLoad * .000007 + (100 - route.security) * .000004 - route.protectedDays * .000004, .00005, .0018);
           if (simulationRandom() < incidentChance) {
             const impact = rnd(10, 28);
@@ -8112,6 +8459,24 @@
           e.budget -= cost; route.expansionDays = 180;
           title = "Расширение коридора начато"; result = `${route.name}: подписан 180-дневный проект новых терминалов и пропускных мощностей.`;
           details = [["Срок", "180 дней", "warn"], ["Будущая мощность", "+11 п.п.", "good"], ["Бюджет", `-${money(cost)}`, "bad"]]; tone = "warn";
+        } else if (mode === "transit") {
+          cost = 320;
+          if (e.budget < cost) return showBlockedDecision("Транзитная миссия не профинансирована", "Нужны гарантии, работа МИД и совместный таможенный протокол.", [["Нужно", money(cost), "bad"]]);
+          e.budget -= cost;
+          const partner=state.diplomacy.countries.find(country=>country.id===route.partnerId);
+          const transit=(route.geography?.transitCountryIds||[]).map(id=>state.diplomacy.countries.find(country=>country.id===id)).filter(Boolean);
+          if(partner)partner.relations=clamp(partner.relations+3.5,0,100);
+          transit.forEach(country=>country.relations=clamp(country.relations+2.5,0,100));
+          route.transitPermitDays=Math.max(route.transitPermitDays,540);route.geographicAccess=clamp(route.geographicAccess+7,0,100);route.security=clamp(route.security+2,0,100);route.lastEvent="МИД согласовал транзитные гарантии и взаимное признание грузовых документов на 540 дней.";
+          title="Транзитные права расширены";result=`${route.name}: дипломатические и таможенные ограничения снижены на всем пути следования.`;
+          details=[["Транзитные гарантии","540 дней","good"],["Географический доступ","+7–12 п.п.","good"],["Отношения с участниками","улучшены","good"],["Бюджет",`-${money(cost)}`,"bad"]];
+        } else if (mode === "reroute") {
+          cost = 520;
+          if(route.reroutedDays>0)return showBlockedDecision("Обход уже действует",`Резервный маршрут будет использоваться еще ${Math.ceil(route.reroutedDays)} дней.`,[["Срок",`${Math.ceil(route.reroutedDays)} дн.`,"warn"]]);
+          if(e.budget<cost)return showBlockedDecision("Обходной маршрут не профинансирован","Нужны дополнительные фрахт, терминалы и страховые гарантии.",[["Нужно",money(cost),"bad"]]);
+          e.budget-=cost;route.reroutedDays=180;route.disruption=clamp(route.disruption-5,0,100);route.insurance=clamp(route.insurance+4,0,100);prepareTradeRouteGeography(route,state);route.lastEvent="Грузы переведены на более длинный резервный путь в обход наиболее рискованного узла.";
+          title="Резервный путь открыт";result=`${route.name}: поток восстановлен через обходной участок, но доставка стала длиннее и дороже.`;
+          details=[["Доступность","выше","good"],["Расстояние","+16%","warn"],["Страхование","+4 п.п.","bad"],["Бюджет",`-${money(cost)}`,"bad"]];tone="warn";
         } else return;
         recordWorldMarket(state, title, result, "маршрут");
         normalizeCore();
@@ -8198,6 +8563,7 @@
         migrateChronicle(game);
         migrateSuccessionSystem(game);
         migrateFederationSystem(game);
+        migrateWorldGeography(game);
         migrateWorldMarketSystem(game);
         migrateEliteSystem(game);
         migrateStatisticsSystem(game);
@@ -8668,31 +9034,34 @@
         const war = normalizeWar(rawWar, game);
         const enemy = game.diplomacy.countries.find(x => x.id === war.enemyId || x.name === war.enemy);
         const own = calcArmyComponents(game);
+        const geography = warGeographyAssessment(game, enemy, war);
         const enemyPower = calcEnemyWarPower(enemy, war, game);
-        const ownOperational = own.total + war.supply * .6 + game.military.recon * .32 + game.military.command * .36 + game.military.drones * .2 + game.military.airSuperiority * .22 + game.military.electronicWarfare * .14 + game.military.satellites * .12 + game.military.engineers * .1 + game.military.airlift * .08 - war.fatigue * .42 - game.military.warExhaustion * .36;
-        const enemyOperational = enemyPower + war.intensity * .52 + Math.max(0, 50 - war.control) * .24;
+        const ownOperational = own.total * geography.projectionFactor + war.supply * .6 + game.military.recon * .32 + game.military.command * .36 + game.military.drones * .2 + game.military.airSuperiority * .22 + game.military.electronicWarfare * .14 + game.military.satellites * .12 + game.military.engineers * .1 + game.military.airlift * .08 - war.fatigue * .42 - game.military.warExhaustion * .36;
+        const enemyOperational = enemyPower * geography.enemyProjection + war.intensity * .52 + Math.max(0, 50 - war.control) * .24;
         const balance = ownOperational - enemyOperational;
         const initiative = clamp(50 + balance * .23 + (war.control - 50) * .22 + (war.initiative - 50) * .18, 0, 100);
         const status = initiative >= 62 ? "инициатива у нас" : initiative <= 38 ? "инициатива у противника" : "равновесие фронта";
-        return { ownPower: own.total, enemyPower, ownOperational, enemyOperational, balance, initiative, status, enemy };
+        return { ownPower: own.total, enemyPower, ownOperational, enemyOperational, balance, initiative, status, enemy, geography };
       }
 
       function calcPreWarAssessment(country, game = state) {
         const own = calcArmyComponents(game);
         const intel = calcPreWarIntelligence(country, game);
+        const geography = warGeographyAssessment(game, country);
         const enemyPower = intel.estimate;
         const trueEnemyPower = intel.truePower;
-        const ratio = own.total / Math.max(1, enemyPower);
-        const trueRatio = own.total / Math.max(1, trueEnemyPower);
-        const initiative = clamp(50 + (own.total - enemyPower) * .075 + game.military.recon * .05 + game.military.logistics * .04 - (country?.intelligence || 50) * .035, 1, 99);
-        const victoryChance = clamp(8 + ratio * 42 + (game.military.readiness - 55) * .18 + (game.military.morale - 55) * .12 - (country?.stability || 50) * .08, 3, 92);
+        const projectedOwnPower=own.total*geography.projectionFactor;
+        const ratio = projectedOwnPower / Math.max(1, enemyPower);
+        const trueRatio = projectedOwnPower / Math.max(1, trueEnemyPower);
+        const initiative = clamp(50 + (projectedOwnPower - enemyPower) * .075 + game.military.recon * .05 + game.military.logistics * .04 - (country?.intelligence || 50) * .035, 1, 99);
+        const victoryChance = clamp(6 + ratio * 40 + (game.military.readiness - 55) * .18 + (game.military.morale - 55) * .12 - (country?.stability || 50) * .08 - Math.max(0,60-geography.supplyCeiling)*.18, 2, 90);
         const risk = ratio >= 1.25 ? "advantage" : ratio >= .82 ? "parity" : ratio >= .48 ? "danger" : "catastrophic";
         const label = risk === "advantage" ? "перевес у нас"
           : risk === "parity" ? "примерный паритет"
           : risk === "danger" ? "перевес противника"
           : "критическое превосходство противника";
         const tone = risk === "advantage" ? "good" : risk === "parity" ? "warn" : "bad";
-        return { ownPower: own.total, enemyPower, enemyPowerLow: intel.low, enemyPowerHigh: intel.high, trueEnemyPower, ratio, trueRatio, initiative, victoryChance, risk, label, tone, intelConfidence: intel.confidence, intelAge: intel.age };
+        return { ownPower: own.total, projectedOwnPower, enemyPower, enemyPowerLow: intel.low, enemyPowerHigh: intel.high, trueEnemyPower, ratio, trueRatio, initiative, victoryChance, risk, label, tone, intelConfidence: intel.confidence, intelAge: intel.age, geography };
       }
 
       function powerIndex(value) {
@@ -8982,12 +9351,15 @@
           "live-day": Math.max(1, Math.round(war.days || 1)),
           "live-date": formatDate(state.date),
           "live-own-power": powerIndex(balance.ownPower),
+          "live-projected-power": powerIndex(balance.ownPower*balance.geography.projectionFactor),
           "live-enemy-power": `≈${powerIndex(observed.enemyPower)} (${powerIndex(observed.enemyPowerLow)}–${powerIndex(observed.enemyPowerHigh)})`,
           "live-intel-confidence": pct(observed.confidence, 0),
           "live-enemy-intent": observed.enemyIntent,
           "live-initiative": pct(balance.initiative, 1),
           "live-front": pct(war.control, 1),
           "live-supply": pct(war.supply, 1),
+          "live-supply-ceiling": pct(balance.geography.supplyCeiling,0),
+          "live-theatre": balance.geography.mode,
           "live-home-damage": pct(calcWarHomeDamage(state, war), 0),
           "live-legitimacy": warLegitimacyLabel(war.legitimacy),
           "live-readiness": pct(stockReadiness(state), 0),
@@ -11355,7 +11727,7 @@
           <div class="panel-section-head"><span><h3 class="section-title">Самостоятельная мировая система</h3><p class="subtle">Экономики, правительства, выборы, кризисы, соглашения и конфликты других государств развиваются без команды игрока.</p></span><span class="pill ${world.worldRisk>65?"bad":world.worldRisk>42?"warn":"good"}">риск ${pct(world.worldRisk,0)}</span></div>
           <div class="kpi-strip" style="margin-top:12px;"><div class="kpi"><span>Мировой рост</span><strong>${world.globalGrowth>=0?"+":""}${world.globalGrowth.toFixed(1)}%</strong></div><div class="kpi"><span>Мировая инфляция</span><strong>${pct(world.globalInflation,1)}</strong></div><div class="kpi"><span>Безработица</span><strong>${pct(world.globalUnemployment,1)}</strong></div><div class="kpi"><span>Торговый импульс</span><strong>${world.tradeMomentum>=0?"+":""}${world.tradeMomentum.toFixed(1)}</strong></div><div class="kpi"><span>Активные кризисы</span><strong>${crises}</strong></div><div class="kpi"><span>Смен власти</span><strong>${world.leadershipChanges}</strong></div></div>
           <p class="subtle" style="margin:10px 0 0;">${esc(world.lastBriefing)}</p>
-          <details class="action-fold" style="margin-top:10px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Межгосударственные конфликты</strong><small>потери, интенсивность и изменение положения сторон</small></span><span class="pill">${active.length}</span></summary><div class="action-fold-body"><div class="list">${active.length?active.slice(0,8).map(item=>`<div class="row"><span><strong>${esc(item.actorName)} → ${esc(item.targetName)}</strong><br><small class="subtle">${esc(item.cause)} · ${item.months} мес. · контроль наступающей стороны ${pct(item.control,0)}<br>потери ${compact(item.actorLosses)} / ${compact(item.targetLosses)} · перемещено ${compact(item.displaced)}</small></span><span class="pill ${item.intensity>65?"bad":"warn"}">интенсивность ${pct(item.intensity,0)}</span></div>`).join(""):`<div class="row"><span>Активных войн между иностранными государствами нет</span><span class="pill good">мир</span></div>`}</div></div></details>
+          <details class="action-fold" style="margin-top:10px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Межгосударственные конфликты</strong><small>потери, интенсивность, расстояние и реальная проекция сил</small></span><span class="pill">${active.length}</span></summary><div class="action-fold-body"><div class="list">${active.length?active.slice(0,8).map(item=>`<div class="row"><span><strong>${esc(item.actorName)} → ${esc(item.targetName)}</strong><br><small class="subtle">${esc(item.cause)} · ${esc(item.theatre)} · ${compact(item.distance)} км · проекция ${pct(item.actorProjection*100,0)} · снабжение ${pct(item.supply,0)}<br>${item.months} мес. · контроль ${pct(item.control,0)} · потери ${compact(item.actorLosses)} / ${compact(item.targetLosses)} · перемещено ${compact(item.displaced)}</small></span><span class="pill ${item.intensity>65?"bad":"warn"}">интенсивность ${pct(item.intensity,0)}</span></div>`).join(""):`<div class="row"><span>Активных войн между иностранными государствами нет</span><span class="pill good">мир</span></div>`}</div></div></details>
           <details class="action-fold" style="margin-top:8px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Действующие соглашения</strong><small>торговые коридоры, соглашения безопасности и перемирия</small></span><span class="pill">${world.agreements.length}</span></summary><div class="action-fold-body"><div class="list">${world.agreements.length?world.agreements.slice(0,10).map(item=>`<div class="row"><span><strong>${esc(item.actorName)} ↔ ${esc(item.targetName)}</strong><br><small class="subtle">${item.type==="trade"?"торговый коридор":item.type==="security"?"соглашение безопасности":"перемирие"} · действует ещё ${item.monthsLeft} мес.</small></span><span class="pill">прочность ${pct(item.strength,0)}</span></div>`).join(""):`<div class="row"><span>Крупных двусторонних соглашений пока нет</span><span class="pill">дипломатия</span></div>`}</div></div></details>
         </section>`;
       }
@@ -11366,6 +11738,7 @@
         const inbox = state.diplomacy.inbox || [];
         const assessment = selected ? calcPreWarAssessment(selected) : null;
         const strategy = selected ? ensureDiplomaticAI(selected).strategy : null;
+        const selectedGeo = selected ? ensureCountryGeography(selected) : null;
         const law = state.diplomacy.law;
         return `
           <section class="grid split">
@@ -11408,9 +11781,10 @@
                   <p class="intent-line"><strong>Вероятный следующий шаг:</strong> ${esc(diplomaticIntent(selected))}.<br><strong>Последнее действие:</strong> ${esc(strategy.recentAction)}.</p>
                 </article>
                 ${renderForeignStatePanel(selected)}
+                <details class="action-fold" style="margin-top:10px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>География и доступ</strong><small>${esc(selectedGeo.zoneName)} · ${assessment.geography.neighbor?"общая граница":`${compact(assessment.geography.distance)} км`}</small></span></summary><div class="action-fold-body"><div class="geography-chip-grid"><div><span>Положение</span><strong>${selectedGeo.landlocked?"без выхода к морю":selectedGeo.island?"островное":"есть морской выход"}</strong></div><div><span>Транспорт</span><strong>${pct(selectedGeo.transport,0)}</strong></div><div><span>Порты</span><strong>${pct(selectedGeo.ports,0)}</strong></div><div><span>Военный театр</span><strong>${esc(assessment.geography.mode)}</strong></div><div><span>Проекция наших сил</span><strong>${pct(assessment.geography.projectionFactor*100,0)}</strong></div><div><span>Предел снабжения</span><strong>${pct(assessment.geography.supplyCeiling,0)}</strong></div></div></div></details>
                 <div class="resource-line" style="margin-top: 10px;">${renderResourceBadges(selected.resources || {}, 6)}</div>
                 <div class="decision-grid" style="margin-top: 12px;">
-                  <div class="kpi"><span>Наша военная мощь</span><strong>${powerIndex(assessment.ownPower)}</strong></div>
+                  <div class="kpi"><span>Общая мощь / доступно</span><strong>${powerIndex(assessment.ownPower)} / ${powerIndex(assessment.projectedOwnPower)}</strong></div>
                   <div class="kpi"><span>Мощь противника</span><strong>≈${powerIndex(assessment.enemyPower)}</strong></div>
                   <div class="kpi"><span>Соотношение</span><strong class="delta ${assessment.tone}">${assessment.ratio.toFixed(2)} : 1</strong></div>
                   <div class="kpi"><span>Прогноз</span><strong class="delta ${assessment.tone}">${esc(assessment.label)}</strong></div>
@@ -11600,8 +11974,9 @@
           intensity: Math.round(rnd(32, 72)),
           fatigue: 0,
           control: Math.round(initialControl),
-          supply: Math.round(rnd(58, 74)),
-          front: pick(fronts),
+          supply: Math.round(Math.min(assessment.geography.supplyCeiling,rnd(58, 74))),
+          front: assessment.geography.neighbor?pick(fronts.slice(0,4)):assessment.geography.mode,
+          geography: assessment.geography,
           phase: initialInitiative >= 55 ? "инициатива" : initialInitiative <= 35 ? "кризис обороны" : initiator === "foreign" ? "оборона" : "маневренная фаза",
           goal: initiator === "foreign" ? "сдерживание угрозы" : pick(["принуждение к переговорам", "демилитаризация угрозы", "защита союзника", "контроль спорного коридора"]),
           initiative: Math.round(initialInitiative),
@@ -11635,6 +12010,7 @@
           fatigue: clamp(num(war.fatigue, 0), 0, 100),
           control: clamp(num(war.control, 50), 0, 100),
           supply: clamp(num(war.supply, 62), 0, 100),
+          geography: war.geography && typeof war.geography === "object" ? war.geography : (enemy ? warGeographyAssessment(game,enemy,war) : null),
           front: war.front || "основное направление",
           phase: war.phase || "маневренная фаза",
           goal: war.goal || "политическое урегулирование",
@@ -12366,12 +12742,15 @@
             <div class="kpi"><span>День войны</span><strong data-battle-value="live-day">${Math.max(1, Math.round(war.days || 1))}</strong></div>
             <div class="kpi"><span>Дата</span><strong data-battle-value="live-date">${esc(formatDate(state.date))}</strong></div>
             <div class="kpi"><span>Наша мощь</span><strong data-battle-value="live-own-power">${powerIndex(balance.ownPower)}</strong></div>
+            <div class="kpi"><span>Доступно на театре</span><strong data-battle-value="live-projected-power">${powerIndex(balance.ownPower*balance.geography.projectionFactor)}</strong></div>
             <div class="kpi"><span>Противник, оценка</span><strong data-battle-value="live-enemy-power">≈${powerIndex(observed.enemyPower)} (${powerIndex(observed.enemyPowerLow)}–${powerIndex(observed.enemyPowerHigh)})</strong></div>
             <div class="kpi"><span>Разведуверенность</span><strong data-battle-value="live-intel-confidence">${pct(observed.confidence,0)}</strong></div>
             <div class="kpi"><span>Вероятный замысел</span><strong data-battle-value="live-enemy-intent">${esc(observed.enemyIntent)}</strong></div>
             <div class="kpi"><span>Инициатива</span><strong data-battle-value="live-initiative">${pct(balance.initiative,1)}</strong></div>
             <div class="kpi"><span>Фронт</span><strong data-battle-value="live-front">${pct(war.control,1)}</strong></div>
             <div class="kpi"><span>Снабжение</span><strong data-battle-value="live-supply">${pct(war.supply,1)}</strong></div>
+            <div class="kpi"><span>Предел снабжения</span><strong data-battle-value="live-supply-ceiling">${pct(balance.geography.supplyCeiling,0)}</strong></div>
+            <div class="kpi"><span>Театр операции</span><strong data-battle-value="live-theatre">${esc(balance.geography.mode)}</strong></div>
             <div class="kpi"><span>Повреждения дома</span><strong data-battle-value="live-home-damage">${pct(calcWarHomeDamage(state, war),0)}</strong></div>
             <div class="kpi"><span>Основания</span><strong data-battle-value="live-legitimacy">${esc(warLegitimacyLabel(war.legitimacy))}</strong></div>
             <div class="kpi"><span>Склады</span><strong data-battle-value="live-readiness">${pct(stockReadiness(state),0)}</strong></div>
@@ -13071,8 +13450,33 @@
         return good ? "good" : bad ? "bad" : "warn";
       }
 
+      function renderWorldLogisticsMap() {
+        const geography=state.geography||migrateWorldGeography(state),market=state.worldMarket,home=geography.home;
+        const zoneShapes=[
+          ["Северная Америка","M52 82 L170 58 232 111 198 202 102 219 45 151 Z","north_america"],
+          ["Южная Америка","M210 245 L300 226 350 282 318 423 264 438 230 351 Z","south_america"],
+          ["Европа","M398 85 L505 73 545 128 505 178 421 166 384 120 Z","europe"],
+          ["Северная Евразия","M512 55 L786 54 839 120 748 171 557 143 Z","north_eurasia"],
+          ["Африка","M405 201 L534 186 604 270 552 425 459 430 397 317 Z","east_africa"],
+          ["Южная и Восточная Азия","M585 186 L790 151 846 226 803 334 683 322 615 272 Z","east_asia"],
+          ["Океания","M795 340 L898 326 915 416 824 438 770 391 Z","oceania"]
+        ];
+        const zones=geographyReference().zones;
+        const routeLines=market.routes.map(route=>{
+          const partner=state.diplomacy.countries.find(country=>country.id===route.partnerId),partnerGeo=partner?.geo;if(!partnerGeo)return "";
+          const points=[`${home.x},${home.y}`,...(route.geography?.chokepointIds||[]).map(id=>geography.chokepoints.find(point=>point.id===id)).filter(Boolean).map(point=>`${point.x},${point.y}`),`${partnerGeo.x},${partnerGeo.y}`];
+          const tone=route.status==="остановлен"?"bad":route.status==="нарушен"?"warn":route.reroutedDays>0?"rerouted":"";
+          return `<polyline class="world-route-line ${tone}" points="${points.join(" ")}"><title>${esc(route.name)} · ${esc(route.status)} · ${pct(route.geographicAccess,0)} доступа</title></polyline>`;
+        }).join("");
+        const conflictLines=(state.diplomacy.worldSystem?.conflicts||[]).filter(item=>item.status==="active").slice(0,8).map(conflict=>{const actor=state.diplomacy.countries.find(country=>country.id===conflict.actorId),target=state.diplomacy.countries.find(country=>country.id===conflict.targetId);if(!actor?.geo||!target?.geo)return "";return `<line class="world-route-line bad" x1="${actor.geo.x}" y1="${actor.geo.y}" x2="${target.geo.x}" y2="${target.geo.y}"><title>${esc(actor.name)} → ${esc(target.name)} · конфликт, интенсивность ${pct(conflict.intensity,0)}</title></line>`;}).join("");
+        const partnerNodes=market.routes.map(route=>state.diplomacy.countries.find(country=>country.id===route.partnerId)).filter((country,index,list)=>country&&list.findIndex(item=>item.id===country.id)===index).map(country=>`<g><circle class="world-route-node" cx="${country.geo.x}" cy="${country.geo.y}" r="6"><title>${esc(country.name)} · ${esc(country.geo.zoneName)}</title></circle><text class="world-route-label" x="${country.geo.x+9}" y="${country.geo.y-8}">${esc(country.name)}</text></g>`).join("");
+        const chokeNodes=geography.chokepoints.filter(point=>market.routes.some(route=>(route.geography?.chokepointIds||[]).includes(point.id))).map(point=>`<g><circle class="world-route-node choke ${point.status==="закрыт"?"bad":""}" cx="${point.x}" cy="${point.y}" r="5"><title>${esc(point.name)} · ${esc(point.status)} · нарушение ${pct(point.disruption,0)}</title></circle></g>`).join("");
+        return `<div class="world-logistics-map"><svg viewBox="0 0 940 470" role="img" aria-label="Схема международных торговых коридоров"><g>${zoneShapes.map(([label,path,zoneId])=>`<path class="geo-zone" d="${path}" fill="${zones[zoneId]?.color||"#788979"}"></path><text class="geo-zone-label" x="${zones[zoneId]?.x||460}" y="${zones[zoneId]?.y||220}">${label}</text>`).join("")}</g><g>${routeLines}${conflictLines}</g><g>${chokeNodes}${partnerNodes}<circle class="world-route-node home" cx="${home.x}" cy="${home.y}" r="8"><title>${esc(state.country.name)} · ${esc(home.zoneName)}</title></circle><text class="world-route-label" x="${home.x+11}" y="${home.y+18}">${esc(state.country.name)}</text></g></svg><div class="world-map-legend"><span>золото: наша страна</span><span>бирюза: открытый маршрут</span><span>пунктир: риск или обход</span><span>красный: активный конфликт</span></div></div>`;
+      }
+
       function renderWorldMarketPanel() {
         const market = state.worldMarket;
+        const geography = state.geography || migrateWorldGeography(state);
         const commodities = market.commodities.slice().sort((a,b) => Math.abs(b.trend) - Math.abs(a.trend));
         const routes = market.routes.slice().sort((a,b) => tradeRouteEfficiency(a) - tradeRouteEfficiency(b));
         const priceIndex = commodityPriceIndex(state);
@@ -13094,6 +13498,12 @@
             </div>
           </section>
           <section class="panel pad">
+            <div class="panel-section-head"><span><h3 class="section-title">География торговли и транзита</h3><p class="subtle">Это оперативная схема маршрутов, а не декоративная карта: линии показывают действующих партнеров, узкие места и фактический доступ. Закрытие пролива, эмбарго или потеря транзитных прав меняют сроки и объем поставок.</p></span><span class="pill">${geography.openChokepoints}/${geography.chokepoints.length} узлов открыты</span></div>
+            <div class="metric-grid compact-metrics" style="margin-top:12px;">${metric("Географический доступ",pct(geography.networkReliability,0),geography.home.landlocked?"нет собственного морского выхода":"есть морской выход",worldMarketTone(geography.networkReliability))}${metric("Средний срок",`${geography.averageDeliveryDays.toFixed(1)} дн.`,`транзитный риск ${pct(geography.transitRisk,0)}`,geography.averageDeliveryDays<18?"good":geography.averageDeliveryDays>34?"bad":"warn")}${metric("Домашний транспорт",pct(geography.home.transport,0),`${geography.home.zoneName} · порты ${pct(geography.home.ports,0)}`,worldMarketTone(geography.home.transport))}${metric("Открытые узлы",`${geography.openChokepoints}/${geography.chokepoints.length}`,geography.lastBriefing,geography.openChokepoints>=7?"good":geography.openChokepoints<=5?"bad":"warn")}</div>
+            <div style="margin-top:12px;">${renderWorldLogisticsMap()}</div>
+            <details class="action-fold" style="margin-top:10px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Глобальные узкие места</strong><small>Проливы и каналы, через которые проходят активные коридоры</small></span></summary><div class="action-fold-body"><div class="scroll"><table class="table"><thead><tr><th>Узел</th><th>Статус</th><th>Мощность</th><th>Безопасность</th><th>Нарушение</th></tr></thead><tbody>${geography.chokepoints.map(point=>`<tr><td><strong>${esc(point.name)}</strong><br><small class="subtle">${esc(point.controllers.join(", "))}</small></td><td><span class="pill delta ${point.status==="закрыт"?"bad":point.status==="ограничен"?"warn":"good"}">${esc(point.status)}</span></td><td>${pct(point.capacity,0)}</td><td>${pct(point.security,0)}</td><td>${pct(point.disruption,0)}</td></tr>`).join("")}</tbody></table></div></div></details>
+          </section>
+          <section class="panel pad">
             <div class="panel-section-head"><span><h3 class="section-title">Котировки стратегических товаров</h3><p class="subtle">Индекс 100 соответствует базовой мировой цене. Изменение цены постепенно переносится в инфляцию, себестоимость отраслей и состояние запасов.</p></span><span class="pill">${commodities.length} рынков</span></div>
             <div class="scroll" style="margin-top:12px;">
               <table class="table world-market-table"><thead><tr><th>Товар</th><th>Цена</th><th>Тренд</th><th>Спрос</th><th>Предложение</th><th>Статус</th></tr></thead><tbody>
@@ -13103,12 +13513,13 @@
           </section>
           <section class="panel pad">
             <div class="panel-section-head"><span><h3 class="section-title">Международные торговые коридоры</h3><p class="subtle">Мощность сама по себе недостаточна: реальный поток ограничивают износ, безопасность, перегрузка, дипломатический доступ и нарушения.</p></span><span class="pill">${routes.filter(route=>route.status!=="работает").length} требуют внимания</span></div>
-            <div class="bill-grid" style="margin-top:12px;">${routes.map(route => { const efficiency=tradeRouteEfficiency(route)*100; return `
+            <div class="bill-grid" style="margin-top:12px;">${routes.map(route => { const efficiency=tradeRouteEfficiency(route)*100,geo=route.geography||{}; return `
               <article class="bill-card ${route.status==="остановлен"?"bad":route.status!=="работает"?"warn":"good"}">
                 <header><span><strong>${esc(route.name)}</strong><small>${esc(route.type)} · ${esc(route.partnerName)} · ${compact(route.distance)} км</small></span><span class="pill">${esc(route.status)}</span></header>
                 <div class="progress"><i style="--w:${efficiency}%"></i></div>
-                <div class="bill-kpis"><div><span>Эффективность</span><strong>${pct(efficiency,0)}</strong></div><div><span>Мощность</span><strong>${pct(route.capacity,0)}</strong></div><div><span>Безопасность</span><strong>${pct(route.security,0)}</strong></div><div><span>Нарушение</span><strong>${pct(route.disruption,0)}</strong></div></div>
-                <details class="action-fold"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Поток ${pct(route.volume,0)} · страхование ${pct(route.insurance,0)}</strong><small>${esc(route.lastEvent)}</small></span></summary><div class="action-fold-body"><p class="subtle" style="margin:0;">Товары: ${route.commodityIds.map(id=>market.commodities.find(item=>item.id===id)?.name||id).map(esc).join(", ")}. Состояние ${pct(route.condition,0)}, перегрузка ${pct(route.congestion,0)}.</p><div class="actions"><button data-action="trade-route-action" data-route="${esc(route.id)}" data-mode="repair">Ремонт</button><button data-action="trade-route-action" data-route="${esc(route.id)}" data-mode="secure">Охрана</button><button data-action="trade-route-action" data-route="${esc(route.id)}" data-mode="expand"${route.expansionDays>0?" disabled":""}>${route.expansionDays>0?`Строится ${route.expansionDays} дн.`:"Расширить"}</button></div></div></details>
+                <div class="bill-kpis"><div><span>Эффективность</span><strong>${pct(efficiency,0)}</strong></div><div><span>Геодоступ</span><strong>${pct(route.geographicAccess,0)}</strong></div><div><span>Доставка</span><strong>${num(geo.deliveryDays,12).toFixed(0)} дн.</strong></div><div><span>Транзитный риск</span><strong>${pct(num(geo.risk,24),0)}</strong></div></div>
+                <div class="route-path">${esc(geo.path||routeGeographyLabel(route,state))}</div>
+                <details class="action-fold"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Поток ${pct(route.volume,0)} · страхование ${pct(route.insurance,0)}</strong><small>${esc(route.lastEvent)}</small></span></summary><div class="action-fold-body"><p class="subtle" style="margin:0;">Товары: ${route.commodityIds.map(id=>market.commodities.find(item=>item.id===id)?.name||id).map(esc).join(", ")}. Состояние ${pct(route.condition,0)}, перегрузка ${pct(route.congestion,0)}, переходов границы ${num(geo.borderCrossings,0)}, транзитные гарантии ${route.transitPermitDays>0?`${Math.ceil(route.transitPermitDays)} дн.`:"не действуют"}.</p><div class="actions"><button data-action="trade-route-action" data-route="${esc(route.id)}" data-mode="repair">Ремонт</button><button data-action="trade-route-action" data-route="${esc(route.id)}" data-mode="secure">Охрана</button><button data-action="trade-route-action" data-route="${esc(route.id)}" data-mode="transit">Транзитные права</button><button data-action="trade-route-action" data-route="${esc(route.id)}" data-mode="reroute"${route.reroutedDays>0?" disabled":""}>${route.reroutedDays>0?`Обход ${Math.ceil(route.reroutedDays)} дн.`:"Открыть обход"}</button><button data-action="trade-route-action" data-route="${esc(route.id)}" data-mode="expand"${route.expansionDays>0?" disabled":""}>${route.expansionDays>0?`Строится ${route.expansionDays} дн.`:"Расширить"}</button></div></div></details>
               </article>`; }).join("")}</div>
           </section>
           <section class="panel pad"><h3 class="section-title">Международная торговая сводка</h3><div class="list" style="margin-top:12px;">${market.incidents.length?market.incidents.slice(0,16).map(item=>`<div class="row"><span><strong>${esc(item.title)}</strong><br><small class="subtle">${esc(item.date)} · ${esc(item.text)}</small></span><span class="pill">${esc(item.type)}</span></div>`).join(""):`<div class="row"><span>Серьезных нарушений международной логистики пока нет</span><span class="pill">штатно</span></div>`}</div></section>
@@ -13327,7 +13738,9 @@
               ${manualCard("Мировой рынок и логистика", [
                 "Нефть, газ, продовольствие, металлы, компоненты, удобрения, оборудование и оборонная продукция имеют собственные мировые цены, спрос, предложение и волатильность.",
                 "Цена меняется постепенно под влиянием дефицита, войн, климата и глобальной напряженности; она передается во внутреннюю инфляцию, импорт, экспорт и отраслевые запасы.",
-                "Торговый поток идет по конкретным морским, железнодорожным, автомобильным, воздушным и энергетическим коридорам. Износ, перегрузка, санкции и плохие отношения снижают реальную пропускную способность.",
+                "Каждое государство имеет макрорегион, координаты, морской доступ, порты, дороги, железные дороги и транспортный потенциал. Расстояние и границы больше не являются декоративными.",
+                "Торговый поток идет по конкретным морским, железнодорожным, автомобильным, воздушным и энергетическим коридорам через транзитные страны, проливы и каналы.",
+                "Санкции, эмбарго, война у узкого места или закрытые транзитные права увеличивают срок доставки, страхование и риск дефицита. Дипломатическая миссия восстанавливает доступ, а обход возвращает поток ценой расстояния и фрахта.",
                 "Резервы защищают от краткого разрыва, диверсификация уменьшает зависимость от одного поставщика, а страхование снижает коммерческий риск без восстановления самого маршрута.",
                 "Инфраструктура коридора расширяется не мгновенно: проект требует бюджета и выполняется по дням."
               ])}
@@ -16235,7 +16648,9 @@
           refreshWarIntelligence(game, w, 0, "ежедневная объединённая сводка");
           simulateOperationalPlanning(game, w);
           w.initiative = clamp(w.initiative * .86 + balance.initiative * .14, 0, 100);
-          w.supply = clamp(w.supply + m.logistics * .00055 + m.industry * .00025 + m.budget * .00016 - w.intensity * .006 - (100 - m.readiness) * .00035, 0, 100);
+          w.geography=balance.geography;
+          const geographicSupplyLoss=Math.max(0,72-balance.geography.access)*.0018+balance.geography.distance/1200000;
+          w.supply = clamp(w.supply + m.logistics * .00055 + m.industry * .00025 + m.budget * .00016 - w.intensity * .006 - (100 - m.readiness) * .00035-geographicSupplyLoss, 0, balance.geography.supplyCeiling);
           const doctrineBonus = m.doctrine === "глубокая операция" ? .035 : m.doctrine === "сетецентрическая война" ? .045 : m.doctrine === "территориальная оборона" ? -.01 : .015;
           const frontDelta = clamp((balance.balance * .00115) + (w.initiative - 50) * .0022 + doctrineBonus * .35 + rnd(-.035, .035), -.13, .13);
           w.control = clamp(w.control + frontDelta, 0, 100);
@@ -17533,7 +17948,8 @@
         if (type === "trade") {
           const tradeGain = rnd(600, 2200);
           e.budget -= 160; c.trade += tradeGain; c.treaties.push("торговый контракт"); c.relations += 3;
-          report = ["Торговый контракт подписан", `${c.name} расширяет закупки и логистические каналы.`, [["Торговля", `+${money(tradeGain)}`, "good"], ["Отношения", "+3 п.п.", "good"], ["Бюджет", "-160 млн", "bad"]], "good"];
+          const route=ensureBilateralTradeRoute(state,c);
+          report = ["Торговый контракт подписан", `${c.name} расширяет закупки; создан или усилен маршрут «${route.name}».`, [["Торговля", `+${money(tradeGain)}`, "good"], ["Географический доступ", pct(route.geographicAccess,0), route.geographicAccess>=55?"good":"warn"], ["Срок доставки", `${route.geography.deliveryDays} дн.`, route.geography.deliveryDays<22?"good":"warn"], ["Отношения", "+3 п.п.", "good"], ["Бюджет", "-160 млн", "bad"]], "good"];
         }
         if (type === "alliance") {
           const chance = clamp(c.relations + c.stability * .2 + state.diplomacy.law.reputation * .18 + state.diplomacy.law.treatyReliability * .14 - 16 - c.spy * .12 - (c.sanctions ? 25 : 0) - (c.embargo ? 18 : 0), 0, 100);
@@ -17609,7 +18025,8 @@
                 <span class="subtle">${dateLabel(state.date)} · ${esc(state.country.capital)} · Генштаб и МИД</span>
               </div>
               <div class="decision-grid">
-                <div class="kpi"><span>Наша мощь</span><strong>${powerIndex(a.ownPower)}</strong></div>
+                <div class="kpi"><span>Общая мощь</span><strong>${powerIndex(a.ownPower)}</strong></div>
+                <div class="kpi"><span>Доступно на театре</span><strong class="delta ${a.geography.projectionFactor>=.75?"good":a.geography.projectionFactor>=.55?"warn":"bad"}">${powerIndex(a.projectedOwnPower)}</strong></div>
                 <div class="kpi"><span>Мощь противника</span><strong>≈${powerIndex(a.enemyPower)}</strong></div>
                 <div class="kpi"><span>Диапазон оценки</span><strong>${powerIndex(a.enemyPowerLow)}–${powerIndex(a.enemyPowerHigh)}</strong></div>
                 <div class="kpi"><span>Уверенность разведки</span><strong class="delta ${a.intelConfidence >= 70 ? "good" : a.intelConfidence >= 45 ? "warn" : "bad"}">${pct(a.intelConfidence,0)}</strong></div>
@@ -17623,6 +18040,7 @@
                 <div class="kpi"><span>Доказательства</span><strong>${pct(country.legalProfile.evidence,0)}</strong></div>
                 <div class="kpi"><span>Репутационный эффект</span><strong class="delta ${legal.reputationDelta >= 0 ? "good" : "bad"}">${legal.reputationDelta >= 0 ? "+" : ""}${legal.reputationDelta.toFixed(1)} п.п.</strong></div>
               </div>
+              <div class="decision-banner ${a.geography.projectionFactor>=.72?"good":a.geography.projectionFactor>=.52?"warn":"bad"}"><strong>${esc(a.geography.label)}</strong><span class="subtle">Проекция сил ${pct(a.geography.projectionFactor*100,0)} · предел снабжения ${pct(a.geography.supplyCeiling,0)} · транспортно-штабное качество ${pct(a.geography.logistics,0)}. Соотношение уже учитывает силы, которые реально можно доставить и поддерживать на этом театре.</span></div>
               <label>Юридическое основание операции
                 <select data-war-legal-cause data-country="${country.id}">
                   ${casusBelliCatalog(country).map(item => `<option value="${item.id}" ${causeId === item.id ? "selected" : ""}>${esc(item.name)} · доказанность ${pct(item.strength,0)} · базовая законность ${pct(item.legality,0)}</option>`).join("")}
@@ -17699,7 +18117,7 @@
         let details = [];
         let tone = accept ? "good" : "warn";
         if (offer.type === "trade") {
-          if (accept) { state.economy.budget -= 140; c.trade += rnd(600, 1800); c.relations += 4.5; Object.keys(state.economy.supply || {}).slice(0, 6).forEach(key => state.economy.supply[key] = clamp(state.economy.supply[key] + 1.5, 0, 180)); result = `${c.name} получает расширенный торговый коридор, а наши производственные цепочки — более надежные поставки.`; details = [["Бюджет", "-140 млн", "bad"], ["Торговля", "выше", "good"], ["Запасы", "+1.5 по базовым позициям", "good"], ["Отношения", "+4.5 п.п.", "good"]]; }
+          if (accept) { state.economy.budget -= 140; c.trade += rnd(600, 1800); c.relations += 4.5; Object.keys(state.economy.supply || {}).slice(0, 6).forEach(key => state.economy.supply[key] = clamp(state.economy.supply[key] + 1.5, 0, 180)); const route=ensureBilateralTradeRoute(state,c); result = `${c.name} получает расширенный торговый коридор, а наши производственные цепочки — маршрут через ${route.geography.path}.`; details = [["Бюджет", "-140 млн", "bad"], ["Торговля", "выше", "good"], ["Срок доставки", `${route.geography.deliveryDays} дн.`, route.geography.deliveryDays<22?"good":"warn"], ["Запасы", "+1.5 по базовым позициям", "good"], ["Отношения", "+4.5 п.п.", "good"]]; }
           else { c.relations -= 1.6; result = "МИД оставил предложение без развития."; details = [["Отношения", "-1.6 п.п.", "warn"], ["Торговля", "без изменений", "warn"]]; }
         }
         if (offer.type === "summit") {
@@ -18500,6 +18918,7 @@
         if (!state.information?.outlets || !state.information?.narratives) migrateInformationSystem(state);
         if (!state.intelligence?.dossiers || !state.intelligence?.operations) migrateIntelligenceSystem(state);
         if (!state.climate?.resources || state.regions.some(region => !region.climate)) migrateClimateSystem(state);
+        if (!state.geography?.chokepoints || state.geography.modelVersion!==GEOGRAPHY_MODEL_VERSION) migrateWorldGeography(state);
         if (!state.worldMarket?.commodities || !state.worldMarket?.routes) migrateWorldMarketSystem(state);
         if (!state.elites?.actors) migrateEliteSystem(state);
         if (!state.statistics?.observed) migrateStatisticsSystem(state);
@@ -18533,7 +18952,8 @@
         const information=state.information;["publicMood","governmentCredibility","pluralism","misinformation","mediaLiteracy","transparency","pressAccess","crisisCommunication","echoChambers","factChecking"].forEach(key=>information[key]=clamp(num(information[key]),0,100));information.briefingCooldown=Math.max(0,Math.round(num(information.briefingCooldown)));information.outlets=information.outlets.map((item,index)=>normalizeInformationOutlet(item,null,index)).slice(0,18);information.narratives=information.narratives.map((item,index)=>normalizeInformationNarrative(item,null,index)).slice(0,16);information.history=(information.history||[]).slice(0,70);syncLegacyInformation(state);
         const intelligence=state.intelligence;["humint","sigint","cyber","analysis","counterIntel","covertAction","oversight","secrecy","foreignNetworks","domesticRisk","cyberThreat","threatLevel"].forEach(key=>intelligence[key]=clamp(num(intelligence[key]),0,100));intelligence.budget=Math.max(0,num(intelligence.budget));intelligence.operations=(intelligence.operations||[]).map(normalizeIntelligenceOperation).slice(0,24);intelligence.dossiers=(intelligence.dossiers||[]).map(item=>{const country=state.diplomacy.countries.find(country=>country.id===item.countryId);return country?normalizeIntelligenceDossier(item,country,state):null;}).filter(Boolean).slice(0,36);intelligence.reports=(intelligence.reports||[]).slice(0,70);state.governance.intelligence.counterIntel=intelligence.counterIntel;state.governance.intelligence.foreignNetworks=intelligence.foreignNetworks;state.governance.intelligence.domesticRisk=intelligence.domesticRisk;state.governance.intelligence.cyberThreat=intelligence.cyberThreat;
         const climate=state.climate;["emissions","resilience","preparedness","adaptation","mitigation","waterStress","biodiversity","airQuality","responseCapacity"].forEach(key=>climate[key]=clamp(num(climate[key]),0,100));climate.temperatureAnomaly=clamp(num(climate.temperatureAnomaly,1.18),.2,4.8);climate.emissionsTrend=clamp(num(climate.emissionsTrend),-5,5);climate.emergencyReserve=Math.max(0,num(climate.emergencyReserve));["fossil","nuclear","renewable"].forEach(key=>climate.energyMix[key]=clamp(num(climate.energyMix[key]),0,100));const energyTotal=climate.energyMix.fossil+climate.energyMix.nuclear+climate.energyMix.renewable||100;["fossil","nuclear","renewable"].forEach(key=>climate.energyMix[key]=climate.energyMix[key]/energyTotal*100);climate.resources=(climate.resources||[]).map((item,index)=>normalizeClimateResource(item,null,index)).slice(0,18);climate.emergencies=(climate.emergencies||[]).map(normalizeClimateEmergency).slice(0,18);climate.history=(climate.history||[]).slice(0,70);
-        const worldMarket=state.worldMarket;["tariffAverage","logisticsReliability","importDependency","exportDiversity","insuranceRisk","reserveCoverage","customsEfficiency","corridorDiplomacy"].forEach(key=>worldMarket[key]=clamp(num(worldMarket[key]),0,100));worldMarket.freightIndex=clamp(num(worldMarket.freightIndex,100),20,300);worldMarket.tradeBalance=num(worldMarket.tradeBalance);const commodityDefaults=new Map(worldCommodityCatalog().map(item=>[item.id,item]));worldMarket.commodities=worldMarket.commodities.map(item=>normalizeWorldCommodity(item,commodityDefaults.get(item.id)||worldCommodityCatalog()[0])).slice(0,16);worldMarket.routes=worldMarket.routes.map((item,index)=>normalizeTradeRoute(item,null,index)).slice(0,16);
+        const geography=state.geography;geography.home=playerGeographyProfile(state);geography.chokepoints=geography.chokepoints.map((item,index)=>normalizeGeographicChokepoint(item,defaultGeographicChokepoints()[index]||defaultGeographicChokepoints()[0])).slice(0,12);["networkReliability","averageDeliveryDays","transitRisk"].forEach(key=>geography[key]=clamp(num(geography[key]),0,key==="averageDeliveryDays"?180:100));state.diplomacy.countries.forEach(ensureCountryGeography);
+        const worldMarket=state.worldMarket;["tariffAverage","logisticsReliability","importDependency","exportDiversity","insuranceRisk","reserveCoverage","customsEfficiency","corridorDiplomacy"].forEach(key=>worldMarket[key]=clamp(num(worldMarket[key]),0,100));worldMarket.freightIndex=clamp(num(worldMarket.freightIndex,100),20,300);worldMarket.tradeBalance=num(worldMarket.tradeBalance);const commodityDefaults=new Map(worldCommodityCatalog().map(item=>[item.id,item]));worldMarket.commodities=worldMarket.commodities.map(item=>normalizeWorldCommodity(item,commodityDefaults.get(item.id)||worldCommodityCatalog()[0])).slice(0,16);worldMarket.routes=worldMarket.routes.map((item,index)=>prepareTradeRouteGeography(normalizeTradeRoute(item,null,index),state)).slice(0,16);
         const elites=state.elites;["captureRisk","pluralism","transparency","networkStability","presidentialAuthority"].forEach(key=>elites[key]=clamp(num(elites[key]),0,100));elites.actors=elites.actors.map((actor,index)=>normalizeEliteActor(actor,null,index)).slice(0,24);elites.unresolvedFavors=Math.max(0,Math.round(num(elites.unresolvedFavors)));elites.log=(elites.log||[]).slice(0,36);
         const statistics=state.statistics;["quality","independence","coverage","timeliness","methodology","auditCapacity","openData","manipulation","publicTrust","revisionRisk"].forEach(key=>statistics[key]=clamp(num(statistics[key]),0,100));statistics.daysUntilRelease=Math.max(0,Math.round(num(statistics.daysUntilRelease)));statistics.reports=(statistics.reports||[]).map(normalizeStatisticsRecord).filter(Boolean).slice(0,36);statistics.revisions=(statistics.revisions||[]).slice(0,36);
         p.popularity = clamp(p.popularity, 0, 100);
