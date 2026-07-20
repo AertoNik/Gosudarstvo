@@ -3454,6 +3454,10 @@
 
       const STORAGE_KEY = "aaa_president_sim_state_v4";
       const SLOTS_KEY = "aaa_president_sim_slots_v4";
+      const SAVE_VERSION = 17;
+      const ECONOMY_MODEL_VERSION = 3;
+      const SAVE_DB_NAME = "aaa_president_sim_storage";
+      const SAVE_DB_STORE = "saves";
       const DAY_MS = 1800;
       const DAYS_PER_YEAR = 365;
       const tabs = [
@@ -3526,6 +3530,7 @@
       let deferredRenderTimer = null;
       let saveTimer = null;
       let lastSaveAt = 0;
+      let lastIndexedSaveAt = 0;
       let lastStorageWarningAt = 0;
       let lastInteractionAt = 0;
       let lastScrollAt = 0;
@@ -3537,6 +3542,8 @@
       let warDrafts = new Map();
       let warLegalDrafts = new Map();
       let setupDraft = defaultSetupDraft();
+      let randomGameContext = null;
+      const nativeRandom = Math.random.bind(Math);
 
       const app = document.getElementById("app");
       const toastBox = document.getElementById("toast");
@@ -3582,16 +3589,59 @@
         return Math.max(min, Math.min(max, value));
       }
 
+      function seedFromText(value) {
+        let seed = 2166136261;
+        for (const char of String(value || "president-sim")) {
+          seed ^= char.charCodeAt(0);
+          seed = Math.imul(seed, 16777619);
+        }
+        return seed >>> 0 || 0x6d2b79f5;
+      }
+
+      function defaultSimulationCore(game = null) {
+        const identity = `${game?.country?.name || "state"}|${game?.createdAt || Date.now()}|${game?.date?.year || currentGameDate().year}`;
+        return {
+          modelVersion: 1,
+          rngState: seedFromText(identity),
+          dayIndex: 0,
+          lastProcessedDate: game?.date ? formatDate(game.date) : "",
+          lastTickDuration: 0,
+          slowTickCount: 0
+        };
+      }
+
+      function migrateSimulationCore(game) {
+        const base = defaultSimulationCore(game);
+        game.simulation = Object.assign(base, game.simulation && typeof game.simulation === "object" ? game.simulation : {});
+        game.simulation.modelVersion = 1;
+        game.simulation.rngState = (Math.round(num(game.simulation.rngState, base.rngState)) >>> 0) || base.rngState;
+        game.simulation.dayIndex = Math.max(0, Math.round(num(game.simulation.dayIndex)));
+        game.simulation.lastProcessedDate ||= formatDate(game.date);
+        game.simulation.lastTickDuration = Math.max(0, num(game.simulation.lastTickDuration));
+        game.simulation.slowTickCount = Math.max(0, Math.round(num(game.simulation.slowTickCount)));
+        delete game.simulation.processing;
+        return game.simulation;
+      }
+
+      function simulationRandom() {
+        const game = randomGameContext || state;
+        if (!game?.simulation) return nativeRandom();
+        let seed = (Math.round(num(game.simulation.rngState, 0x6d2b79f5)) >>> 0) || 0x6d2b79f5;
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        game.simulation.rngState = seed;
+        return seed / 4294967296;
+      }
+
       function rnd(min, max) {
-        return min + Math.random() * (max - min);
+        return min + simulationRandom() * (max - min);
       }
 
       function pick(list) {
-        return list[Math.floor(Math.random() * list.length)];
+        return list[Math.floor(simulationRandom() * list.length)];
       }
 
       function uid(prefix) {
-        return prefix + "_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
+        return prefix + "_" + simulationRandom().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
       }
 
       function esc(value) {
@@ -3678,9 +3728,164 @@
         notify(text);
       }
 
+      function openSaveDatabase() {
+        if (typeof indexedDB === "undefined") return Promise.resolve(null);
+        return new Promise(resolve => {
+          try {
+            const request = indexedDB.open(SAVE_DB_NAME, 1);
+            request.onupgradeneeded = () => {
+              const database = request.result;
+              if (!database.objectStoreNames.contains(SAVE_DB_STORE)) database.createObjectStore(SAVE_DB_STORE);
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => resolve(null);
+            request.onblocked = () => resolve(null);
+          } catch {
+            resolve(null);
+          }
+        });
+      }
+
+      async function persistIndexedState(game = state, force = false, prepared = null) {
+        if (!game || typeof indexedDB === "undefined") return false;
+        const now = Date.now();
+        if (!force && now - lastIndexedSaveAt < 4500) return true;
+        const database = await openSaveDatabase();
+        if (!database) return false;
+        return new Promise(resolve => {
+          try {
+            const transaction = database.transaction(SAVE_DB_STORE, "readwrite");
+            transaction.objectStore(SAVE_DB_STORE).put(prepared || serializeStateForStorage(game, "normal"), "autosave");
+            transaction.oncomplete = () => { lastIndexedSaveAt = now; database.close(); resolve(true); };
+            transaction.onerror = () => { database.close(); resolve(false); };
+            transaction.onabort = () => { database.close(); resolve(false); };
+          } catch {
+            database.close();
+            resolve(false);
+          }
+        });
+      }
+
+      async function restoreIndexedState() {
+        const database = await openSaveDatabase();
+        if (!database) return null;
+        return new Promise(resolve => {
+          try {
+            const transaction = database.transaction(SAVE_DB_STORE, "readonly");
+            const request = transaction.objectStore(SAVE_DB_STORE).get("autosave");
+            request.onsuccess = () => {
+              database.close();
+              try { resolve(request.result ? migrateState(request.result) : null); } catch { resolve(null); }
+            };
+            request.onerror = () => { database.close(); resolve(null); };
+          } catch {
+            database.close();
+            resolve(null);
+          }
+        });
+      }
+
+      async function clearIndexedState() {
+        const database = await openSaveDatabase();
+        if (!database) return false;
+        return new Promise(resolve => {
+          try {
+            const transaction = database.transaction(SAVE_DB_STORE, "readwrite");
+            transaction.objectStore(SAVE_DB_STORE).delete("autosave");
+            transaction.oncomplete = () => { database.close(); resolve(true); };
+            transaction.onerror = () => { database.close(); resolve(false); };
+          } catch {
+            database.close();
+            resolve(false);
+          }
+        });
+      }
+
+      async function writeIndexedRecord(key, value) {
+        const database = await openSaveDatabase();
+        if (!database) return false;
+        return new Promise(resolve => {
+          try {
+            const transaction = database.transaction(SAVE_DB_STORE, "readwrite");
+            transaction.objectStore(SAVE_DB_STORE).put(value, key);
+            transaction.oncomplete = () => { database.close(); resolve(true); };
+            transaction.onerror = () => { database.close(); resolve(false); };
+            transaction.onabort = () => { database.close(); resolve(false); };
+          } catch {
+            database.close();
+            resolve(false);
+          }
+        });
+      }
+
+      async function readIndexedRecord(key) {
+        const database = await openSaveDatabase();
+        if (!database) return null;
+        return new Promise(resolve => {
+          try {
+            const transaction = database.transaction(SAVE_DB_STORE, "readonly");
+            const request = transaction.objectStore(SAVE_DB_STORE).get(key);
+            request.onsuccess = () => { database.close(); resolve(request.result || null); };
+            request.onerror = () => { database.close(); resolve(null); };
+          } catch {
+            database.close();
+            resolve(null);
+          }
+        });
+      }
+
+      async function deleteIndexedRecords(keys) {
+        const database = await openSaveDatabase();
+        if (!database) return false;
+        return new Promise(resolve => {
+          try {
+            const transaction = database.transaction(SAVE_DB_STORE, "readwrite");
+            const store = transaction.objectStore(SAVE_DB_STORE);
+            keys.forEach(key => store.delete(key));
+            transaction.oncomplete = () => { database.close(); resolve(true); };
+            transaction.onerror = () => { database.close(); resolve(false); };
+          } catch {
+            database.close();
+            resolve(false);
+          }
+        });
+      }
+
+      function indexedSlotStub(save, slot) {
+        return {
+          __indexedSlot: true,
+          slot: String(slot),
+          version: SAVE_VERSION,
+          date: safeDateParts(save?.date),
+          lastSaved: save?.lastSaved || new Date().toISOString(),
+          country: { name: save?.country?.name || "Сохранение" }
+        };
+      }
+
+      async function migrateLegacySlotsToIndexed() {
+        if (typeof indexedDB === "undefined") return false;
+        const slots = loadSlots();
+        let changed = false;
+        for (const [slot, save] of Object.entries(slots)) {
+          if (!save || save.__indexedSlot) continue;
+          const migrated = migrateState(save);
+          if (!migrated) continue;
+          const snapshot = serializeStateForStorage(migrated, "normal");
+          if (await writeIndexedRecord(`slot:${slot}`, snapshot)) {
+            slots[slot] = indexedSlotStub(snapshot, slot);
+            changed = true;
+          }
+        }
+        if (changed) {
+          try { localStorage.setItem(SLOTS_KEY, JSON.stringify(slots)); } catch (error) { console.warn(error); return false; }
+        }
+        return changed;
+      }
+
       function serializeStateForStorage(game = state, level = "normal") {
         if (!game || typeof game !== "object") return null;
         const copy = JSON.parse(JSON.stringify(game));
+        if (copy.simulation) delete copy.simulation.processing;
         const historyLimit = level === "tiny" || level === "safe" ? 60 : 180;
         const newsLimit = level === "tiny" || level === "safe" ? 24 : 90;
         copy.news = (copy.news || []).slice(0, newsLimit);
@@ -3739,6 +3944,7 @@
           const slots = JSON.parse(raw);
           const compacted = {};
           for (const [slot, save] of Object.entries(slots || {})) {
+            if (save?.__indexedSlot) { compacted[slot] = save; continue; }
             const migrated = migrateState(save);
             if (migrated) compacted[slot] = serializeStateForStorage(migrated, "tiny");
           }
@@ -3748,6 +3954,7 @@
           } catch {
             const safeSlots = {};
             for (const [slot, save] of Object.entries(compacted)) {
+              if (save?.__indexedSlot) { safeSlots[slot] = save; continue; }
               const safe = serializeStateForStorage(save, "safe");
               if (safe) safeSlots[slot] = safe;
             }
@@ -3766,12 +3973,15 @@
         const now = Date.now();
         if (!options.force && now - lastSaveAt < 1500) return true;
         state.lastSaved = new Date().toISOString();
+        const normalSnapshot = serializeStateForStorage(state, "normal");
+        void persistIndexedState(state, !!options.indexedForce, normalSnapshot);
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeStateForStorage(state, "normal")));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(normalSnapshot));
           lastSaveAt = now;
           return true;
         } catch (err) {
           console.warn(err);
+          void persistIndexedState(state, true, normalSnapshot);
           try {
             compactExistingSlots();
             localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeStateForStorage(state, "tiny")));
@@ -3890,7 +4100,8 @@
         loaded.country.flag.image = sanitizeImageData(loaded.country.flag.image);
         loaded.country.coatImage = sanitizeImageData(loaded.country.coatImage);
         loaded.country.president.photo = sanitizeImageData(loaded.country.president.photo);
-        loaded.version = 16;
+        loaded.version = SAVE_VERSION;
+        migrateSimulationCore(loaded);
         loaded.news = Array.isArray(loaded.news)
           ? loaded.news.filter(item => item && typeof item === "object" && !Array.isArray(item)).slice(0, 240)
           : [];
@@ -4103,11 +4314,13 @@
         fiscal.activeYear = year;
         e.fiscal = fiscal;
         repairEconomicScale(game);
+        migrateNationalAccounts(game);
         refreshFiscalProjections(game);
       }
 
       function repairEconomicScale(game) {
         const e = game.economy;
+        const previousModelVersion = num(e.modelVersion, 0);
         const gdp = Math.max(1000, num(e.gdp, 642000));
         e.gdp = gdp;
         const repaired = [];
@@ -4119,7 +4332,7 @@
             repaired.push(key);
           }
         };
-        if (num(e.modelVersion, 0) < 2) {
+        if (previousModelVersion < 2) {
           resetIfAbove("exports", .72, .18);
           resetIfAbove("imports", .72, .16);
           resetIfAbove("investments", .48, .085);
@@ -4135,7 +4348,7 @@
             repaired.push("stockIndex");
           }
         }
-        e.modelVersion = 2;
+        e.modelVersion = ECONOMY_MODEL_VERSION;
         e.macro = Object.assign({
           structuralGrowth: clamp(num(e.growth, 2), -8, 8),
           inflationTarget: clamp(num(e.inflation, 5), .5, 30),
@@ -4151,6 +4364,113 @@
         if (repaired.length) {
           e.lastScaleRepair = `Исправлены несоразмерные показатели старой модели: ${repaired.join(", ")}.`;
         } else e.lastScaleRepair ||= "";
+      }
+
+      function estimatedLaborForce(game) {
+        const demography = game.population?.demography;
+        if (Array.isArray(demography?.cohorts) && demography.cohorts.length) {
+          const participation = { children: 0, youth: .56, prime: .88, mature: .7, elderly: .09 };
+          return demography.cohorts.reduce((sum, cohort) => sum + Math.max(0, num(cohort.population)) * (participation[cohort.id] ?? .52), 0);
+        }
+        return Math.max(1, num(game.population?.total, 14500000) * .54);
+      }
+
+      function defaultNationalAccounts(game) {
+        const e = game.economy;
+        const gdp = Math.max(1000, num(e.gdp, 642000));
+        const publicConsumption = gdp * .115;
+        const publicInvestment = gdp * .052;
+        const grossFixedCapital = Math.max(gdp * .04, num(e.investments, gdp * .08) + publicInvestment);
+        const netExports = num(e.exports) - num(e.imports);
+        return {
+          modelVersion: 1,
+          baselineGdp: gdp,
+          potentialGdp: gdp * 1.035,
+          realGdpIndex: 100,
+          priceIndex: 100,
+          nominalGdp: gdp,
+          outputGap: -3.4,
+          capacityUtilization: 74,
+          productivity: 100,
+          capitalStock: gdp * 2.8,
+          laborForce: estimatedLaborForce(game),
+          employment: estimatedLaborForce(game) * (1 - num(e.unemployment, 6) / 100),
+          privateConsumption: Math.max(gdp * .4, gdp - publicConsumption - grossFixedCapital - netExports),
+          governmentConsumption: publicConsumption,
+          publicInvestment,
+          grossFixedCapital,
+          inventoryChange: 0,
+          netExports,
+          identityGap: 0,
+          potentialGrowth: 1.7,
+          productivityGrowth: 1.1,
+          laborGrowth: .2,
+          capitalGrowth: .2,
+          demandImpulse: 0,
+          fiscalImpulse: 0,
+          primaryBalance: 0,
+          overallBalance: 0,
+          interestExpense: 0,
+          revenue: 0,
+          expense: 0,
+          debtServiceRatio: 0,
+          sovereignRisk: 18,
+          arrears: 0,
+          drivers: { growth: [], inflation: [], unemployment: [], budget: [] },
+          lastDay: { gdp: gdp, inflation: num(e.inflation), unemployment: num(e.unemployment), budget: num(e.budget), debt: num(e.debt) }
+        };
+      }
+
+      function migrateNationalAccounts(game) {
+        const base = defaultNationalAccounts(game);
+        const incoming = game.economy.nationalAccounts && typeof game.economy.nationalAccounts === "object" ? game.economy.nationalAccounts : {};
+        const accounts = Object.assign(base, incoming);
+        accounts.drivers = Object.assign(base.drivers, incoming.drivers || {});
+        for (const key of Object.keys(accounts.drivers)) {
+          accounts.drivers[key] = Array.isArray(accounts.drivers[key]) ? accounts.drivers[key].filter(Boolean).slice(0, 8) : [];
+        }
+        accounts.lastDay = Object.assign(base.lastDay, incoming.lastDay || {});
+        accounts.modelVersion = 1;
+        accounts.baselineGdp = Math.max(1000, num(accounts.baselineGdp, game.economy.gdp));
+        accounts.potentialGdp = clamp(num(accounts.potentialGdp, game.economy.gdp * 1.035), game.economy.gdp * .55, game.economy.gdp * 1.8);
+        accounts.realGdpIndex = clamp(num(accounts.realGdpIndex, 100), 1, 100000);
+        accounts.priceIndex = clamp(num(accounts.priceIndex, 100), 1, 100000);
+        accounts.capitalStock = clamp(num(accounts.capitalStock, game.economy.gdp * 2.8), game.economy.gdp * .8, game.economy.gdp * 8);
+        accounts.productivity = clamp(num(accounts.productivity, 100), 20, 1000);
+        accounts.arrears = Math.max(0, num(accounts.arrears));
+        game.economy.nationalAccounts = accounts;
+        reconcileNationalAccounts(game);
+        return accounts;
+      }
+
+      function reconcileNationalAccounts(game) {
+        const e = game.economy;
+        const a = e.nationalAccounts;
+        if (!a) return null;
+        const expense = calcExpenseBreakdown(game);
+        const publicConsumption = expense.programs * clamp((e.spending.defense + e.spending.health + e.spending.education + e.spending.security) / Math.max(1, Object.values(e.spending).reduce((sum, value) => sum + num(value), 0)), .25, .85);
+        const publicInvestment = expense.programs * clamp((e.spending.infrastructure + e.spending.science) / Math.max(1, Object.values(e.spending).reduce((sum, value) => sum + num(value), 0)), .04, .4);
+        const grossFixedCapital = clamp(num(e.investments) + publicInvestment, e.gdp * .025, e.gdp * .38);
+        const netExports = num(e.exports) - num(e.imports);
+        const inventoryChange = clamp((calcIndustryHealth(game) - 1) * e.gdp * .012, -e.gdp * .025, e.gdp * .025);
+        const privateConsumption = Math.max(e.gdp * .28, e.gdp - publicConsumption - grossFixedCapital - netExports - inventoryChange);
+        const identityTotal = privateConsumption + publicConsumption + grossFixedCapital + netExports + inventoryChange;
+        a.privateConsumption = privateConsumption;
+        a.governmentConsumption = publicConsumption;
+        a.publicInvestment = publicInvestment;
+        a.grossFixedCapital = grossFixedCapital;
+        a.netExports = netExports;
+        a.inventoryChange = inventoryChange;
+        a.identityGap = e.gdp - identityTotal;
+        if (Math.abs(a.identityGap) > .001) {
+          a.privateConsumption += a.identityGap;
+          a.identityGap = 0;
+        }
+        a.nominalGdp = e.gdp * a.priceIndex / 100;
+        a.outputGap = (e.gdp / Math.max(1, a.potentialGdp) - 1) * 100;
+        a.laborForce = estimatedLaborForce(game);
+        a.employment = a.laborForce * (1 - e.unemployment / 100);
+        return a;
       }
 
       function defaultFinancialSystem() {
@@ -4233,7 +4553,7 @@
 
       function defaultEconomy() {
         return {
-          modelVersion: 2,
+          modelVersion: ECONOMY_MODEL_VERSION,
           gdp: 642000,
           inflation: 5.7,
           unemployment: 6.2,
@@ -4256,6 +4576,7 @@
           growth: 2.4,
           emission: 0,
           macro: { structuralGrowth: 2.4, inflationTarget: 5.7, exportTarget: 110000, importTarget: 97000, tradeAccess: 50 },
+          nationalAccounts: null,
           lastScaleRepair: "",
           taxes: { income: 15, vat: 18, corporate: 20, property: 2.2, export: 4 },
           spending: { defense: 14, health: 13, education: 14, infrastructure: 15, welfare: 18, science: 8, security: 8 },
@@ -4467,8 +4788,8 @@
         game.population.crime=clamp(game.population.crime+(s.organizedCrime*.00016+s.violence*.00018-s.enforcementPressure*.00012),0,100);
         p.corruption=clamp(p.corruption+s.laundering*.00007+s.organizedCrime*.00005-s.financialIntelligence*.00006,0,100);
         e.growth=clamp(e.growth+s.informalShare*.000025-s.organizedCrime*.000035-s.smuggling*.00002,-25,30);
-        if(s.investigations.filter(item=>item.status!=="закрыто").length<5&&Math.random()<.0012+risk*.000014) openCrimeInvestigation(game,pick(["smuggling","laundering","racketeering"]),pick(["Транзитная контрабандная сеть","Цепочка фиктивных компаний","Вымогательство в государственных закупках"]),rnd(38,82));
-        if(Math.random()<s.violence*.000018){const event={id:uid("crime_incident"),date:formatDate(game.date),title:"Криминальный конфликт",text:"Конкурирующие сети вступили в открытый конфликт; полиция усиливает охрану свидетелей."};s.incidents.unshift(event);s.incidents=s.incidents.slice(0,18);p.protests=clamp(p.protests+.4,0,100);recordShadowEvent(game,event.title,event.text,"bad");}
+        if(s.investigations.filter(item=>item.status!=="закрыто").length<5&&simulationRandom()<.0012+risk*.000014) openCrimeInvestigation(game,pick(["smuggling","laundering","racketeering"]),pick(["Транзитная контрабандная сеть","Цепочка фиктивных компаний","Вымогательство в государственных закупках"]),rnd(38,82));
+        if(simulationRandom()<s.violence*.000018){const event={id:uid("crime_incident"),date:formatDate(game.date),title:"Криминальный конфликт",text:"Конкурирующие сети вступили в открытый конфликт; полиция усиливает охрану свидетелей."};s.incidents.unshift(event);s.incidents=s.incidents.slice(0,18);p.protests=clamp(p.protests+.4,0,100);recordShadowEvent(game,event.title,event.text,"bad");}
       }
 
       function shadowEconomyAction(mode) {
@@ -6054,7 +6375,7 @@
           sanctions: false,
           embargo: false,
           war: false,
-          embassy: Math.random() > .12,
+          embassy: simulationRandom() > .12,
           visa: pick(["свободный","электронная виза","обычный","строгий"]),
           treaties: [],
           spy: Math.round(rnd(5, 55)),
@@ -6182,7 +6503,7 @@
           const minister=p.ministers.slice().sort((a,b)=>b.skill-a.skill)[0];s.designatedSuccessor={name:minister?.name||p.pm,party:game.country.president.party,ideology:game.country.president.ideology,competence:num(minister?.skill,64),designatedDate:formatDate(game.date),source:"решение правящей коалиции"};
           recordSuccessionEvent(game,"Коалиция выдвинула преемника",`${s.designatedSuccessor.name} станет кандидатом правительственного курса из-за ограничения президентских сроков.`,"warn");syncSuccessionCandidate(game);
         }
-        if(days<90&&s.transitionRisk>62&&Math.random()<.0012){p.protests=clamp(p.protests+.7,0,100);p.cabinet.cohesion=clamp(p.cabinet.cohesion-.5,0,100);recordSuccessionEvent(game,"Риск транзита власти вырос","Элиты и ведомства публично спорят о гарантиях после выборов.","bad");}
+        if(days<90&&s.transitionRisk>62&&simulationRandom()<.0012){p.protests=clamp(p.protests+.7,0,100);p.cabinet.cohesion=clamp(p.cabinet.cohesion-.5,0,100);recordSuccessionEvent(game,"Риск транзита власти вырос","Элиты и ведомства публично спорят о гарантиях после выборов.","bad");}
       }
 
       function successionAction(mode) {
@@ -6273,7 +6594,7 @@
           i.integration=clamp(i.integration+(integrationTarget-i.integration)*.0014,0,100);region.integration=i.integration;
           region.loyalty=clamp(region.loyalty+(i.centerTrust-region.loyalty)*.0007-i.separatism*.00012,0,100);
           i.disputeCooldown=Math.max(0,i.disputeCooldown-1);
-          if(i.separatism>62&&!i.disputeCooldown&&Math.random()<clamp((i.separatism-55)*.00008,.0003,.003)){
+          if(i.separatism>62&&!i.disputeCooldown&&simulationRandom()<clamp((i.separatism-55)*.00008,.0003,.003)){
             const dispute={id:uid("federal_dispute"),regionId:region.id,region:region.name,date:formatDate(game.date),issue:autonomyGap>culturalGap?"распределение полномочий":"языковые и культурные гарантии",severity:clamp(i.grievance*.55+i.separatism*.45,0,100),status:"открыт"};
             federation.disputes.unshift(dispute);federation.disputes=federation.disputes.slice(0,18);i.disputeCooldown=180;game.politics.protests+=.8;
             recordFederalEvent(game,region,"Открыт федеративный спор",`Регион требует переговоров по вопросу «${dispute.issue}».`,"bad");pushNews(game,"Политика","Федеративный спор",`${region.name} требует переговоров с центральной властью: ${dispute.issue}.`);
@@ -6607,7 +6928,7 @@
           const resourceTarget=clamp(35+actor.influence*.45+actor.access*.2+actor.favors*2-actor.pressure*.12,10,95);
           actor.resources=clamp(actor.resources+(resourceTarget-actor.resources)*.001,0,100);
           actor.cooldown = Math.max(0, actor.cooldown - 1);
-          if (!actor.cooldown && Math.random() < clamp(.002 + actor.pressure * .000055 + actor.ambition * .000018, .001, .011)) runEliteMove(game, actor);
+          if (!actor.cooldown && simulationRandom() < clamp(.002 + actor.pressure * .000055 + actor.ambition * .000018, .001, .011)) runEliteMove(game, actor);
           actor.status = actor.pressure >= 70 ? "готовит давление" : actor.loyalty < 38 ? "в оппозиции" : actor.loyalty >= 68 ? "лоялен курсу" : "в рабочем контакте";
         }
         system.captureRisk = eliteCaptureRisk(game);
@@ -6820,7 +7141,7 @@
           route.volume = clamp(route.volume * .94 + route.capacity * efficiency * .06, 0, 160);
           route.status = route.disruption > 65 ? "остановлен" : route.disruption > 28 || route.condition < 38 ? "нарушен" : route.congestion > 82 ? "перегружен" : "работает";
           const incidentChance = clamp(.00018 + tension * .000003 + warLoad * .000007 + (100 - route.security) * .000004 - route.protectedDays * .000004, .00005, .0018);
-          if (Math.random() < incidentChance) {
+          if (simulationRandom() < incidentChance) {
             const impact = rnd(10, 28);
             route.disruption = clamp(route.disruption + impact, 0, 100);
             route.security = clamp(route.security - rnd(1, 4), 0, 100);
@@ -6974,7 +7295,7 @@
         const population = defaultPopulation(populationTotal);
         const diplomacy = { countries: createWorldCountries(country.neighbors), organizations: defaultOrganizations(), inbox: [], pressureLog: [], worldLog: [], globalTension: 34 };
         const game = {
-          version: 16,
+          version: SAVE_VERSION,
           createdAt: new Date().toISOString(),
           lastSaved: new Date().toISOString(),
           theme: "dark",
@@ -6993,6 +7314,7 @@
           history: emptyHistory(),
           chronicle: defaultChronicle(currentGameDate())
         };
+        migrateSimulationCore(game);
         migrateEconomicSystems(game);
         migrateFinancialSystem(game);
         migrateStrategicDiplomacy(game);
@@ -7030,7 +7352,7 @@
         const information = game.information;
         const outlet = information?.outlets?.length ? pick(information.outlets) : null;
         const sentiment = ({ "Катастрофы": -42, "Эпидемии": -34, "Скандалы": -38, "Аварии": -25, "Безопасность": -12, "Открытия": 38, "Экономика": game.economy?.growth >= 0 ? 8 : -18 })[category] ?? 0;
-        game.news.unshift({ id: uid("news"), date: formatDate(game.date), category, title, text, impact, source: outlet?.name || "Национальная лента", reach: outlet?.reach || 50, trust: outlet?.trust || 50, sentiment, verified: Math.random() * 100 < (information?.factChecking || 55) });
+        game.news.unshift({ id: uid("news"), date: formatDate(game.date), category, title, text, impact, source: outlet?.name || "Национальная лента", reach: outlet?.reach || 50, trust: outlet?.trust || 50, sentiment, verified: simulationRandom() * 100 < (information?.factChecking || 55) });
         game.news = game.news.slice(0, 240);
         if (game.chronicle && isChronicleWorthy(category, title)) {
           recordChronicle(game, category, title, text, chronicleImportance(title));
@@ -7148,7 +7470,11 @@
       function effectiveDebtRate(game = state) {
         const e = game.economy;
         const debtRatio = num(e.debt) / Math.max(1, num(e.gdp));
-        return clamp(2 + num(e.keyRate, 8) * .55 + Math.max(0, debtRatio - .75) * 3.2, 2, 22);
+        const accounts = e.nationalAccounts || {};
+        const institutionalRisk = Math.max(0, 55 - num(game.diplomacy?.law?.legalStanding, 55)) * .018
+          + Math.max(0, 55 - num(game.statistics?.publicTrust, 55)) * .012;
+        const riskPremium = Math.max(0, debtRatio - .55) * 5.8 + num(accounts.sovereignRisk, 18) * .025 + institutionalRisk;
+        return clamp(1.25 + num(e.keyRate, 8) * .52 + riskPremium, 1.5, 28);
       }
 
       function externalSectorTargets(game, industryHealth = calcIndustryHealth(game)) {
@@ -7186,7 +7512,12 @@
       function projectedExpensesFor(game, allocations) {
         const e = game.economy;
         const spend = Object.values(allocations || e.spending).reduce((a, b) => a + num(b), 0) / 100;
-        return e.gdp * spend * .23 + e.debt * effectiveDebtRate(game) / 100 + e.pensions * game.population.total / 1000000 * .09;
+        return e.gdp * spend * .23
+          + e.debt * effectiveDebtRate(game) / 100
+          + e.pensions * game.population.total / 1000000 * .09
+          + num(game.infrastructure?.maintenanceBudget)
+          + num(game.intelligence?.budget)
+          + num(game.climate?.emergencyReserve) * .08;
       }
 
       function refreshFiscalProjections(game = state) {
@@ -7254,21 +7585,44 @@
         if (game.date.day === 1) refreshFiscalProjections(game);
       }
 
-      function calcIncome(game = state) {
+      function calcIncomeBreakdown(game = state) {
         const e = game.economy;
         const t = e.taxes;
-        const base = e.gdp * ((t.income * .36 + t.vat * .42 + t.corporate * .12 + t.property * .08 + t.export * .08) / 100);
+        const incomeTax = e.gdp * t.income * .36 / 100;
+        const vat = e.gdp * t.vat * .42 / 100;
+        const corporate = e.gdp * t.corporate * .12 / 100;
+        const property = e.gdp * t.property * .08 / 100;
+        const exportDuty = e.gdp * t.export * .08 / 100;
+        const base = incomeTax + vat + corporate + property + exportDuty;
         const industrialTaxes = (e.industries || []).reduce((sum, sector) => sum + num(sector.output) * (1 + num(sector.stateShare) / 180), 0) * 5.2;
         const privateTaxes = Math.max(0,num(e.privateSector?.taxBase)) * t.corporate / 100;
         const shadow = game.shadowEconomy;
         const collection = shadow ? clamp(1-shadow.informalShare*.0038-shadow.taxGap*.0028, .58, 1) : 1;
-        return (base + industrialTaxes + privateTaxes) * collection + e.exports * .035 + e.stateCompanies * 140;
+        const customsAndTrade = e.exports * .035;
+        const stateDividends = e.stateCompanies * 140;
+        const total = (base + industrialTaxes + privateTaxes) * collection + customsAndTrade + stateDividends;
+        return { incomeTax, vat, corporate, property, exportDuty, industrialTaxes, privateTaxes, customsAndTrade, stateDividends, collection, total };
+      }
+
+      function calcExpenseBreakdown(game = state) {
+        const e = game.economy;
+        const spend = Object.values(e.spending).reduce((a, b) => a + b, 0) / 100;
+        const programs = e.gdp * spend * .23;
+        const interest = e.debt * effectiveDebtRate(game) / 100;
+        const pensions = e.pensions * game.population.total / 1000000 * .09;
+        const infrastructure = num(game.infrastructure?.maintenanceBudget, 0);
+        const intelligence = num(game.intelligence?.budget, 0);
+        const emergency = num(game.climate?.emergencyReserve, 0) * .08;
+        const primary = programs + pensions + infrastructure + intelligence + emergency;
+        return { programs, interest, pensions, infrastructure, intelligence, emergency, primary, total: primary + interest };
+      }
+
+      function calcIncome(game = state) {
+        return calcIncomeBreakdown(game).total;
       }
 
       function calcExpenses(game = state) {
-        const e = game.economy;
-        const spend = Object.values(e.spending).reduce((a, b) => a + b, 0) / 100;
-        return e.gdp * spend * .23 + e.debt * effectiveDebtRate(game) / 100 + e.pensions * game.population.total / 1000000 * .09 + num(game.infrastructure?.maintenanceBudget,0) + num(game.intelligence?.budget,0) + num(game.climate?.emergencyReserve,0) * .08;
+        return calcExpenseBreakdown(game).total;
       }
 
       function calcArmyPower(game = state) {
@@ -7561,6 +7915,16 @@
         render();
         bindGlobalEvents();
         startTimer();
+        void migrateLegacySlotsToIndexed();
+        if (!state) {
+          void restoreIndexedState().then(restored => {
+            if (!state && activateLoadedState(restored)) {
+              saveState({ force: true });
+              render({ force: true, resetScroll: true });
+              notify("Автосохранение восстановлено из расширенного хранилища.", "good", "Сохранения");
+            }
+          });
+        }
       }
 
       function bindGlobalEvents() {
@@ -7585,7 +7949,7 @@
       function startTimer() {
         if (timer) clearInterval(timer);
         timer = setInterval(() => {
-          if (!state || !state.speed) return;
+          if (!state || !state.speed || document.hidden) return;
           enqueueSimulationDays(state.speed);
         }, DAY_MS);
       }
@@ -7596,7 +7960,7 @@
           simulationQueue = 0;
           queuedSimulationState = state;
         }
-        simulationQueue += Math.max(0, Math.floor(num(days, 0)));
+        simulationQueue = Math.min(120, simulationQueue + Math.max(0, Math.floor(num(days, 0))));
         if (simulationFrame === null) simulationFrame = requestAnimationFrame(runSimulationQueue);
       }
 
@@ -8857,6 +9221,69 @@
         `;
       }
 
+      function economicDriverTone(kind, impact) {
+        const favorable = kind === "growth" || kind === "budget" ? impact >= 0 : impact <= 0;
+        return Math.abs(impact) < .08 ? "" : favorable ? "good" : "warn";
+      }
+
+      function renderEconomicDriverGroup(title, kind, drivers) {
+        const unit = kind === "budget" ? "% ВВП" : "п.п.";
+        return `
+          <details class="action-fold">
+            <summary>
+              <span class="action-fold-arrow">›</span>
+              <span class="action-summary-main"><strong>${esc(title)}</strong><small>${drivers.length ? esc(drivers[0].label) : "устойчивое состояние"}</small></span>
+            </summary>
+            <div class="action-fold-body">
+              <div class="news-feed" style="max-height:300px;">
+                ${drivers.length ? drivers.map(driver => `
+                  <article class="news-card">
+                    <div class="news-meta"><span>${esc(driver.detail || "фактор модели")}</span><strong class="delta ${economicDriverTone(kind, driver.impact)}">${driver.impact > 0 ? "+" : ""}${driver.impact.toFixed(2)} ${unit}</strong></div>
+                    <h4>${esc(driver.label)}</h4>
+                  </article>
+                `).join("") : `<p class="subtle">Существенных отклонений сейчас нет.</p>`}
+              </div>
+            </div>
+          </details>
+        `;
+      }
+
+      function renderNationalAccountsPanel(game = state) {
+        const e = game.economy;
+        const a = e.nationalAccounts || migrateNationalAccounts(game);
+        const identity = a.privateConsumption + a.governmentConsumption + a.grossFixedCapital + a.netExports + a.inventoryChange;
+        return `
+          <section class="panel pad">
+            <div class="panel-section-head">
+              <span><h3 class="section-title">Национальные счета и причины изменений</h3><p class="subtle">ВВП равен потреблению, государственному спросу, инвестициям и чистому экспорту. Потенциальный выпуск ограничивают труд, капитал, производительность, инфраструктура и доступность сырья.</p></span>
+              <span class="pill ${Math.abs(a.outputGap) > 6 ? "warn" : "good"}">разрыв выпуска ${a.outputGap > 0 ? "+" : ""}${pct(a.outputGap,1)}</span>
+            </div>
+            <div class="kpi-strip" style="margin-top:12px;">
+              <div class="kpi"><span>Фактический ВВП</span><strong>${money(e.gdp)}</strong><small class="subtle">индекс ${a.realGdpIndex.toFixed(1)}</small></div>
+              <div class="kpi"><span>Потенциальный ВВП</span><strong>${money(a.potentialGdp)}</strong><small class="subtle">рост потенциала ${pct(a.potentialGrowth,2)}</small></div>
+              <div class="kpi"><span>Загрузка мощностей</span><strong>${pct(a.capacityUtilization,1)}</strong><small class="subtle">капитал ${money(a.capitalStock)}</small></div>
+              <div class="kpi"><span>Риск заимствований</span><strong class="delta ${a.sovereignRisk > 55 ? "bad" : a.sovereignRisk > 30 ? "warn" : "good"}">${pct(a.sovereignRisk,1)}</strong><small class="subtle">ставка долга ${pct(effectiveDebtRate(game),1)}</small></div>
+              <div class="kpi"><span>Обслуживание долга</span><strong>${pct(a.debtServiceRatio,1)}</strong><small class="subtle">доля доходов бюджета</small></div>
+              <div class="kpi"><span>Просроченные обязательства</span><strong class="delta ${a.arrears > e.gdp * .01 ? "bad" : a.arrears > 0 ? "warn" : "good"}">${money(a.arrears)}</strong><small class="subtle">непрофинансированные платежи</small></div>
+            </div>
+            <div class="fiscal-ledger" style="margin-top:12px;">
+              <span><small>Потребление граждан</small><strong>${money(a.privateConsumption)}</strong></span>
+              <span><small>Государственное потребление</small><strong>${money(a.governmentConsumption)}</strong></span>
+              <span><small>Валовые инвестиции</small><strong>${money(a.grossFixedCapital)}</strong></span>
+              <span><small>Чистый экспорт</small><strong>${money(a.netExports)}</strong></span>
+              <span><small>Изменение запасов</small><strong>${money(a.inventoryChange)}</strong></span>
+              <span><small>Проверка тождества</small><strong class="delta ${Math.abs(identity - e.gdp) < 1 ? "good" : "bad"}">${money(identity - e.gdp)}</strong></span>
+            </div>
+            <div class="bill-grid" style="margin-top:12px;">
+              ${renderEconomicDriverGroup("Почему меняется рост", "growth", a.drivers.growth || [])}
+              ${renderEconomicDriverGroup("Почему меняется инфляция", "inflation", a.drivers.inflation || [])}
+              ${renderEconomicDriverGroup("Почему меняется занятость", "unemployment", a.drivers.unemployment || [])}
+              ${renderEconomicDriverGroup("Почему меняется бюджет", "budget", a.drivers.budget || [])}
+            </div>
+          </section>
+        `;
+      }
+
       function renderEconomy() {
         const e = state.economy;
         refreshFiscalProjections(state);
@@ -8877,6 +9304,7 @@
               <div class="kpi"><span>Целевой экспорт</span><strong>${money(e.macro?.exportTarget || 0)}</strong><small class="subtle">доступ к рынкам ${pct(e.macro?.tradeAccess || 0,0)}</small></div>
               <div class="kpi"><span>Стоимость долга</span><strong>${pct(effectiveDebtRate(state),1)}</strong><small class="subtle">эффективная годовая ставка</small></div>
             </div>
+            ${renderNationalAccountsPanel(state)}
             ${renderShadowEconomyPanel()}
             <div class="grid split">
               <section class="panel pad">
@@ -9347,11 +9775,11 @@
 
       function saveDecisionMeta(id) {
         const data = {
-          autosave: ["Ручное сохранение", "сохранение", "Записывает текущее состояние в автосохранение.", "Когда перед рискованным решением нужен контрольный пункт.", "Сохраняет текущую игру локально.", "При переполненном LocalStorage лучше сначала экспортировать JSON.", "Сохранить", "good"],
-          exportSave: ["Экспорт JSON", "резерв", "Скачивает сохранение отдельным JSON-файлом.", "Когда LocalStorage переполнен или нужно перенести игру.", "Создает внешний бэкап сохранения.", "Файл содержит полное состояние игры.", "Экспортировать", "civic"],
+          autosave: ["Ручное сохранение", "сохранение", "Записывает текущее состояние в автосохранение.", "Когда перед рискованным решением нужен контрольный пункт.", "Сохраняет текущую игру локально в двухуровневом хранилище.", "При очистке данных браузера локальные копии могут быть удалены.", "Сохранить", "good"],
+          exportSave: ["Экспорт JSON", "резерв", "Скачивает сохранение отдельным JSON-файлом.", "Когда нужен внешний архив или перенос игры.", "Создает независимый бэкап сохранения.", "Файл содержит полное состояние игры.", "Экспортировать", "civic"],
           importClick: ["Импорт JSON", "загрузка", "Загружает сохранение из JSON-файла.", "Когда нужно восстановить или перенести игру.", "Открывает выбор файла для импорта.", "Неподходящий JSON не загрузится.", "Импортировать", "warn"],
-          compactStorage: ["Оптимизировать хранилище", "память", "Сжимает старые слоты и автосохранение.", "Когда появляется предупреждение о переполнении LocalStorage.", "Уменьшает размер сохранений без удаления текущей игры.", "Если слоты очень большие, может потребоваться экспорт и очистка.", "Оптимизировать", "good"],
-          clearSlots: ["Очистить слоты", "очистка", "Удаляет ручные слоты 1-5, но не автосохранение.", "Когда старые слоты занимают слишком много места.", "Освобождает LocalStorage.", "Удаленные слоты нельзя восстановить без экспортированного JSON.", "Очистить слоты", "bad"],
+          compactStorage: ["Оптимизировать хранилище", "память", "Переносит старые слоты в расширенное хранилище и сокращает журналы.", "Когда импортированы сохранения старой версии или браузер сообщает о нехватке места.", "Уменьшает нагрузку на LocalStorage без удаления игры.", "Перед очисткой данных браузера всё равно нужен экспорт JSON.", "Оптимизировать", "good"],
+          clearSlots: ["Очистить слоты", "очистка", "Удаляет ручные слоты 1-5 из обоих уровней хранения, но не автосохранение.", "Когда старые слоты больше не нужны.", "Освобождает место браузера.", "Удаленные слоты нельзя восстановить без экспортированного JSON.", "Очистить слоты", "bad"],
           newGame: ["Новая игра", "старт", "Удаляет автосохранение и возвращает к созданию страны.", "Когда нужно начать срок с нуля.", "Сбрасывает текущую автосессию.", "Текущая игра исчезнет из автосохранения.", "Новая игра", "bad"]
         };
         const item = data[id] || data.autosave;
@@ -11127,7 +11555,7 @@
         if (operation.status !== "preparing") return;
         const enemy = game.diplomacy.countries.find(country => country.id === war.enemyId || country.name === war.enemy);
         const detectionRisk = clamp((enemy?.intelligence || 50) * .22 + war.intensity * .16 - operation.concealment * .25, 1, 42);
-        if (Math.random() < detectionRisk / 1000) {
+        if (simulationRandom() < detectionRisk / 1000) {
           operation.daysRemaining += 1;
           operation.disruption = clamp(operation.disruption + rnd(5, 12), 0, 100);
           operation.quality = clamp(operation.quality - rnd(1, 4), 0, 100);
@@ -11521,10 +11949,10 @@
           for (const c of greatPowers) {
             const law = game.diplomacy.law || defaultInternationalLaw();
             const outrage = clamp((45 - legitimacy) * .035 + law.sanctionsExposure * .004 + Math.max(0, 52 - law.reputation) * .006 + (c.greatPower ? .28 : .08) + (c.relations > 55 ? .12 : 0), .05, .92);
-            if (Math.random() < outrage) {
+            if (simulationRandom() < outrage) {
               c.relations = clamp(c.relations - rnd(2.5, 8), 0, 100);
               relationLoss++;
-              if (Math.random() < outrage * .34) {
+              if (simulationRandom() < outrage * .34) {
                 c.sanctions = true;
                 sanctions++;
               }
@@ -11563,7 +11991,7 @@
       function simulateWarDiplomaticPressure(game) {
         for (const war of game.military.wars || []) {
           war.pressureClock = (war.pressureClock || 0) + 1;
-          if (war.legitimacy >= 45 || war.pressureClock < 30 || Math.random() > .18) continue;
+          if (war.legitimacy >= 45 || war.pressureClock < 30 || simulationRandom() > .18) continue;
           war.pressureClock = 0;
           const enemy = game.diplomacy.countries.find(c => c.id === war.enemyId || c.name === war.enemy);
           const details = applyAggressionPressure(game, war, enemy);
@@ -11874,11 +12302,14 @@
             </section>
             <div class="guide-grid">
               ${manualCard("Экономика", [
-                "ВВП растет от инфраструктуры, образования, инвестиций, госуслуг, стабильности и реального выпуска отраслей.",
+                "ВВП растет от инфраструктуры, образования, инвестиций, госуслуг, стабильности и реального выпуска отраслей. Фактический выпуск ограничен потенциальным ВВП, рабочей силой и загрузкой мощностей.",
+                "Национальные счета сводят ВВП по расходам: потребление граждан, государственное потребление, инвестиции, чистый экспорт и изменение запасов. Эти части всегда сходятся с итоговым ВВП.",
                 "Каждая отрасль потребляет сырье и полуфабрикаты. Нехватка энергии, металлов или компонентов останавливает следующие звенья цепочки.",
                 "Модернизация повышает мощность и эффективность, резерв сглаживает дефицит, а экстренный импорт быстро помогает ценой бюджета и торгового баланса.",
                 "Высокие налоги, инфляция, войны и коррупция тормозят рост.",
-                "Низкое обеспечение производственных цепочек повышает импорт, инфляцию, безработицу и замедляет рост."
+                "Низкое обеспечение производственных цепочек повышает импорт, инфляцию, безработицу и замедляет рост.",
+                "Дефицит можно покрыть только доступным долгом и резервами. Непрофинансированная часть становится задолженностью государства и повышает суверенный риск.",
+                "В раскрывающемся блоке причин показан вклад спроса, производства, ставок, внешней торговли, бюджета и институтов в рост, инфляцию, занятость и баланс бюджета."
               ])}
               ${manualCard("Мировой рынок и логистика", [
                 "Нефть, газ, продовольствие, металлы, компоненты, удобрения, оборудование и оборонная продукция имеют собственные мировые цены, спрос, предложение и волатильность.",
@@ -12254,7 +12685,7 @@
           <section class="grid two">
             <section class="panel pad">
               <h3 class="section-title">Сохранения</h3>
-              <p class="subtle" style="margin: 8px 0 0;">Здесь видно, какие действия просто сохраняют игру, какие освобождают LocalStorage, а какие удаляют текущую автосессию.</p>
+              <p class="subtle" style="margin: 8px 0 0;">Автосессия дублируется в устойчивом хранилище браузера, а ручные слоты автоматически переносятся туда целиком. В LocalStorage остаются только компактные указатели и аварийная копия.</p>
               ${actionCardGrid([
                 renderActionCard(saveDecisionMeta("autosave"), { "data-action": "autosave" }, { compact: true }),
                 renderActionCard(saveDecisionMeta("exportSave"), { "data-action": "export-save" }, { compact: true }),
@@ -12297,6 +12728,7 @@
           try {
             const compacted = {};
             for (const [slot, save] of Object.entries(slots || {})) {
+              if (save?.__indexedSlot) { compacted[slot] = save; continue; }
               const migrated = migrateState(save);
               if (migrated) compacted[slot] = serializeStateForStorage(migrated, "tiny");
             }
@@ -12308,6 +12740,7 @@
             try {
               const safeSlots = {};
               for (const [slot, save] of Object.entries(slots || {})) {
+                if (save?.__indexedSlot) { safeSlots[slot] = save; continue; }
                 const migrated = migrateState(save);
                 if (!migrated) continue;
                 const safe = serializeStateForStorage(migrated, "safe");
@@ -12836,7 +13269,6 @@
         else return;
         syncLiveInputValue(el);
         queueSave(900);
-        scheduleRender();
       }
 
       function syncLiveInputValue(el) {
@@ -13023,7 +13455,7 @@
         const score = capability * .46 + service.analysis * .2 + service.oversight * .05 + service.secrecy * .08 + rnd(4, 24) - spec.difficulty * .32 - targetDefense * .24;
         const success = score >= 35;
         const detectionChance = clamp(spec.exposure + (country?.intelligence || 35) * .24 - service.secrecy * .32 - capability * .12, 1, 94);
-        operation.detected = !!country && Math.random() * 100 < detectionChance;
+        operation.detected = !!country && simulationRandom() * 100 < detectionChance;
         operation.status = success ? "завершена" : "неудача";
         operation.progress = 100;
         let text = "";
@@ -13248,7 +13680,7 @@
         const openSeverity = climate.emergencies.filter(item => item.status !== "закрыта").reduce((sum, item) => sum + item.severity, 0);
         const nationalHazard = avg(game.regions.map(region => ({ risk: Math.max(region.climate.floodRisk, region.climate.droughtRisk, region.climate.fireRisk, region.climate.heatRisk, region.climate.stormRisk) })), "risk");
         const spawnChance = clamp(.00025 + nationalHazard * .000009 + climate.temperatureAnomaly * .00008 - climate.preparedness * .0000025, .00008, .0025);
-        if (climate.emergencies.filter(item => item.status !== "закрыта").length < 4 && Math.random() < spawnChance) spawnClimateEmergency(game);
+        if (climate.emergencies.filter(item => item.status !== "закрыта").length < 4 && simulationRandom() < spawnChance) spawnClimateEmergency(game);
         climate.lastAssessment = "Риск регионов " + pct(nationalHazard, 0) + ", активная нагрузка ЧС " + pct(clamp(openSeverity / 3, 0, 100), 0) + ", ресурсная безопасность " + pct(avg(climate.resources, "security"), 0) + ".";
       }
 
@@ -13258,35 +13690,53 @@
       }
 
       function tickDay(game) {
-        advanceDate(game.date);
-        simulateClimateSystem(game);
-        simulateInfrastructure(game);
-        simulateWorldMarket(game);
-        simulateShadowEconomySystem(game);
-        simulateEconomy(game);
-        simulatePrivateSector(game);
-        simulatePolitics(game);
-        simulateShadowCabinetSystem(game);
-        simulatePromiseSystem(game);
-        simulateEliteSystem(game);
-        simulateSuccessionSystem(game);
-        simulateJusticeSystem(game);
-        simulateCabinet(game);
-        simulatePopulation(game);
-        simulateTech(game);
-        simulateRegions(game);
-        simulateFederationSystem(game);
-        simulateDiplomacy(game);
-        simulateSoftPowerSystem(game);
-        simulateIntelligenceSystem(game);
-        simulateMilitary(game);
-        simulateGovernance(game);
-        simulateInformationSpace(game);
-        simulateStatisticsSystem(game);
-        simulateChronicle(game);
-        if (Math.random() < .18) generateDailyNews(game);
-        if (Math.random() < .018) triggerRandomEvent(game);
-        if (game.date.day === 1 || game.history.date.length < 6) pushHistory(game);
+        if (!game || typeof game !== "object") return false;
+        const core = game.simulation || migrateSimulationCore(game);
+        if (core.processing) return false;
+        const startedAt = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+        const previousContext = randomGameContext;
+        core.processing = true;
+        randomGameContext = game;
+        try {
+          advanceDate(game.date);
+          simulateClimateSystem(game);
+          simulateInfrastructure(game);
+          simulateWorldMarket(game);
+          simulateShadowEconomySystem(game);
+          simulateEconomy(game);
+          simulatePrivateSector(game);
+          simulatePolitics(game);
+          simulateShadowCabinetSystem(game);
+          simulatePromiseSystem(game);
+          simulateEliteSystem(game);
+          simulateSuccessionSystem(game);
+          simulateJusticeSystem(game);
+          simulateCabinet(game);
+          simulatePopulation(game);
+          simulateTech(game);
+          simulateRegions(game);
+          simulateFederationSystem(game);
+          simulateDiplomacy(game);
+          simulateSoftPowerSystem(game);
+          simulateIntelligenceSystem(game);
+          simulateMilitary(game);
+          simulateGovernance(game);
+          simulateInformationSpace(game);
+          simulateStatisticsSystem(game);
+          simulateChronicle(game);
+          if (simulationRandom() < .18) generateDailyNews(game);
+          if (simulationRandom() < .018) triggerRandomEvent(game);
+          if (game.date.day === 1 || game.history.date.length < 6) pushHistory(game);
+          core.dayIndex++;
+          core.lastProcessedDate = formatDate(game.date);
+          return true;
+        } finally {
+          const finishedAt = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+          core.lastTickDuration = Math.max(0, finishedAt - startedAt);
+          if (core.lastTickDuration > 18) core.slowTickCount++;
+          core.processing = false;
+          randomGameContext = previousContext;
+        }
       }
 
       function advanceDate(d) {
@@ -13500,7 +13950,7 @@
           bank.assets = Math.max(100,bank.assets*(1+clamp(f.creditGrowth,-15,25)/100/365));
           bank.deposits = Math.max(0,bank.deposits*(1+(f.depositConfidence-50)/180000-(bank.status === "критический" ? .001 : 0)));
           bank.status = bank.capital<3||bank.liquidity<8?"критический":bank.capital<7||bank.liquidity<16||bank.badLoans>16?"проблемный":bank.capital<10||bank.badLoans>9?"наблюдение":"устойчив";
-          if (bank.status==="критический" && (bank.capital<-1||bank.liquidity<2) && Math.random()<.04) triggerBankFailure(game,bank);
+          if (bank.status==="критический" && (bank.capital<-1||bank.liquidity<2) && simulationRandom()<.04) triggerBankFailure(game,bank);
         }
         const surviving = f.banks.filter(bank=>bank.status!=="ликвидирован");
         f.badLoanRatio = clamp(avg(surviving,"badLoans"),0,65);
@@ -13556,7 +14006,7 @@
           if(edge.upgrade>0){edge.upgrade=clamp(edge.upgrade+system.investmentEfficiency*.006,0,100);if(edge.upgrade>=100){edge.capacity=clamp(edge.capacity+18,5,160);edge.condition=clamp(edge.condition+16,0,100);edge.upgrade=0;recordInfrastructure(game,"Модернизация линии завершена",`${meta.name}: коридор ${from.name} — ${to.name} получил дополнительную пропускную способность.`,edge.type);}}
           edge.status=edge.disruption>45?"авария":edge.condition<35?"изношено":edge.utilization>105?"перегрузка":"работает";
           const incidentChance=Math.max(0,edge.utilization-105)*.000035+Math.max(0,35-edge.condition)*.000025+damage*.0008;
-          if(edge.disruption<18&&Math.random()<incidentChance){edge.disruption=clamp(edge.disruption+rnd(18,42),0,100);incidents++;recordInfrastructure(game,"Сетевая авария",`${meta.name}: нарушение на линии ${from.name} — ${to.name}. Диспетчеры ограничили поток и направили ремонтные бригады.`,edge.type);pushNews(game,"Аварии","Нарушение инфраструктурного коридора",`${meta.name}, ${from.name} — ${to.name}: пропускная способность временно снижена.`);}
+          if(edge.disruption<18&&simulationRandom()<incidentChance){edge.disruption=clamp(edge.disruption+rnd(18,42),0,100);incidents++;recordInfrastructure(game,"Сетевая авария",`${meta.name}: нарушение на линии ${from.name} — ${to.name}. Диспетчеры ограничили поток и направили ремонтные бригады.`,edge.type);pushNews(game,"Аварии","Нарушение инфраструктурного коридора",`${meta.name}, ${from.name} — ${to.name}: пропускная способность временно снижена.`);}
         }
         for(const node of system.nodes){
           const region=game.regions.find(r=>r.id===node.regionId);if(!region)continue;const linked=system.edges.filter(edge=>edge.from===region.id||edge.to===region.id);
@@ -13590,7 +14040,7 @@
           const jobsDelta=clamp((revenueGrowth*company.employees*.3)+(company.profitMargin>8?company.employees*.00003:-company.employees*.000025)-laborTightness*company.employees*.000015,-Math.max(1,company.employees*.003),Math.max(1,company.employees*.003));company.employees=Math.max(0,Math.round(company.employees+jobsDelta));if(jobsDelta>0)hires+=jobsDelta;else layoffs-=jobsDelta;
           company.wage=Math.max(100,company.wage*(1+(e.inflation/100)/365*.62+(company.productivity-55)/800000+laborTightness*.00008));company.trend=clamp(company.trend*.78+revenueGrowth*36500*.12+company.profitMargin*.025+rnd(-.18,.18),-20,20);company.capitalization=clamp(company.capitalization*(1+company.trend/36500),1,Math.max(100,company.revenue*14));company.expansionDays=Math.max(0,company.expansionDays-1);
           company.status=company.cash<-company.revenue*.22||company.debt>company.revenue*1.65||company.profitMargin<-14?"кризис":company.profitMargin<0||company.debt>company.revenue?"под наблюдением":"работает";
-          if(company.status==="кризис"&&company.cash<-company.revenue*.55&&Math.random()<.008)triggerCorporateFailure(game,company);
+          if(company.status==="кризис"&&company.cash<-company.revenue*.55&&simulationRandom()<.008)triggerCorporateFailure(game,company);
         }
         updatePrivateSectorTotals(game);const active=ps.companies.filter(c=>c.status!=="банкротство"),largest=active.length?Math.max(...active.map(c=>c.marketShare)):100;ps.monopolyRisk=clamp(ps.monopolyRisk*.99+Math.max(0,largest-20)*.015+(100-ps.competition)*.006,0,100);
         const businessTarget=clamp(50+e.growth*2-e.inflation*.6+(financialHealth(game)-55)*.2+(infraFactor-1)*20-ps.insolvencyRate*.8,10,90);
@@ -13620,56 +14070,129 @@
         const regionalTotal=game.regions.reduce((sum,r)=>sum+r.population,0),difference=p.total-regionalTotal;if(game.regions[0])game.regions[0].population=Math.max(1000,game.regions[0].population+difference);
       }
 
+      function economicDriver(label, impact, detail = "") {
+        return { label, impact: num(impact), detail };
+      }
+
+      function storeEconomicDrivers(accounts, key, drivers) {
+        accounts.drivers[key] = drivers
+          .filter(item => Number.isFinite(item.impact) && Math.abs(item.impact) >= .005)
+          .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact))
+          .slice(0, 7);
+      }
+
       function simulateEconomy(game) {
         const e = game.economy;
         const pop = game.population;
+        const accounts = e.nationalAccounts || migrateNationalAccounts(game);
+        const previous = { gdp: e.gdp, inflation: e.inflation, unemployment: e.unemployment, budget: e.budget, debt: e.debt, laborForce: accounts.laborForce };
         const factories = totalBuildings("factories", game);
         const farms = totalBuildings("farms", game);
         const industryHealth = simulateProductionChains(game);
         const finance = simulateFinancialSystem(game);
-        const privateSector = game.economy.privateSector || defaultPrivateSector(game);
+        const privateSector = e.privateSector || defaultPrivateSector(game);
         const education = pop.education / 100;
         const taxLoad = (e.taxes.income + e.taxes.vat + e.taxes.corporate + e.taxes.export) / 100;
         const stability = (game.politics.popularity + 100 - game.politics.corruption + pop.happiness) / 300;
         const infrastructure = infrastructureEfficiency(game);
-        const privateImpact = clamp((privateSector.businessConfidence - 50) * .012 + (infrastructure - 1) * 1.1 - privateSector.insolvencyRate * .035, -1.4, 1.3);
         const debtRatio = e.debt / Math.max(1, e.gdp);
-        const targetAnnualGrowth = clamp(
-          1.15
-          + clamp(calcProjectEffect(game), 0, 100) * .012
-          + (calcServiceScore(game) - 55) * .012
-          + (education - .55) * 1.5
-          + (stability - .55) * 1.8
-          + (industryHealth - .9) * 3.2
-          + (infrastructure - 1) * 1.35
-          + finance.growthImpact * .55
-          + privateImpact * .55
-          - Math.max(0, taxLoad - .68) * 2.2
-          - Math.max(0, e.inflation - 6) * .12
-          - e.supplyShock * .018
-          - Math.max(0, debtRatio - .75) * .38
-          - game.military.wars.length * 2.2,
-          -8,
-          8
+        const laborForce = estimatedLaborForce(game);
+        const laborGrowth = clamp((laborForce / Math.max(1, previous.laborForce) - 1) * DAYS_PER_YEAR * 100, -3.5, 3.5);
+        const publicCapital = Math.max(0, num(accounts.publicInvestment));
+        const grossCapitalFormation = clamp(num(e.investments) + publicCapital, e.gdp * .025, e.gdp * .38);
+        const depreciationRate = clamp(.035 + avg(game.regions, "damage") * .00025 + game.military.wars.length * .006, .03, .09);
+        const capitalGrowth = clamp((grossCapitalFormation / Math.max(1, accounts.capitalStock) - depreciationRate) * 100, -4, 7);
+        accounts.capitalStock = Math.max(e.gdp * .8, accounts.capitalStock + (grossCapitalFormation - accounts.capitalStock * depreciationRate) / DAYS_PER_YEAR);
+        const productivityGrowth = clamp(
+          .45 + (education - .5) * 1.8 + (num(game.tech.research, 50) - 50) * .012
+          + (infrastructure - .9) * .7 + (calcServiceScore(game) - 50) * .006
+          - e.supplyShock * .01 - game.military.wars.length * .35,
+          -1.5,
+          4.2
         );
-        e.growth = clamp(e.growth + (targetAnnualGrowth - e.growth) * .006 + rnd(-.004, .004), -10, 10);
+        accounts.productivity = clamp(accounts.productivity * (1 + productivityGrowth / 100 / DAYS_PER_YEAR), 20, 1000);
+        const potentialGrowth = clamp(productivityGrowth + capitalGrowth * .34 + laborGrowth * .66, -4.5, 6.5);
+        accounts.potentialGdp = Math.max(1000, accounts.potentialGdp * (1 + potentialGrowth / 100 / DAYS_PER_YEAR));
+        accounts.potentialGrowth = potentialGrowth;
+        accounts.productivityGrowth = productivityGrowth;
+        accounts.capitalGrowth = capitalGrowth;
+        accounts.laborGrowth = laborGrowth;
+        accounts.laborForce = laborForce;
+
+        const incomeAnnualBefore = calcIncomeBreakdown(game);
+        const expenseAnnualBefore = calcExpenseBreakdown(game);
+        const primaryBalanceRatio = (incomeAnnualBefore.total - expenseAnnualBefore.primary) / Math.max(1, e.gdp);
+        const consumerImpulse = clamp((privateSector.consumerConfidence - 50) * .015 + (pop.happiness - 50) * .008 - Math.max(0, e.inflation - 6) * .035, -1.5, 1.2);
+        const investmentImpulse = clamp((privateSector.businessConfidence - 50) * .012 + finance.investmentGrowth * .035 - Math.max(0, e.keyRate - e.inflation - 2) * .045, -1.5, 1.3);
+        const fiscalImpulse = clamp((-primaryBalanceRatio - .01) * 7, -1.1, 1.25);
+        const externalImpulse = clamp((e.exports - e.imports) / Math.max(1, e.gdp) * 3.2 + (num(e.macro?.tradeAccess, 50) - 50) * .006, -.9, 1.1);
+        const outputGapImpulse = clamp(-num(accounts.outputGap) * .16, -1.4, 1.4);
+        const industryImpulse = clamp((industryHealth - .9) * 2.8, -2.2, .7);
+        const institutionalImpulse = clamp((stability - .55) * 1.25 + (calcServiceScore(game) - 55) * .009 + clamp(calcProjectEffect(game), 0, 100) * .005, -.9, 1.25);
+        const infrastructureImpulse = clamp((infrastructure - .92) * 1.4, -.8, .55);
+        const financeImpulse = clamp(finance.growthImpact * .45 - e.financial.crisisLevel * .012, -1.4, .8);
+        const taxPenalty = -Math.max(0, taxLoad - .68) * 1.8;
+        const pricePenalty = -Math.max(0, e.inflation - 7) * .075;
+        const debtPenalty = -Math.max(0, debtRatio - .75) * .75;
+        const shortagePenalty = -e.supplyShock * .012;
+        const warPenalty = -game.military.wars.length * 1.9;
+        const demandImpulse = consumerImpulse + investmentImpulse + fiscalImpulse + externalImpulse;
+        accounts.demandImpulse = demandImpulse;
+        accounts.fiscalImpulse = fiscalImpulse;
+        const growthDrivers = [
+          economicDriver("Потенциальный выпуск", potentialGrowth, "капитал, труд и производительность"),
+          economicDriver("Частный спрос", consumerImpulse + investmentImpulse, "потребление и инвестиции"),
+          economicDriver("Бюджетный импульс", fiscalImpulse, "первичный баланс бюджета"),
+          economicDriver("Внешний спрос", externalImpulse, "экспорт, импорт и доступ к рынкам"),
+          economicDriver("Загрузка отраслей", industryImpulse, "производственные цепочки"),
+          economicDriver("Институты и услуги", institutionalImpulse + infrastructureImpulse, "стабильность и инфраструктура"),
+          economicDriver("Финансовые условия", financeImpulse + pricePenalty + debtPenalty, "банки, инфляция и долг"),
+          economicDriver("Дефициты и война", shortagePenalty + warPenalty, "шоки предложения и конфликты")
+        ];
+        const targetAnnualGrowth = clamp(growthDrivers.reduce((sum, item) => sum + item.impact, 0) + outputGapImpulse + taxPenalty, -9, 8);
+        e.growth = clamp(e.growth + (targetAnnualGrowth - e.growth) * .005 + rnd(-.0025, .0025), -10, 10);
         e.macro ||= {};
         e.macro.structuralGrowth = targetAnnualGrowth;
         const growthDaily = e.growth / 100 / DAYS_PER_YEAR;
         e.gdp = Math.max(1000, e.gdp * (1 + growthDaily));
-        const income = calcIncome(game) / DAYS_PER_YEAR;
-        const expenses = calcExpenses(game) / DAYS_PER_YEAR;
+
+        const incomeBreakdown = calcIncomeBreakdown(game);
+        const expenseBreakdown = calcExpenseBreakdown(game);
+        const income = incomeBreakdown.total / DAYS_PER_YEAR;
+        const expenses = expenseBreakdown.total / DAYS_PER_YEAR;
         const fiscalBalance = income - expenses;
-        if (fiscalBalance >= 0) e.budget += fiscalBalance;
-        else {
+        if (fiscalBalance >= 0) {
+          const arrearsPayment = Math.min(accounts.arrears, fiscalBalance * .72);
+          accounts.arrears -= arrearsPayment;
+          e.budget += fiscalBalance - arrearsPayment;
+        } else {
           const financingNeed = -fiscalBalance;
           const liquidityFloor = e.gdp * .03;
           const cashUse = Math.min(financingNeed, Math.max(0, e.budget - liquidityFloor));
           e.budget -= cashUse;
-          e.debt += financingNeed - cashUse;
+          const marketDebtLimit = e.gdp * clamp(num(e.fiscal?.debtLimit, 70) / 100, .2, 1.6);
+          const borrowingRoom = Math.max(0, marketDebtLimit - e.debt);
+          const borrowed = Math.min(financingNeed - cashUse, borrowingRoom);
+          e.debt += borrowed;
+          accounts.arrears += Math.max(0, financingNeed - cashUse - borrowed);
         }
         e.budget = Math.max(0, e.budget);
         e.debt = clamp(e.debt, 0, e.gdp * 6);
+        accounts.revenue = incomeBreakdown.total;
+        accounts.expense = expenseBreakdown.total;
+        accounts.interestExpense = expenseBreakdown.interest;
+        accounts.primaryBalance = incomeBreakdown.total - expenseBreakdown.primary;
+        accounts.overallBalance = incomeBreakdown.total - expenseBreakdown.total;
+        accounts.debtServiceRatio = expenseBreakdown.interest / Math.max(1, incomeBreakdown.total) * 100;
+        const sovereignRiskTarget = clamp(
+          8 + debtRatio * 34 + Math.max(0, -accounts.overallBalance / Math.max(1, e.gdp)) * 130
+          + Math.max(0, e.inflation - 6) * 1.1 + e.financial.crisisLevel * .28
+          + accounts.arrears / Math.max(1, e.gdp) * 800
+          - e.reserves / Math.max(1, e.gdp) * 22 - num(game.diplomacy?.law?.legalStanding, 50) * .08,
+          2,
+          100
+        );
+        accounts.sovereignRisk = clamp(accounts.sovereignRisk + (sovereignRiskTarget - accounts.sovereignRisk) * .006, 0, 100);
         simulateFiscalPolicy(game, income, expenses);
 
         const external = externalSectorTargets(game, industryHealth);
@@ -13689,27 +14212,29 @@
         const importedInflation = num(game.worldMarket?.inflationPressure, 0);
         const emissionPressure = clamp(e.emission / Math.max(1, e.gdp) * 150, 0, 12);
         const realRate = clamp(e.keyRate - e.inflation, -12, 18);
+        const outputGapPressure = clamp(accounts.outputGap * .22, -2.2, 2.2);
         const inflationTarget = clamp(
-          centralTarget + importedInflation + e.supplyShock * .065
+          centralTarget + importedInflation + e.supplyShock * .065 + outputGapPressure
           + Math.max(0, e.spending.welfare - 24) * .04 + emissionPressure
-          + Math.max(0, e.growth - 2.5) * .18 - realRate * .18,
-          .5,
+          + Math.max(0, e.growth - accounts.potentialGrowth) * .12 - realRate * .18,
+          .2,
           30
         );
-        e.inflation = clamp(e.inflation + (inflationTarget - e.inflation) * .006 + rnd(-.002, .002), -2, 45);
+        e.inflation = clamp(e.inflation + (inflationTarget - e.inflation) * .005 + rnd(-.0015, .0015), -2, 45);
         e.macro.inflationTarget = inflationTarget;
 
         const unemploymentTarget = clamp(
-          7.3 - e.growth * .48 - factories * .08 - farms * .025
-          + Math.max(0, e.taxes.corporate - 20) * .08
-          + Math.max(0, .9 - industryHealth) * 8 + e.bankruptcies * .04,
+          7.1 - e.growth * .42 - factories * .065 - farms * .02
+          + Math.max(0, e.taxes.corporate - 20) * .065
+          + Math.max(0, .9 - industryHealth) * 7.5 + e.bankruptcies * .04
+          + Math.max(0, -accounts.outputGap) * .16,
           2.5,
-          24
+          25
         );
-        e.unemployment = clamp(e.unemployment + (unemploymentTarget - e.unemployment) * .004 + rnd(-.0015, .0015), 1, 45);
-        e.avgSalary = Math.max(e.minSalary, e.avgSalary * (1 + growthDaily * .55 + (e.inflation / 100) / DAYS_PER_YEAR * .6));
+        e.unemployment = clamp(e.unemployment + (unemploymentTarget - e.unemployment) * .0035 + rnd(-.001, .001), 1, 45);
+        e.avgSalary = Math.max(e.minSalary, e.avgSalary * (1 + growthDaily * .52 + (e.inflation / 100) / DAYS_PER_YEAR * .58));
         const currentAccountRatio = (e.exports - e.imports) / Math.max(1, e.gdp);
-        const exchangeAnnual = clamp((e.inflation - inflationTarget) * .8 + e.financial.exchangePressure * .035 - currentAccountRatio * 8 - e.reserves / Math.max(1, e.gdp) * 1.1, -12, 20);
+        const exchangeAnnual = clamp((e.inflation - centralTarget) * .65 + e.financial.exchangePressure * .035 - currentAccountRatio * 8 - e.reserves / Math.max(1, e.gdp) * 1.1, -12, 20);
         e.exchangeRate = clamp(e.exchangeRate * (1 + exchangeAnnual / 100 / DAYS_PER_YEAR), .1, 5000);
 
         const investmentShare = clamp(
@@ -13732,6 +14257,39 @@
           c.value = clamp(c.value * (1 + c.trend / 36500), 100, e.gdp * .2);
         });
         e.emission *= .995;
+
+        accounts.priceIndex = clamp(accounts.priceIndex * (1 + e.inflation / 100 / DAYS_PER_YEAR), 1, 100000);
+        accounts.realGdpIndex = e.gdp / Math.max(1, accounts.baselineGdp) * 100;
+        accounts.capacityUtilization = clamp(avg(e.industries, "utilization") * .72 + clamp(78 + accounts.outputGap * 1.6, 45, 96) * .28, 35, 105);
+        reconcileNationalAccounts(game);
+        storeEconomicDrivers(accounts, "growth", growthDrivers.concat(economicDriver("Циклический разрыв", outputGapImpulse, "возврат к потенциальному выпуску")));
+        storeEconomicDrivers(accounts, "inflation", [
+          economicDriver("Цель Центрального банка", centralTarget, "якорь инфляционных ожиданий"),
+          economicDriver("Импортируемая инфляция", importedInflation, "мировые цены и логистика"),
+          economicDriver("Дефициты поставок", e.supplyShock * .065, "узкие места производственных цепочек"),
+          economicDriver("Разрыв выпуска", outputGapPressure, "спрос относительно потенциала"),
+          economicDriver("Реальная ставка", -realRate * .18, "охлаждение или поддержка спроса"),
+          economicDriver("Эмиссия", emissionPressure, "монетарное финансирование")
+        ]);
+        storeEconomicDrivers(accounts, "unemployment", [
+          economicDriver("Деловой цикл", -e.growth * .42, "рост создает занятость"),
+          economicDriver("Производственные ограничения", Math.max(0, .9 - industryHealth) * 7.5, "нехватка выпуска и сырья"),
+          economicDriver("Предприятия и фермы", -factories * .065 - farms * .02, "физические рабочие места"),
+          economicDriver("Корпоративные налоги", Math.max(0, e.taxes.corporate - 20) * .065, "нагрузка на найм"),
+          economicDriver("Недозагрузка экономики", Math.max(0, -accounts.outputGap) * .16, "ВВП ниже потенциала")
+        ]);
+        storeEconomicDrivers(accounts, "budget", [
+          economicDriver("Налоговые и неналоговые доходы", incomeBreakdown.total / Math.max(1, e.gdp) * 100, "годовая доля ВВП"),
+          economicDriver("Первичные расходы", -expenseBreakdown.primary / Math.max(1, e.gdp) * 100, "программы, пенсии и ведомства"),
+          economicDriver("Проценты по долгу", -expenseBreakdown.interest / Math.max(1, e.gdp) * 100, "стоимость обслуживания долга"),
+          economicDriver("Просроченные обязательства", -accounts.arrears / Math.max(1, e.gdp) * 100, "непрофинансированные платежи")
+        ]);
+        accounts.lastDay = {
+          gdp: e.gdp, inflation: e.inflation, unemployment: e.unemployment, budget: e.budget, debt: e.debt,
+          gdpDelta: e.gdp - previous.gdp, inflationDelta: e.inflation - previous.inflation,
+          unemploymentDelta: e.unemployment - previous.unemployment, budgetDelta: e.budget - previous.budget,
+          debtDelta: e.debt - previous.debt
+        };
       }
 
       function totalBuildingValue(game, keys) {
@@ -13932,7 +14490,7 @@
         }
         const scandalMinister=p.ministers.find(minister=>minister.scandal>62);
         const corruptRegion=game.regions.find(region=>region.administration.corruption>68);
-        if(j.cases.filter(item=>item.status!=="закрыто").length<9&&Math.random()<.0035){
+        if(j.cases.filter(item=>item.status!=="закрыто").length<9&&simulationRandom()<.0035){
           if(scandalMinister)openJusticeCase(game,"corruption",`Контракты: ${scandalMinister.post}`,scandalMinister.name,clamp(scandalMinister.scandal+rnd(-8,12),20,95),72);
           else if(corruptRegion)openJusticeCase(game,"corruption",`Региональные закупки: ${corruptRegion.name}`,corruptRegion.governor,clamp(corruptRegion.administration.corruption+rnd(-10,12),20,95),65);
           else openJusticeCase(game,pick(["rights","police","civil"]),pick(["Жалоба на административное решение","Проверка действий полиции","Спор о государственном контракте"]),pick(["Федеральное ведомство","Региональная полиция","Государственная компания"]),rnd(35,78),rnd(30,72));
@@ -13962,7 +14520,7 @@
         p.coalition=clamp(p.coalition+(coalitionTarget-p.coalition)*.0015+rnd(-.006,.006),0,100);
         p.impeachmentRisk = clamp((p.protests * .22 + p.corruption * .12 + Math.max(0, 45 - p.coalition) * .42 + Math.max(0, 30 - p.popularity) * .5), 0, 100);
         if (p.referendumCooldown > 0) p.referendumCooldown--;
-        if (p.impeachmentRisk > 86 && Math.random() < .006) {
+        if (p.impeachmentRisk > 86 && simulationRandom() < .006) {
           applyGroupApprovalImpact(game, { all: -8 }, "процедура импичмента");
           p.coalition = clamp(p.coalition - 12, 0, 100);
           pushNews(game, "Политика", "Процедура импичмента", "Оппозиция инициировала процедуру импичмента. Коалиция требует срочных уступок и публичного антикризисного плана.");
@@ -14361,7 +14919,7 @@
           minister.performance = clamp(minister.performance * .94 + (minister.skill * .42 + minister.integrity * .18 + portfolio * .25 + c.execution * .15 - minister.workload * .12) * .06, 0, 100);
           minister.publicTrust = clamp(minister.publicTrust + (minister.performance - 55) * .0015 - minister.scandal * .0008, 0, 100);
           minister.scandal = clamp(minister.scandal + (100 - minister.integrity) * .0005 + p.corruption * .00018 - c.integrity * .00022, 0, 100);
-          if (minister.scandal > 70 && Math.random() < .0015) triggerMinisterScandal(game, minister);
+          if (minister.scandal > 70 && simulationRandom() < .0015) triggerMinisterScandal(game, minister);
           const administrativeEffect = (minister.performance - 50) * .000018;
           if (minister.portfolio === "economy") game.economy.growth = clamp(game.economy.growth + administrativeEffect, -12, 12);
           if (minister.portfolio === "defense") game.military.readiness = clamp(game.military.readiness + administrativeEffect * .65, 0, 100);
@@ -14488,7 +15046,7 @@
         s.recentAction = action;
         s.cooldown = Math.round(rnd(38, 115));
         pushWorldDiplomacyLog(game, actor.name, target.name, action, tone);
-        if (actor.greatPower && Math.random() < .34) pushNews(game, "Мир", "Перестройка международных связей", `${actor.name} ${action}. МИД оценивает влияние на глобальную напряженность.`);
+        if (actor.greatPower && simulationRandom() < .34) pushNews(game, "Мир", "Перестройка международных связей", `${actor.name} ${action}. МИД оценивает влияние на глобальную напряженность.`);
         return true;
       }
 
@@ -14501,11 +15059,11 @@
         const strategicThreat=avg(game.diplomacy.countries.map(country=>({value:num(country.strategy?.threat,35)})),"value");
         const tensionTarget=clamp(22+hostility*.28+strategicThreat*.16+sanctionCount*2.5+game.military.wars.length*14,12,92);
         game.diplomacy.globalTension=clamp(game.diplomacy.globalTension+(tensionTarget-game.diplomacy.globalTension)*.0012+rnd(-.003,.003),0,100);
-        if (Math.random() >= .17) return;
+        if (simulationRandom() >= .17) return;
         const ready = game.diplomacy.countries.filter(country => !country.war && country.strategy.cooldown <= 0);
         if (!ready.length) return;
         const actor = pick(ready);
-        const playerFacing = Math.random() < .52 || actor.greatPower && actor.strategy.threat > 68;
+        const playerFacing = simulationRandom() < .52 || actor.greatPower && actor.strategy.threat > 68;
         if (playerFacing) {
           const type = strategicOfferType(actor);
           if (!enqueueStrategicOffer(game, actor, type)) simulateWorldDiplomaticAction(game, actor);
@@ -14600,7 +15158,7 @@
           if (ai === "реформистский") c.stability = clamp(c.stability + rnd(-.02, .04), 0, 100);
           c.relations = clamp(c.relations + rnd(-.045, .045) + (c.alliance ? .012 : 0) - (c.sanctions ? .035 : 0) - (c.war ? .18 : 0), 0, 100);
           c.gdp = Math.max(100, c.gdp * (1 + rnd(-.00008, .00016)));
-          if (!c.war && c.relations < 8 && c.military > 70 && Math.random() < .0005) {
+          if (!c.war && c.relations < 8 && c.military > 70 && simulationRandom() < .0005) {
             c.war = true;
             const war = createWar(c, "foreign", game);
             game.military.wars.push(war);
@@ -14682,7 +15240,7 @@
           if (enemy) enemy.relations = clamp(enemy.relations - .035, 0, 100);
           if (w.control >= 94 || w.warScore >= 84) finishWar(game, w, "victory", "Военная победа", `${w.enemy} принимает условия прекращения боевых действий после долгой потери инициативы.`);
           else if (w.control <= 6 || w.warScore <= -84) finishWar(game, w, "defeat", "Невыгодное перемирие", `Кабинет соглашается на тяжелое перемирие с ${w.enemy}, чтобы остановить потери.`);
-          else if ((w.fatigue > 92 || m.warExhaustion > 82) && Math.random() < .006) finishWar(game, w, "ceasefire", "Перемирие", `Стороны конфликта с ${w.enemy} согласовали прекращение огня из-за истощения.`);
+          else if ((w.fatigue > 92 || m.warExhaustion > 82) && simulationRandom() < .006) finishWar(game, w, "ceasefire", "Перемирие", `Стороны конфликта с ${w.enemy} согласовали прекращение огня из-за истощения.`);
         }
       }
 
@@ -15029,7 +15587,7 @@
           crisis.severity = clamp(crisis.severity + calcNationalRisk(game) * .00055 - calcGovernanceScore(game) * .00042 + rnd(-.05, .06), 0, 100);
         }
         g.crises = g.crises.filter(c => c.severity > 8 || c.days < 12).slice(0, 8);
-        if (calcNationalRisk(game) > 54 && g.crises.length < 5 && Math.random() < .006) spawnGovernanceCrisis(game);
+        if (calcNationalRisk(game) > 54 && g.crises.length < 5 && simulationRandom() < .006) spawnGovernanceCrisis(game);
       }
 
       function completeProject(game, project) {
@@ -16123,7 +16681,7 @@
         }
         if (offer.type === "border") {
           if (accept) { state.economy.budget -= 240; c.relations += 2.5; state.military.readiness += 1.4; result = "Срочные переговоры и демонстрация готовности снижают риск эскалации."; details = [["Бюджет", "-240 млн", "bad"], ["Боеготовность", "+1.4 п.п.", "good"], ["Отношения", "+2.5 п.п.", "good"]]; tone = "warn"; }
-          else { c.relations -= 8; state.military.readiness += 2.4; result = "Отказ усиливает пограничный кризис."; details = [["Отношения", "-8 п.п.", "bad"], ["Боеготовность", "+2.4 п.п.", "warn"]]; tone = "bad"; if (c.relations < 12 && Math.random() < .35) { c.war = true; const war = createWar(c, "foreign"); state.military.wars.push(war); applyAggressionPressure(state, war, c); result += " Конфликт переходит в вооруженную фазу, а международное давление идет на агрессора."; } }
+          else { c.relations -= 8; state.military.readiness += 2.4; result = "Отказ усиливает пограничный кризис."; details = [["Отношения", "-8 п.п.", "bad"], ["Боеготовность", "+2.4 п.п.", "warn"]]; tone = "bad"; if (c.relations < 12 && simulationRandom() < .35) { c.war = true; const war = createWar(c, "foreign"); state.military.wars.push(war); applyAggressionPressure(state, war, c); result += " Конфликт переходит в вооруженную фазу, а международное давление идет на агрессора."; } }
         }
         c.relations = clamp(c.relations, 0, 100);
         c.stability = clamp(c.stability, 0, 100);
@@ -16892,8 +17450,10 @@
       function normalizeCore() {
         normalizeGovernance();
         const e = state.economy, p = state.politics, pop = state.population, m = state.military;
+        if (!state.simulation) migrateSimulationCore(state);
         if (!Array.isArray(pop.groups) || !Array.isArray(p.forces) || !Array.isArray(p.legislation)) migratePoliticalSystems(state);
         if (!Array.isArray(e.industries) || !e.fiscal || !e.supply) migrateEconomicSystems(state);
+        if (!e.nationalAccounts) migrateNationalAccounts(state);
         if (!e.financial?.centralBank || !Array.isArray(e.financial?.banks)) migrateFinancialSystem(state);
         if (!pop.demography?.cohorts || state.regions.some(region=>!region.demography)) migrateDemographySystem(state);
         if (!state.infrastructure?.edges || state.regions.some(region=>!state.infrastructure.nodes?.some(node=>node.regionId===region.id))) migrateInfrastructureSystem(state);
@@ -16917,6 +17477,8 @@
         e.unemployment = clamp(e.unemployment, 1, 45);
         e.smallBusiness = clamp(e.smallBusiness, 0, 100);
         e.bankruptcies = clamp(e.bankruptcies, 0, 40);
+        const accounts=e.nationalAccounts;
+        accounts.potentialGdp=clamp(num(accounts.potentialGdp,e.gdp),e.gdp*.55,e.gdp*1.8);accounts.capitalStock=clamp(num(accounts.capitalStock,e.gdp*2.8),e.gdp*.8,e.gdp*8);accounts.productivity=clamp(num(accounts.productivity,100),20,1000);accounts.capacityUtilization=clamp(num(accounts.capacityUtilization,74),0,110);accounts.outputGap=clamp(num(accounts.outputGap),-45,45);accounts.sovereignRisk=clamp(num(accounts.sovereignRisk,18),0,100);accounts.arrears=Math.max(0,num(accounts.arrears));accounts.priceIndex=clamp(num(accounts.priceIndex,100),1,100000);reconcileNationalAccounts(state);
         const financial=e.financial,cb=financial.centralBank;
         ["stability","interbankLiquidity","depositConfidence","depositInsurance","exchangePressure","supervision","crisisLevel"].forEach(key=>financial[key]=clamp(num(financial[key]),0,100));
         financial.badLoanRatio=clamp(num(financial.badLoanRatio),0,65);financial.creditGrowth=clamp(num(financial.creditGrowth),-25,30);financial.householdDebt=clamp(num(financial.householdDebt),0,160);financial.corporateDebt=clamp(num(financial.corporateDebt),0,180);
@@ -17040,19 +17602,32 @@
         normalizeCore();
       }
 
-      function saveSlot(slot) {
+      async function saveSlot(slot) {
+        const snapshot = serializeStateForStorage(state, "normal");
+        if (await writeIndexedRecord(`slot:${slot}`, snapshot)) {
+          const slots = loadSlots();
+          slots[slot] = indexedSlotStub(snapshot, slot);
+          if (saveSlots(slots)) {
+            notify(`Слот ${slot} сохранён в расширенном хранилище.`, "good", "Сохранения");
+            render({ force: true, preserveScroll: true });
+          }
+          return;
+        }
         const slots = loadSlots();
-        slots[slot] = serializeStateForStorage(state, "normal");
+        slots[slot] = snapshot;
         if (saveSlots(slots)) notify(`Слот ${slot} сохранён.`);
       }
 
-      function loadSlot(slot) {
+      async function loadSlot(slot) {
         const slots = loadSlots();
         if (!slots[slot]) return notify("Слот пуст.");
-        const loaded = migrateState(slots[slot]);
+        const saved = slots[slot].__indexedSlot ? await readIndexedRecord(`slot:${slot}`) : slots[slot];
+        if (!saved) return notify("Данные слота не найдены. Сохраните его заново или импортируйте JSON.", "warn", "Сохранения");
+        const loaded = migrateState(saved);
         if (!activateLoadedState(loaded)) return notify("Слот поврежден и не может быть загружен.", "bad", "Сохранения");
         saveState({ force: true });
         notify(`Слот ${slot} загружен.`);
+        render({ force: true, resetScroll: true });
       }
 
       function exportSave() {
@@ -17103,6 +17678,7 @@
       function compactStorageAction() {
         const compacted = compactExistingSlots();
         const saved = saveState({ force: true });
+        void migrateLegacySlotsToIndexed();
         if (compacted || saved) notify("Хранилище оптимизировано.");
       }
 
@@ -17141,6 +17717,7 @@
         queuedSimulationState = null;
         pendingRender = false;
         try { localStorage.removeItem(STORAGE_KEY); } catch (err) { console.warn(err); }
+        void clearIndexedState();
         if (timer) {
           clearInterval(timer);
           timer = null;
@@ -17174,6 +17751,7 @@
 
       function clearSaveSlots() {
         localStorage.removeItem(SLOTS_KEY);
+        void deleteIndexedRecords([1,2,3,4,5].map(slot => `slot:${slot}`));
         modal = null;
         notify("Слоты очищены.", "good", "Сохранения");
       }
