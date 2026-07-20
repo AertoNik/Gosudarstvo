@@ -3488,10 +3488,10 @@
 
       const STORAGE_KEY = "aaa_president_sim_state_v4";
       const SLOTS_KEY = "aaa_president_sim_slots_v4";
-      const SAVE_VERSION = 20;
+      const SAVE_VERSION = 21;
       const ECONOMY_MODEL_VERSION = 4;
       const FOREIGN_STATE_MODEL_VERSION = 1;
-      const GEOGRAPHY_MODEL_VERSION = 1;
+      const GEOGRAPHY_MODEL_VERSION = 2;
       const SAVE_DB_NAME = "aaa_president_sim_storage";
       const SAVE_DB_STORE = "saves";
       const DAY_MS = 1800;
@@ -3608,6 +3608,7 @@
           coat: "Серебряная звезда над волной",
           flagName: "Три горизонта",
           continent: "Евразия",
+          geographyType: "coastal",
           neighbors: "Финляндия, Казахстан, Турция",
           presidentName: "Александр Рей",
           age: 46,
@@ -4126,8 +4127,10 @@
           coatImage: "",
           flagName: identityDefaults.flagName,
           continent: identityDefaults.continent,
+          geographyType: loaded.geography?.home?.island ? "island" : loaded.geography?.home?.landlocked ? "landlocked" : identityDefaults.geographyType,
           neighbors: identityDefaults.neighbors.split(",").map(item => item.trim())
         }, loaded.country || {});
+        if (!["coastal","landlocked","island"].includes(loaded.country.geographyType)) loaded.country.geographyType = identityDefaults.geographyType;
         loaded.country.ministries = Array.isArray(loaded.country.ministries) && loaded.country.ministries.length ? loaded.country.ministries : identityDefaults.ministries.split(",").map(item => item.trim());
         loaded.country.neighbors = Array.isArray(loaded.country.neighbors) && loaded.country.neighbors.length ? loaded.country.neighbors : identityDefaults.neighbors.split(",").map(item => item.trim());
         loaded.country.president = Object.assign({
@@ -6972,9 +6975,11 @@
         const neighborY = neighbors.length ? avg(neighbors.map(country => ({value:country.geo.y})), "value") : zone.y;
         const portBuildings = (game?.regions || []).reduce((sum, region) => sum + num(region.buildings?.ports), 0);
         const airportBuildings = (game?.regions || []).reduce((sum, region) => sum + num(region.buildings?.airports), 0);
-        const explicitlyLandlocked = neighbors.length >= 2 && neighbors.every(country => country.geo.landlocked) && portBuildings === 0;
+        const geographyType = ["coastal","landlocked","island"].includes(game?.country?.geographyType) ? game.country.geographyType : "coastal";
+        const explicitlyLandlocked = geographyType === "landlocked";
+        const island = geographyType === "island";
         const infrastructure = clamp((num(game?.infrastructure?.freightIndex, 58) + num(game?.infrastructure?.reliability, 62)) / 2, 10, 100);
-        return {modelVersion:GEOGRAPHY_MODEL_VERSION,zoneId:inferred,zoneName:zone.name,x:clamp(neighborX+(stableCountryFactor(game?.country,61)-.5)*34,30,890),y:clamp(neighborY+(stableCountryFactor(game?.country,62)-.5)*28,25,425),coastal:!explicitlyLandlocked,landlocked:explicitlyLandlocked,island:false,terrain:zone.terrain,ports:explicitlyLandlocked?0:clamp(34+portBuildings*8+infrastructure*.28,12,100),rail:clamp(infrastructure+num(game?.regions?.reduce((sum,r)=>sum+num(r.buildings?.roads),0),0)*.35,10,100),road:infrastructure,transport:infrastructure,hub:clamp(infrastructure*.58+portBuildings*5+airportBuildings*3,12,100),tradeAccess:clamp(infrastructure*.68+num(game?.worldMarket?.corridorDiplomacy,58)*.32,10,100)};
+        return {modelVersion:GEOGRAPHY_MODEL_VERSION,zoneId:inferred,zoneName:zone.name,x:clamp(neighborX+(stableCountryFactor(game?.country,61)-.5)*34,30,890),y:clamp(neighborY+(stableCountryFactor(game?.country,62)-.5)*28,25,425),coastal:!explicitlyLandlocked,landlocked:explicitlyLandlocked,island,terrain:island?"островной":zone.terrain,ports:explicitlyLandlocked?0:clamp(34+portBuildings*8+infrastructure*.28+(island?8:0),12,100),rail:clamp(infrastructure+num(game?.regions?.reduce((sum,r)=>sum+num(r.buildings?.roads),0),0)*.35-(island?10:0),10,100),road:infrastructure,transport:infrastructure,hub:clamp(infrastructure*.58+portBuildings*5+airportBuildings*3+(island?4:0),12,100),tradeAccess:clamp(infrastructure*.68+num(game?.worldMarket?.corridorDiplomacy,58)*.32,10,100)};
       }
 
       function defaultGeographicChokepoints() {
@@ -8192,6 +8197,12 @@
         return [...new Set(ranked.slice(0,3).map(item=>item[0]).concat("machinery"))].slice(0,4);
       }
 
+      function limitTradeRoutes(routes) {
+        const coreIds=new Set(["north_rail","south_land","ocean_port","energy_line","air_cargo"]),seen=new Set();
+        const unique=(routes||[]).filter(route=>{if(!route?.id||seen.has(route.id))return false;seen.add(route.id);return true;});
+        return unique.filter(route=>coreIds.has(route.id)).concat(unique.filter(route=>!coreIds.has(route.id)).slice(-12));
+      }
+
       function ensureBilateralTradeRoute(game,country) {
         const market=game.worldMarket||migrateWorldMarketSystem(game);
         const existing=market.routes.find(route=>route.partnerId===country.id);
@@ -8199,7 +8210,7 @@
         const home=game.geography?.home||migrateWorldGeography(game).home,target=ensureCountryGeography(country),neighbor=(game.country.neighbors||[]).includes(country.name);
         const type=neighbor?"железная дорога":home.coastal&&target.coastal?"морской путь":"грузовая авиация";
         const route=prepareTradeRouteGeography(normalizeTradeRoute({id:`bilateral_${country.id}`,name:`Торговый коридор: ${country.name}`,type,partnerId:country.id,partnerName:country.name,capacity:clamp(38+country.relations*.35,32,78),condition:68,security:clamp(44+country.stability*.32,42,82),distance:geographicDistance(home,target),commodityIds:tradeGoodsForCountry(country),disruption:0,congestion:32,insurance:24,volume:26,expansionDays:0,protectedDays:60,reroutedDays:0,transitPermitDays:240,status:"работает",lastEvent:"Двусторонний договор открыл регулярный грузовой поток."},null,market.routes.length),game);
-        market.routes.push(route);market.routes=market.routes.slice(-12);updateTradeRouteGeography(game,route);return route;
+        market.routes.push(route);market.routes=limitTradeRoutes(market.routes);updateTradeRouteGeography(game,route);return route;
       }
 
       function normalizeTradeRoute(value, fallback, index = 0) {
@@ -8241,7 +8252,10 @@
         market.commodities = base.commodities.map(item => normalizeWorldCommodity(incomingCommodities.get(item.id), item));
         const routeFallbacks = defaultTradeRoutes(game);
         const incomingRoutes = new Map((Array.isArray(incoming.routes) ? incoming.routes : []).filter(Boolean).map(item => [item.id, item]));
-        market.routes = routeFallbacks.map((item, index) => prepareTradeRouteGeography(normalizeTradeRoute(incomingRoutes.get(item.id), item, index),game));
+        const coreRoutes = routeFallbacks.map((item, index) => prepareTradeRouteGeography(normalizeTradeRoute(incomingRoutes.get(item.id), item, index),game));
+        const coreIds = new Set(routeFallbacks.map(item => item.id));
+        const agreementRoutes = [...incomingRoutes.values()].filter(item => item?.id && !coreIds.has(item.id)).map((item,index) => prepareTradeRouteGeography(normalizeTradeRoute(item,null,routeFallbacks.length+index),game));
+        market.routes = limitTradeRoutes(coreRoutes.concat(agreementRoutes));
         market.contracts = Array.isArray(incoming.contracts) ? incoming.contracts.filter(item => item && typeof item === "object").slice(0, 20) : [];
         market.incidents = Array.isArray(incoming.incidents) ? incoming.incidents.filter(item => item && typeof item === "object").slice(0, 24) : [];
         market.history = Array.isArray(incoming.history) ? incoming.history.filter(item => item && typeof item === "object").slice(0, 48) : [];
@@ -8507,6 +8521,7 @@
           coatImage: sanitizeImageData(config.coatImage || ""),
           flagName: config.flagName || "Три горизонта",
           continent: config.continent || "Евразия",
+          geographyType: ["coastal","landlocked","island"].includes(config.geographyType) ? config.geographyType : "coastal",
           neighbors: (config.neighbors || "Финляндия, Казахстан, Турция").split(",").map(s => s.trim()).filter(Boolean),
           flag: { colors: [config.flagA || "#21c7a8", config.flagB || "#f8fafc", config.flagC || "#4fa3ff"], layout: config.flagLayout || "horizontal", image: sanitizeImageData(config.flagImage || "") },
           president: {
@@ -9540,6 +9555,13 @@
                       </select>
                     </label>
                     ${input("continent", "Континент", defaults.continent)}
+                    <label>Географическое положение
+                      <select name="geographyType">
+                        <option value="coastal" ${defaults.geographyType === "coastal" ? "selected" : ""}>Прибрежная страна</option>
+                        <option value="landlocked" ${defaults.geographyType === "landlocked" ? "selected" : ""}>Без выхода к морю</option>
+                        <option value="island" ${defaults.geographyType === "island" ? "selected" : ""}>Островное государство</option>
+                      </select>
+                    </label>
                     ${input("neighbors", "Соседи через запятую", defaults.neighbors)}
                     ${input("armyName", "Название армии", defaults.armyName)}
                     ${input("parliamentName", "Название парламента", defaults.parliamentName)}
@@ -13469,9 +13491,22 @@
           return `<polyline class="world-route-line ${tone}" points="${points.join(" ")}"><title>${esc(route.name)} · ${esc(route.status)} · ${pct(route.geographicAccess,0)} доступа</title></polyline>`;
         }).join("");
         const conflictLines=(state.diplomacy.worldSystem?.conflicts||[]).filter(item=>item.status==="active").slice(0,8).map(conflict=>{const actor=state.diplomacy.countries.find(country=>country.id===conflict.actorId),target=state.diplomacy.countries.find(country=>country.id===conflict.targetId);if(!actor?.geo||!target?.geo)return "";return `<line class="world-route-line bad" x1="${actor.geo.x}" y1="${actor.geo.y}" x2="${target.geo.x}" y2="${target.geo.y}"><title>${esc(actor.name)} → ${esc(target.name)} · конфликт, интенсивность ${pct(conflict.intensity,0)}</title></line>`;}).join("");
-        const partnerNodes=market.routes.map(route=>state.diplomacy.countries.find(country=>country.id===route.partnerId)).filter((country,index,list)=>country&&list.findIndex(item=>item.id===country.id)===index).map(country=>`<g><circle class="world-route-node" cx="${country.geo.x}" cy="${country.geo.y}" r="6"><title>${esc(country.name)} · ${esc(country.geo.zoneName)}</title></circle><text class="world-route-label" x="${country.geo.x+9}" y="${country.geo.y-8}">${esc(country.name)}</text></g>`).join("");
+        const occupied=zoneShapes.map(([label,,zoneId])=>{const zone=zones[zoneId]||{x:460,y:220},width=clamp(label.length*6.6,54,150);return{x1:zone.x-width/2,y1:zone.y-13,x2:zone.x+width/2,y2:zone.y+4};});
+        const placeLabel=(x,y,name,priority=false)=>{
+          const width=clamp(name.length*7.2,44,168),candidates=priority?[[12,20,"start"],[12,-10,"start"],[-12,20,"end"],[-12,-10,"end"], [12,38,"start"]]:[[10,-9,"start"],[10,18,"start"],[-10,-9,"end"],[-10,18,"end"],[10,35,"start"],[-10,35,"end"]];
+          let chosen=null;
+          for(const [dx,dy,anchor] of candidates){
+            const tx=anchor==="start"?clamp(x+dx,8,930-width):clamp(x+dx,8+width,932),ty=clamp(y+dy,16,458),box={x1:anchor==="start"?tx:tx-width,y1:ty-14,x2:anchor==="start"?tx+width:tx,y2:ty+4};
+            if(!occupied.some(other=>box.x1<other.x2+4&&box.x2+4>other.x1&&box.y1<other.y2+3&&box.y2+3>other.y1)){chosen={x:tx,y:ty,anchor,box};break;}
+          }
+          if(!chosen){const tx=clamp(x+10,8,930-width),ty=clamp(y+18,16,458);chosen={x:tx,y:ty,anchor:"start",box:{x1:tx,y1:ty-14,x2:tx+width,y2:ty+4}};}
+          occupied.push(chosen.box);return chosen;
+        };
+        const homeLabel=placeLabel(home.x,home.y,state.country.name,true);
+        const partnerCountries=market.routes.map(route=>state.diplomacy.countries.find(country=>country.id===route.partnerId)).filter((country,index,list)=>country&&list.findIndex(item=>item.id===country.id)===index);
+        const partnerNodes=partnerCountries.map(country=>{const label=placeLabel(country.geo.x,country.geo.y,country.name);return `<g><circle class="world-route-node" cx="${country.geo.x}" cy="${country.geo.y}" r="6"><title>${esc(country.name)} · ${esc(country.geo.zoneName)}</title></circle><text class="world-route-label" text-anchor="${label.anchor}" x="${label.x}" y="${label.y}">${esc(country.name)}</text></g>`;}).join("");
         const chokeNodes=geography.chokepoints.filter(point=>market.routes.some(route=>(route.geography?.chokepointIds||[]).includes(point.id))).map(point=>`<g><circle class="world-route-node choke ${point.status==="закрыт"?"bad":""}" cx="${point.x}" cy="${point.y}" r="5"><title>${esc(point.name)} · ${esc(point.status)} · нарушение ${pct(point.disruption,0)}</title></circle></g>`).join("");
-        return `<div class="world-logistics-map"><svg viewBox="0 0 940 470" role="img" aria-label="Схема международных торговых коридоров"><g>${zoneShapes.map(([label,path,zoneId])=>`<path class="geo-zone" d="${path}" fill="${zones[zoneId]?.color||"#788979"}"></path><text class="geo-zone-label" x="${zones[zoneId]?.x||460}" y="${zones[zoneId]?.y||220}">${label}</text>`).join("")}</g><g>${routeLines}${conflictLines}</g><g>${chokeNodes}${partnerNodes}<circle class="world-route-node home" cx="${home.x}" cy="${home.y}" r="8"><title>${esc(state.country.name)} · ${esc(home.zoneName)}</title></circle><text class="world-route-label" x="${home.x+11}" y="${home.y+18}">${esc(state.country.name)}</text></g></svg><div class="world-map-legend"><span>золото: наша страна</span><span>бирюза: открытый маршрут</span><span>пунктир: риск или обход</span><span>красный: активный конфликт</span></div></div>`;
+        return `<div class="world-logistics-map"><svg viewBox="0 0 940 470" role="img" aria-label="Схема международных торговых коридоров"><g>${zoneShapes.map(([label,path,zoneId])=>`<path class="geo-zone" d="${path}" fill="${zones[zoneId]?.color||"#788979"}"></path><text class="geo-zone-label" x="${zones[zoneId]?.x||460}" y="${zones[zoneId]?.y||220}">${label}</text>`).join("")}</g><g>${routeLines}${conflictLines}</g><g>${chokeNodes}${partnerNodes}<circle class="world-route-node home" cx="${home.x}" cy="${home.y}" r="8"><title>${esc(state.country.name)} · ${esc(home.zoneName)}</title></circle><text class="world-route-label" text-anchor="${homeLabel.anchor}" x="${homeLabel.x}" y="${homeLabel.y}">${esc(state.country.name)}</text></g></svg><div class="world-map-legend"><span>золото: наша страна</span><span>бирюза: открытый маршрут</span><span>пунктир: риск или обход</span><span>красный: активный конфликт</span></div></div>`;
       }
 
       function renderWorldMarketPanel() {
@@ -13984,6 +14019,13 @@
                 ${editorInput("country.name", "Страна", state.country.name)}
                 ${editorInput("country.capital", "Столица", state.country.capital)}
                 ${editorInput("country.currency", "Валюта", state.country.currency)}
+                <label>Географическое положение
+                  <select data-geography-type>
+                    <option value="coastal" ${state.country.geographyType === "coastal" ? "selected" : ""}>Прибрежная страна</option>
+                    <option value="landlocked" ${state.country.geographyType === "landlocked" ? "selected" : ""}>Без выхода к морю</option>
+                    <option value="island" ${state.country.geographyType === "island" ? "selected" : ""}>Островное государство</option>
+                  </select>
+                </label>
                 ${editorInput("country.armyName", "Армия", state.country.armyName)}
                 ${editorInput("country.parliamentName", "Парламент", state.country.parliamentName)}
                 ${editorInput("country.intelligenceName", "Спецслужба", state.country.intelligenceName)}
@@ -14725,7 +14767,13 @@
           rememberWarPlanFromElement(el);
           return;
         }
-        if (el.matches("[data-action='editor-region']")) {
+        if (el.matches("[data-geography-type]")) {
+          state.country.geographyType = ["coastal","landlocked","island"].includes(el.value) ? el.value : "coastal";
+          state.geography.home = playerGeographyProfile(state);
+          (state.worldMarket?.routes || []).forEach(route => updateTradeRouteGeography(state, route));
+          queueSave(300);
+          render({ force: true, preserveScroll: true });
+        } else if (el.matches("[data-action='editor-region']")) {
           selectedRegionId = el.value;
           render();
         } else if (el.matches("[data-action='editor-country']")) {
