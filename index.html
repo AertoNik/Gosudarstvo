@@ -2355,106 +2355,235 @@
       white-space: nowrap;
     }
 
-    .treaty-paper {
-      color: #18212f;
-      border: 1px solid rgba(82, 65, 31, .35);
-      border-radius: var(--radius);
-      padding: clamp(18px, 3vw, 30px);
+    .state-document {
+      position: relative;
+      isolation: isolate;
+      overflow: hidden;
+      color: #1b2430;
+      border: 1px solid rgba(92, 72, 37, .42);
+      border-radius: 6px;
+      padding: clamp(20px, 3.2vw, 38px);
       background:
-        linear-gradient(135deg, rgba(255,255,255,.75), rgba(255,255,255,.1)),
-        repeating-linear-gradient(0deg, rgba(90, 65, 30, .055), rgba(90, 65, 30, .055) 1px, transparent 1px, transparent 22px),
-        #f4ead0;
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,.45), 0 24px 60px rgba(0,0,0,.28);
+        linear-gradient(90deg, transparent 0 46px, rgba(143, 65, 58, .11) 46px 47px, transparent 47px),
+        repeating-linear-gradient(0deg, rgba(92, 72, 37, .045), rgba(92, 72, 37, .045) 1px, transparent 1px, transparent 25px),
+        radial-gradient(circle at 18% 10%, rgba(255,255,255,.72), transparent 34%),
+        #f3ead4;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.52), 0 20px 48px rgba(0,0,0,.3);
       display: grid;
       gap: 16px;
     }
 
-    .treaty-paper header {
+    .state-document::after {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      width: 290px;
+      height: 290px;
+      right: -84px;
+      bottom: -118px;
+      border: 18px double rgba(116, 51, 50, .045);
+      border-radius: 50%;
+    }
+
+    .document-classification {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      color: rgba(27, 36, 48, .64);
+      font-size: 11px;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+
+    .document-classification span:last-child {
+      text-align: right;
+    }
+
+    .document-head {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
-      gap: 14px;
       align-items: start;
-      padding-bottom: 12px;
-      border-bottom: 1px solid rgba(82, 65, 31, .22);
+      gap: 18px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid rgba(92, 72, 37, .28);
     }
 
-    .treaty-paper h3 {
-      margin: 0;
-      font-size: clamp(22px, 3vw, 34px);
-      line-height: 1.05;
-      letter-spacing: 0;
-    }
-
-    .treaty-paper p {
-      margin: 0;
-      line-height: 1.5;
-    }
-
-    .treaty-paper .subtle,
-    .treaty-paper small {
-      color: rgba(24, 33, 47, .68);
-    }
-
-    .treaty-seal {
-      width: 86px;
-      height: 86px;
-      border-radius: 50%;
-      border: 3px double rgba(125, 39, 39, .62);
-      display: grid;
-      place-items: center;
-      color: rgba(125, 39, 39, .84);
-      font-weight: 900;
-      text-align: center;
+    .document-kicker {
+      margin: 0 0 6px;
+      color: #7c3639;
       font-size: 12px;
+      font-weight: 900;
       text-transform: uppercase;
-      transform: rotate(-9deg);
-      background: radial-gradient(circle, rgba(255,255,255,.18), rgba(125,39,39,.12));
     }
 
-    .treaty-terms {
+    .document-title {
+      margin: 0;
+      max-width: 780px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 31px;
+      line-height: 1.08;
+      overflow-wrap: anywhere;
+    }
+
+    .document-register {
+      margin: 7px 0 0;
+      color: rgba(27, 36, 48, .68);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .document-seal {
+      width: 94px;
+      height: 94px;
+      border: 4px double rgba(128, 46, 47, .66);
+      border-radius: 50%;
+      display: grid;
+      place-content: center;
+      gap: 2px;
+      color: rgba(128, 46, 47, .86);
+      background: radial-gradient(circle, rgba(255,255,255,.2), rgba(128,46,47,.1));
+      text-align: center;
+      font-size: 10px;
+      font-weight: 900;
+      line-height: 1.1;
+      text-transform: uppercase;
+      transform: rotate(-7deg);
+    }
+
+    .document-seal strong {
+      font-size: 13px;
+      color: inherit;
+    }
+
+    .document-preamble {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.55;
+    }
+
+    .document-clauses {
       display: grid;
       gap: 8px;
-      counter-reset: term;
+      counter-reset: document-clause;
     }
 
-    .treaty-term {
-      counter-increment: term;
+    .document-clause {
+      counter-increment: document-clause;
       display: grid;
-      grid-template-columns: 30px 1fr;
-      gap: 9px;
+      grid-template-columns: 32px minmax(0, 1fr);
       align-items: start;
-      padding: 9px;
-      border: 1px solid rgba(82, 65, 31, .16);
-      border-radius: var(--radius);
-      background: rgba(255,255,255,.22);
+      gap: 10px;
+      padding: 10px 11px;
+      border: 1px solid rgba(92, 72, 37, .17);
+      border-radius: 5px;
+      background: rgba(255,255,255,.2);
+      line-height: 1.45;
     }
 
-    .treaty-term::before {
-      content: counter(term);
-      width: 24px;
-      height: 24px;
+    .document-clause::before {
+      content: counter(document-clause);
+      width: 26px;
+      height: 26px;
       border-radius: 50%;
       display: grid;
       place-items: center;
-      background: rgba(24,33,47,.1);
+      background: rgba(27, 36, 48, .09);
       font-weight: 900;
     }
 
-    .treaty-signatures {
+    .document-effects {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      border-top: 1px solid rgba(82, 65, 31, .22);
-      padding-top: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+      gap: 7px;
     }
 
-    .signature-line {
-      min-height: 56px;
-      border-bottom: 2px solid rgba(24,33,47,.42);
+    .document-effect {
+      min-width: 0;
+      padding: 9px 10px;
+      border-left: 3px solid rgba(27, 36, 48, .24);
+      background: rgba(255,255,255,.18);
+      display: grid;
+      gap: 3px;
+    }
+
+    .document-effect span {
+      color: rgba(27, 36, 48, .62);
+      font-size: 10px;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+
+    .document-effect strong {
+      color: #1b2430;
+      font-size: 14px;
+      overflow-wrap: anywhere;
+    }
+
+    .document-effect.good { border-left-color: #3c7754; }
+    .document-effect.warn { border-left-color: #a67627; }
+    .document-effect.bad { border-left-color: #9a3940; }
+
+    .document-administration {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      padding: 11px;
+      border: 1px solid rgba(92, 72, 37, .2);
+      background: rgba(255,255,255,.14);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .document-administration span {
+      display: grid;
+      gap: 2px;
+    }
+
+    .document-administration small,
+    .document-signature small {
+      color: rgba(27, 36, 48, .62);
+    }
+
+    .document-signatures {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      padding-top: 15px;
+      border-top: 1px solid rgba(92, 72, 37, .28);
+    }
+
+    .document-signature {
+      min-height: 62px;
+      border-bottom: 2px solid rgba(27, 36, 48, .42);
       display: grid;
       align-content: end;
-      padding-bottom: 6px;
-      font-weight: 800;
+      padding-bottom: 7px;
+      font-weight: 850;
+    }
+
+    .document-status-stamp {
+      position: static;
+      justify-self: end;
+      padding: 6px 12px;
+      border: 3px double rgba(55, 111, 72, .6);
+      border-radius: 4px;
+      color: rgba(44, 101, 62, .76);
+      font-size: 12px;
+      font-weight: 950;
+      text-transform: uppercase;
+      transform: rotate(-5deg);
+      pointer-events: none;
+    }
+
+    .state-document.warn .document-status-stamp { border-color: rgba(153, 105, 34, .65); color: rgba(139, 91, 25, .82); }
+    .state-document.bad .document-status-stamp { border-color: rgba(142, 48, 54, .65); color: rgba(142, 48, 54, .82); }
+
+    .document-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding-top: 2px;
     }
 
     .front-meter {
@@ -3437,15 +3566,13 @@
     .metric .value,
     .command-main h3,
     .setup-hero h1,
-    .war-report-head h2,
-    .treaty-paper h3 {
+    .war-report-head h2 {
       font-size: 30px;
     }
 
     .command-main h3 { font-size: 42px; }
     .setup-hero h1 { font-size: 54px; }
     .war-report-head h2 { font-size: 36px; }
-    .treaty-paper h3 { font-size: 32px; }
 
     .modal {
       overscroll-behavior: contain;
@@ -3482,18 +3609,26 @@
       .nav .nav-icon { width: 28px; height: 28px; }
       .project-action-line { grid-template-columns: 1fr; }
       .project-action-line button { width: 100%; min-width: 0; }
+      .state-document { padding: 17px 14px 22px; background-position: 0, 0, 0; }
+      .document-classification { align-items: flex-start; font-size: 9px; }
+      .document-head { grid-template-columns: minmax(0, 1fr) 66px; gap: 9px; }
+      .document-title { font-size: 23px; }
+      .document-seal { width: 64px; height: 64px; border-width: 3px; font-size: 8px; }
+      .document-seal strong { font-size: 10px; }
+      .document-preamble { font-size: 14px; }
+      .document-effects,
+      .document-administration,
+      .document-signatures { grid-template-columns: 1fr; }
+      .document-status-stamp { position: static; justify-self: end; margin-top: -5px; }
       .battle-theater,
       .battle-svg { min-height: 360px; }
       .battle-live-note { max-width: calc(100% - 24px); }
-      .war-report-head,
-      .treaty-paper header,
-      .treaty-signatures { grid-template-columns: 1fr; }
+      .war-report-head { grid-template-columns: 1fr; }
       .top-title h2 { font-size: 25px; }
       .metric .value { font-size: 26px; }
       .command-main h3 { font-size: 30px; }
       .setup-hero h1 { font-size: 38px; }
       .war-report-head h2 { font-size: 30px; }
-      .treaty-paper h3 { font-size: 27px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -3516,7 +3651,7 @@
 
       const STORAGE_KEY = "aaa_president_sim_state_v4";
       const SLOTS_KEY = "aaa_president_sim_slots_v4";
-      const SAVE_VERSION = 22;
+      const SAVE_VERSION = 23;
       const ECONOMY_MODEL_VERSION = 4;
       const FOREIGN_STATE_MODEL_VERSION = 1;
       const GEOGRAPHY_MODEL_VERSION = 2;
@@ -5283,15 +5418,16 @@
           formalize:{cost:320,title:"Программа легализации занятости"}, tax:{cost:280,title:"Риск-ориентированный налоговый контроль"},
           customs:{cost:420,title:"Таможенная разведка"}, aml:{cost:380,title:"Раскрытие бенефициаров и финансовая разведка"},
           taskforce:{cost:600,title:"Межведомственный штаб против оргпреступности"}, witness:{cost:260,title:"Защита свидетелей"}
-        },spec=specs[mode];if(!spec)return;if(e.budget<spec.cost)return notify("Недостаточно средств для операции.");e.budget-=spec.cost;
+        },spec=specs[mode];if(!spec)return;if(e.budget<spec.cost)return showBlockedDecision("Операция не профинансирована","Бюджет не покрывает работу ведомств, защищенную инфраструктуру и процессуальные расходы.",[["Нужно",money(spec.cost),"bad"],["Бюджет",money(e.budget),"bad"]]);e.budget-=spec.cost;
         if(mode==="formalize"){s.formalization+=8;s.informalShare-=2.4;e.smallBusiness+=1.8;e.unemployment-=.25;}
         if(mode==="tax"){s.enforcementPressure+=7;s.taxGap-=2.8;const recovered=Math.round(rnd(160,460));s.recoveredTaxes+=recovered;e.budget+=recovered;}
         if(mode==="customs"){s.customsControl+=8;s.smuggling-=3.2;}
         if(mode==="aml"){s.financialIntelligence+=9;s.laundering-=3;openCrimeInvestigation(state,"laundering","Финансовая сеть номинальных владельцев",rnd(48,78));}
         if(mode==="taskforce"){s.enforcementPressure+=9;s.organizedCrime-=2.6;s.violence-=1.2;openCrimeInvestigation(state,"organized","Межрегиональный преступный синдикат",rnd(55,86));}
         if(mode==="witness"){s.witnessProtection+=10;j.dueProcess+=1.4;j.publicTrust+=.7;}
-        recordShadowEvent(state,spec.title,`Решение профинансировано на ${money(spec.cost)}. Эффект будет разворачиваться по мере работы ведомств.`,"good");
-        normalizeCore();queueSave();notify(spec.title,"good","Теневая экономика");
+        const result=`Решение профинансировано на ${money(spec.cost)}. Эффект будет разворачиваться по мере работы ведомств и судебного контроля.`;
+        recordShadowEvent(state,spec.title,result,"good");
+        normalizeCore();queueSave();showDecision(spec.title,result,[["Стоимость",`-${money(spec.cost)}`,"bad"],["Системный риск",pct(shadowEconomyRisk(state),0),shadowEconomyRisk(state)>55?"warn":"good"],["Активные дела",String(s.investigations.filter(item=>item.status!=="закрыто").length),"warn"],["Давление контроля",pct(s.enforcementPressure,0),"good"]],"good");
       }
 
       function defaultShadowCabinetSystem(game) {
@@ -5341,10 +5477,10 @@
       function shadowCabinetAction(mode, id="") {
         const s=state.politics.shadowCabinet||migrateShadowCabinetSystem(state),p=state.politics,item=s.proposals.find(entry=>entry.id===id);let title="",text="";
         if(mode==="debate"){const govt=p.cabinet.capacity+p.popularity+rnd(-18,18),opp=s.credibility+s.approval+rnd(-18,18);if(govt>=opp){applyGroupApprovalImpact(state,{all:.8},"парламентские дебаты");s.momentum-=1.2;text="Правительство защитило расчеты и выиграло публичные дебаты.";}else{applyGroupApprovalImpact(state,{all:-.9},"парламентские дебаты");s.momentum+=1.4;text="Оппозиция убедительнее представила альтернативу и усилила давление.";}title="Парламентские дебаты завершены";}
-        if(mode==="disclose"){if(state.economy.budget<140)return notify("Недостаточно средств для независимого раскрытия данных.");state.economy.budget-=140;state.statistics.openData+=3;state.statistics.publicTrust+=1;s.scrutiny-=2;p.cabinet.integrity+=.8;title="Правительство раскрыло данные";text="Независимые приложения к отчету направлены парламенту и СМИ.";}
-        if(mode==="accept"&&item){if(state.economy.budget<item.cost)return notify("Недостаточно средств для включения предложения в программу.");state.economy.budget-=item.cost;item.status="принято правительством";p.coalition+=1.5;s.credibility+=1.2;s.momentum-=.6;applyGroupApprovalImpact(state,{workers:.7,public:.6,rural:.4},"межпартийный компромисс");title="Предложение оппозиции принято";text=`${item.title} включен в правительственную программу с публичным указанием авторства.`;}
+        if(mode==="disclose"){if(state.economy.budget<140)return showBlockedDecision("Раскрытие данных не профинансировано","Независимая публикация требует проверки наборов данных, обезличивания и внешнего аудита.",[["Нужно",money(140),"bad"],["Бюджет",money(state.economy.budget),"bad"]]);state.economy.budget-=140;state.statistics.openData+=3;state.statistics.publicTrust+=1;s.scrutiny-=2;p.cabinet.integrity+=.8;title="Правительство раскрыло данные";text="Независимые приложения к отчету направлены парламенту и СМИ.";}
+        if(mode==="accept"&&item){if(state.economy.budget<item.cost)return showBlockedDecision("Предложение оппозиции не профинансировано","Для включения инициативы в государственную программу требуется подтвержденный бюджетный лимит.",[["Нужно",money(item.cost),"bad"],["Бюджет",money(state.economy.budget),"bad"]]);state.economy.budget-=item.cost;item.status="принято правительством";p.coalition+=1.5;s.credibility+=1.2;s.momentum-=.6;applyGroupApprovalImpact(state,{workers:.7,public:.6,rural:.4},"межпартийный компромисс");title="Предложение оппозиции принято";text=`${item.title} включен в правительственную программу с публичным указанием авторства.`;}
         if(mode==="reject"&&item){item.status="отклонено";p.coalition+=.3;s.momentum+=item.support>60?1.5:.4;title="Предложение оппозиции отклонено";text=`Правительство отклонило «${item.title}» и обязалось представить собственные расчеты.`;}
-        if(!title)return;recordOppositionEvent(state,title,text,mode==="accept"||mode==="disclose"?"good":"warn");normalizeCore();queueSave();notify(text,mode==="accept"?"good":"warn",title);
+        if(!title)return;const tone=mode==="accept"||mode==="disclose"?"good":"warn";recordOppositionEvent(state,title,text,tone);normalizeCore();queueSave();showDecision(title,text,[["Поддержка оппозиции",pct(s.approval,0),s.approval>55?"warn":"good"],["Достоверность",pct(s.credibility,0),s.credibility>=60?"good":"warn"],["Коалиция",pct(p.coalition,0),p.coalition>=50?"good":"warn"],["Статус",item?.status||"решение исполнено",tone]],tone);
       }
 
       function promiseCatalog(game=state) {
@@ -5377,7 +5513,25 @@
 
       function simulatePromiseSystem(game) {const s=game.politics.promises||migratePromiseSystem(game);s.reviewDays=Math.max(0,s.reviewDays-1);for(const item of s.active){if(item.status!=="в работе")continue;item.elapsed++;item.deadlineDays=Math.max(0,item.deadlineDays-1);assessPromise(game,item);if(item.progress>=100){item.status="выполнено";s.fulfilled++;s.credibility+=3*item.weight;applyGroupApprovalImpact(game,{all:1.2*item.weight},"выполнено президентское обещание");const event={id:uid("promise"),date:formatDate(game.date),title:"Президентское обещание выполнено",text:item.title,tone:"good"};s.log.unshift(event);pushNews(game,"Политика",event.title,event.text);}else if(!item.deadlineDays){item.status="нарушено";s.broken++;s.credibility-=5*item.weight;game.politics.opposition+=2*item.weight;applyGroupApprovalImpact(game,{all:-2*item.weight},"нарушено президентское обещание");const event={id:uid("promise"),date:formatDate(game.date),title:"Срок обещания истек",text:item.title,tone:"bad"};s.log.unshift(event);pushNews(game,"Политика",event.title,event.text);}}if(!s.reviewDays){s.reviewDays=30;s.accountability=clamp(num(game.statistics?.independence,50)*.34+num(game.governance?.media?.freedom,50)*.32+num(game.politics.justice?.independence,50)*.34,0,100);s.credibility=clamp(s.credibility+(avg(s.active.filter(item=>item.status==="в работе"),"progress")-45)*.008+(s.accountability-50)*.002,0,100);s.lastBriefing=`Опубликована ежемесячная сверка: выполнено ${s.fulfilled}, нарушено ${s.broken}, в работе ${s.active.filter(item=>item.status==="в работе").length}.`;s.log.unshift({id:uid("promise_review"),date:formatDate(game.date),title:"Ежемесячная проверка обязательств",text:s.lastBriefing,tone:s.credibility>=60?"good":"warn"});}s.log=s.log.slice(0,32);}
 
-      function promiseAction(mode,id="") {const s=state.politics.promises||migratePromiseSystem(state),item=s.active.find(p=>p.id===id&&p.status==="в работе");if(mode==="audit"){if(state.economy.budget<120)return notify("Недостаточно средств для независимого аудита.");state.economy.budget-=120;s.accountability+=4;state.statistics.independence+=1.5;state.statistics.publicTrust+=1;s.reviewDays=0;s.lastBriefing="Счетная палата и статистическая служба получили поручение провести внеочередную проверку обещаний.";}if(mode==="priority"&&item){if(state.economy.budget<480)return notify("Недостаточно средств для межведомственного приоритета.");state.economy.budget-=480;state.politics.cabinet.execution+=1.5;item.progress=clamp(item.progress+5,0,99);item.deadlineDays+=45;item.lastAssessment="Кабинет выделил отдельный проектный офис, бюджет и 45 дней дополнительного графика.";}if(mode==="revise"&&item){item.deadlineDays+=365;item.status="пересмотрено";s.credibility-=5;state.politics.opposition+=2;applyGroupApprovalImpact(state,{all:-1.5},"пересмотр предвыборного обещания");s.broken++;item.lastAssessment="Администрация официально изменила обязательство и признала политическую ответственность.";}normalizeCore();queueSave();notify(s.lastBriefing||item?.lastAssessment||"Решение принято.",mode==="revise"?"warn":"good","Ответственность президента");}
+      function promiseAction(mode,id="") {
+        const s=state.politics.promises||migratePromiseSystem(state),item=s.active.find(p=>p.id===id&&p.status==="в работе");
+        let title="Решение по президентским обязательствам",result="",cost=0,tone="good";
+        if(mode==="audit"){
+          cost=120;
+          if(state.economy.budget<cost)return showBlockedDecision("Независимый аудит не профинансирован","Проверка обещаний требует отдельного лимита Счетной палаты и статистической службы.",[["Нужно",money(cost),"bad"],["Бюджет",money(state.economy.budget),"bad"]]);
+          state.economy.budget-=cost;s.accountability+=4;state.statistics.independence+=1.5;state.statistics.publicTrust+=1;s.reviewDays=0;
+          result="Счетная палата и статистическая служба получили поручение провести внеочередную проверку обещаний.";s.lastBriefing=result;title="Внеочередная проверка обещаний назначена";
+        } else if(mode==="priority"&&item){
+          cost=480;
+          if(state.economy.budget<cost)return showBlockedDecision("Межведомственный приоритет не профинансирован","Проектному офису требуется защищенный бюджет и согласованный календарь исполнения.",[["Нужно",money(cost),"bad"],["Бюджет",money(state.economy.budget),"bad"]]);
+          state.economy.budget-=cost;state.politics.cabinet.execution+=1.5;item.progress=clamp(item.progress+5,0,99);item.deadlineDays+=45;
+          result="Кабинет выделил отдельный проектный офис, бюджет и 45 дней дополнительного графика.";item.lastAssessment=result;title=`Приоритет обещания: ${item.title}`;
+        } else if(mode==="revise"&&item){
+          item.deadlineDays+=365;item.status="пересмотрено";s.credibility-=5;state.politics.opposition+=2;applyGroupApprovalImpact(state,{all:-1.5},"пересмотр предвыборного обещания");s.broken++;
+          result="Администрация официально изменила обязательство и признала политическую ответственность.";item.lastAssessment=result;title=`Обязательство пересмотрено: ${item.title}`;tone="warn";
+        } else return showBlockedDecision("Обязательство недоступно","Выбранное обещание уже закрыто либо не найдено в действующем мандате.",[["Статус","нет активного обязательства","warn"]]);
+        normalizeCore();queueSave();showDecision(title,result,[["Подотчетность",pct(s.accountability,0),s.accountability>=60?"good":"warn"],["Доверие к обещаниям",pct(s.credibility,0),s.credibility>=55?"good":"warn"],["Стоимость",cost?`-${money(cost)}`:"без новых расходов",cost?"bad":"good"],["Срок",item?`${item.deadlineDays} дн.`:"проверка вне графика","warn"]],tone);
+      }
 
       function defaultSoftPowerSystem(game) {return{prestige:56,culturalReach:51,educationAttraction:49,mediaReach:46,diasporaTrust:55,humanitarianInfluence:52,sportsPrestige:44,tourismAppeal:57,credibility:55,budget:1800,programs:[],events:[],influence:(game.diplomacy?.countries||[]).map(country=>({countryId:country.id,affinity:clamp(45+country.relations*.2+rnd(-8,8),15,85),trust:clamp(42+country.relations*.22,10,90),access:50,students:0,diaspora:rnd(25,72),lastEvent:"культурные контакты поддерживаются посольством"})),log:[],lastBriefing:"Культурная дипломатия опирается на образование, гуманитарную репутацию, медиа и связи с диаспорой."};}
 
@@ -5387,7 +5541,17 @@
 
       function simulateSoftPowerSystem(game) {const s=game.softPower||migrateSoftPowerSystem(game),law=game.diplomacy.law,p=game.politics,pop=game.population;const target=clamp(law.reputation*.2+law.humanitarianStanding*.15+p.constitution.rights*.12+pop.education*.12+game.governance.media.trust*.1+s.culturalReach*.14+s.educationAttraction*.1+s.credibility*.07-law.sanctionsExposure*.08,0,100);s.prestige=clamp(s.prestige+(target-s.prestige)*.0018+rnd(-.006,.006),0,100);s.credibility=clamp(s.credibility+(law.treatyReliability-s.credibility)*.001+(game.statistics.publicTrust-50)*.0002,0,100);for(const program of s.programs){if(program.status!=="active")continue;program.days--;program.progress=clamp((program.duration-program.days)/program.duration*100,0,100);if(program.days<=0){program.status="завершена";const inf=s.influence.find(x=>x.countryId===program.countryId),country=game.diplomacy.countries.find(x=>x.id===program.countryId);if(inf){inf.affinity=clamp(inf.affinity+program.affinity,0,100);inf.trust=clamp(inf.trust+program.trust,0,100);inf.access=clamp(inf.access+program.access,0,100);inf.students+=program.students||0;inf.lastEvent=program.title;}if(country)country.relations=clamp(country.relations+program.trust*.25+program.affinity*.12,0,100);s.prestige=clamp(s.prestige+program.prestige,0,100);const event={id:uid("soft_event"),date:formatDate(game.date),title:program.title,text:`Программа завершена${country?` в направлении ${country.name}`:""}; эффект подтвержден итоговой оценкой.`,tone:"good"};s.events.unshift(event);s.lastBriefing=event.text;pushNews(game,"Мир",event.title,event.text);}}for(const inf of s.influence){const country=game.diplomacy.countries.find(x=>x.id===inf.countryId);if(!country)continue;inf.trust=clamp(inf.trust+(s.credibility-country.strategy.threat-inf.trust*.15)*.00035,0,100);country.relations=clamp(country.relations+(softPowerInfluence(game,country.id)-50)*.00008,0,100);}game.economy.exports=Math.max(0,game.economy.exports+s.prestige*.001+s.tourismAppeal*.0008);s.events=s.events.slice(0,20);s.log=s.log.slice(0,28);}
 
-      function softPowerAction(mode,countryId="") {const s=state.softPower||migrateSoftPowerSystem(state),country=state.diplomacy.countries.find(item=>item.id===(countryId||selectedCountryId));if(!country)return notify("Сначала выберите государство.");const specs={center:{title:"Культурный центр",cost:360,duration:120,affinity:5,trust:2,access:7,prestige:1.2,students:0},scholarships:{title:"Стипендиальная программа",cost:450,duration:180,affinity:3,trust:4,access:3,prestige:1.6,students:Math.round(rnd(180,520))},humanitarian:{title:"Гуманитарная миссия",cost:520,duration:75,affinity:2,trust:7,access:2,prestige:2.4,students:0},media:{title:"Международное общественное вещание",cost:380,duration:100,affinity:4,trust:1,access:6,prestige:1,students:0},festival:{title:"Международный культурно-спортивный форум",cost:700,duration:90,affinity:6,trust:3,access:4,prestige:3,students:0},diaspora:{title:"Форум соотечественников и диаспоры",cost:250,duration:60,affinity:3,trust:3,access:3,prestige:.8,students:0}},spec=specs[mode];if(!spec)return;if(state.economy.budget<spec.cost)return notify("Недостаточно средств для программы.");state.economy.budget-=spec.cost;s.budget+=spec.cost;const program=Object.assign({id:uid("soft_program"),countryId:country.id,status:"active",started:formatDate(state.date),days:spec.duration,progress:0},spec);s.programs.unshift(program);s.programs=s.programs.slice(0,16);s.lastBriefing=`${spec.title}: программа с ${country.name} запущена на ${spec.duration} дней.`;s.log.unshift({id:uid("soft_log"),date:formatDate(state.date),title:spec.title,text:s.lastBriefing,tone:"institution"});queueSave();notify(s.lastBriefing,"good","Мягкая сила");}
+      function softPowerAction(mode,countryId="") {
+        const s=state.softPower||migrateSoftPowerSystem(state),country=state.diplomacy.countries.find(item=>item.id===(countryId||selectedCountryId));
+        if(!country)return showBlockedDecision("Направление мягкой силы не выбрано","Выберите государство, для которого будет подготовлена культурная или гуманитарная программа.",[["Статус","нет страны-партнера","bad"]]);
+        const specs={center:{title:"Культурный центр",cost:360,duration:120,affinity:5,trust:2,access:7,prestige:1.2,students:0},scholarships:{title:"Стипендиальная программа",cost:450,duration:180,affinity:3,trust:4,access:3,prestige:1.6,students:Math.round(rnd(180,520))},humanitarian:{title:"Гуманитарная миссия",cost:520,duration:75,affinity:2,trust:7,access:2,prestige:2.4,students:0},media:{title:"Международное общественное вещание",cost:380,duration:100,affinity:4,trust:1,access:6,prestige:1,students:0},festival:{title:"Международный культурно-спортивный форум",cost:700,duration:90,affinity:6,trust:3,access:4,prestige:3,students:0},diaspora:{title:"Форум соотечественников и диаспоры",cost:250,duration:60,affinity:3,trust:3,access:3,prestige:.8,students:0}},spec=specs[mode];
+        if(!spec)return;
+        if(state.economy.budget<spec.cost)return showBlockedDecision("Программа мягкой силы не профинансирована","Культурная дипломатия требует подтвержденного бюджета, местного партнера и оценки репутационных рисков.",[["Нужно",money(spec.cost),"bad"],["Бюджет",money(state.economy.budget),"bad"]]);
+        state.economy.budget-=spec.cost;s.budget+=spec.cost;
+        const program=Object.assign({id:uid("soft_program"),countryId:country.id,status:"active",started:formatDate(state.date),days:spec.duration,progress:0},spec);
+        s.programs.unshift(program);s.programs=s.programs.slice(0,16);s.lastBriefing=`${spec.title}: программа с ${country.name} запущена на ${spec.duration} дней.`;s.log.unshift({id:uid("soft_log"),date:formatDate(state.date),title:spec.title,text:s.lastBriefing,tone:"institution"});
+        queueSave();showDecision(spec.title,s.lastBriefing,[["Партнер",country.name,"good"],["Срок",`${spec.duration} дн.`,"warn"],["Стоимость",`-${money(spec.cost)}`,"bad"],["Ожидаемый престиж",`+${spec.prestige.toFixed(1)} п.п.`,"good"],["Ожидаемое доверие",`+${spec.trust} п.п.`,"good"]],"institution");
+      }
 
       function renderShadowEconomyPanel() {
         const s=state.shadowEconomy||migrateShadowEconomySystem(state),risk=shadowEconomyRisk(state),active=s.investigations.filter(item=>item.status!=="закрыто");
@@ -14610,22 +14774,182 @@
         `;
       }
 
+      function decisionDocumentMeta(title, result = "", tone = "good") {
+        const text = `${title} ${result}`.toLowerCase();
+        const blocked = /недостаточно|не профинансирован|невозможно|не найден|уже закрыт|заблокирован|не согласован|не обоснован|нет финансирования|предел полномочий|не подготовлен/i.test(text);
+        const groups = [
+          {
+            match: /войн|военн|арм|генштаб|обор|вооруж|развед|контрразвед|безопасност|террор|кибер/,
+            documentType: "Директива Верховного Главнокомандующего",
+            issuer: state.country.armyName || "Министерство обороны",
+            responsible: "Генеральный штаб и Совет безопасности",
+            basis: "полномочия Верховного Главнокомандующего и утвержденная стратегия национальной безопасности",
+            prefix: "ВГК",
+            seal: "ГЕНШТАБ"
+          },
+          {
+            match: /диплом|международ|союз|торгов|санкц|эмбарго|виз|саммит|гуманитар|мягк|культурн.*центр|стипендиаль/,
+            documentType: "Внешнеполитический акт",
+            issuer: "Министерство иностранных дел",
+            responsible: "Министерство иностранных дел и профильные ведомства",
+            basis: "международные обязательства, национальные интересы и заключение дипломатической службы",
+            prefix: "МИД",
+            seal: "МИД"
+          },
+          {
+            match: /закон|конституц|парламент|коалиц|выбор|кабинет|министр|оппозиц|парт|обещан|президент|вотум|политическ/,
+            documentType: "Распоряжение Президента",
+            issuer: "Администрация Президента",
+            responsible: "Правительство и парламентский представитель Президента",
+            basis: "Конституция, действующее законодательство и политический мандат главы государства",
+            prefix: "АП",
+            seal: "КАНЦЕЛЯРИЯ"
+          },
+          {
+            match: /суд|правосуд|прокурат|корруп|преступ|полици|аудит|провер|следств|бенефициар|свидетел/,
+            documentType: "Межведомственное поручение",
+            issuer: "Государственно-правовое управление",
+            responsible: "Органы юстиции, контроля и надзора",
+            basis: "принцип верховенства права, процессуальные гарантии и компетенция независимых органов",
+            prefix: "ГПУ",
+            seal: "КОНТРОЛЬ"
+          },
+          {
+            match: /регион|федера|инфраструкт|климат|чрезвыч|кризис|восстанов|эвакуац|стихийн|катастроф/,
+            documentType: "Распоряжение Правительства",
+            issuer: "Координационный штаб Правительства",
+            responsible: "Профильные министерства и региональные администрации",
+            basis: "бюджетные полномочия Правительства и межведомственный план реагирования",
+            prefix: "ПР",
+            seal: "ПРАВИТЕЛЬСТВО"
+          },
+          {
+            match: /эконом|бюджет|банк|ставк|инфляц|рынок|налог|компан|промышлен|производ|финанс|инвест|занятост|статист/,
+            documentType: "Постановление Правительства",
+            issuer: "Экономический блок Правительства",
+            responsible: "Министерство финансов, Министерство экономики и уполномоченные регуляторы",
+            basis: "закон о бюджете, макроэкономический прогноз и заключение финансово-экономического блока",
+            prefix: "ПП",
+            seal: "ПРАВИТЕЛЬСТВО"
+          },
+          {
+            match: /медиа|информац|брифинг|обществен|демограф|образован|медицин|здрав|семь|жиль|культур/,
+            documentType: "Президентское поручение",
+            issuer: "Социально-гуманитарный блок Правительства",
+            responsible: "Профильное министерство и проектный офис",
+            basis: "государственная программа, социальные гарантии и оценка общественных последствий",
+            prefix: "ППР",
+            seal: "ПРЕЗИДЕНТ"
+          }
+        ];
+        const fallback = {
+          documentType: "Решение Президента",
+          issuer: "Администрация Президента",
+          responsible: "Правительство и Контрольное управление",
+          basis: "Конституция, действующее законодательство и материалы профильных ведомств",
+          prefix: "РП",
+          seal: "ПРЕЗИДЕНТ"
+        };
+        const heading = String(title || "").toLowerCase();
+        const selected = groups.find(item => item.match.test(heading)) || groups.find(item => item.match.test(text)) || fallback;
+        if (!blocked) return Object.assign({ blocked: false }, selected);
+        return Object.assign({}, selected, {
+          blocked: true,
+          documentType: "Служебное заключение",
+          issuer: selected.issuer,
+          responsible: "Аппарат согласования и профильное ведомство",
+          prefix: "ЗКЛ",
+          seal: "НЕ СОГЛАСОВАНО"
+        });
+      }
+
+      function stateDocumentRegistry(prefix, title = "") {
+        const date = safeDateParts(state?.date);
+        let hash = 2166136261;
+        for (const char of `${prefix}:${title}:${formatDate(date)}`) {
+          hash ^= char.charCodeAt(0);
+          hash = Math.imul(hash, 16777619) >>> 0;
+        }
+        return `${prefix}-${date.year}/${String(hash % 100000).padStart(5, "0")}`;
+      }
+
+      function renderStateDocument(options = {}) {
+        const tone = options.tone || "good";
+        const title = options.title || "Государственное решение";
+        const documentType = options.documentType || "Официальный документ";
+        const issuer = options.issuer || "Администрация Президента";
+        const responsible = options.responsible || "Правительство и Контрольное управление";
+        const basis = options.basis || "действующее законодательство и материалы профильных ведомств";
+        const registry = options.registry || stateDocumentRegistry(options.prefix || "РП", title);
+        const status = options.status || (tone === "bad" ? "НЕ СОГЛАСОВАНО" : options.pending ? "НА ПОДПИСИ" : "ПОДПИСАНО");
+        const preamble = options.preamble || "Решение рассмотрено и внесено в государственный реестр.";
+        const terms = (options.terms || []).filter(Boolean);
+        const effects = (options.effects || []).filter(Boolean);
+        const seal = String(options.seal || "ПРЕЗИДЕНТ").slice(0, 20);
+        const signatures = options.signatures || [
+          [state.country.president.name, `Президент ${state.country.name}`],
+          [responsible, "ответственный исполнитель"]
+        ];
+        return `
+          <article class="state-document ${esc(tone)}">
+            <div class="document-classification"><span>${esc(documentType)}</span><span>Экз. № 1 · государственный реестр</span></div>
+            <header class="document-head">
+              <div>
+                <p class="document-kicker">${esc(issuer)}</p>
+                <h3 class="document-title">${esc(title)}</h3>
+                <p class="document-register">№ ${esc(registry)} · ${esc(dateLabel(state.date))} · ${esc(state.country.capital)}</p>
+              </div>
+              <div class="document-seal" aria-label="Официальная печать"><span>${esc(state.country.name.slice(0, 14))}</span><strong>${esc(seal)}</strong></div>
+            </header>
+            <p class="document-preamble">${esc(preamble)}</p>
+            ${terms.length ? `<div class="document-clauses">${terms.map(term => `<div class="document-clause">${esc(term)}</div>`).join("")}</div>` : ""}
+            ${effects.length ? `<div class="document-effects">${effects.map(([label, value, cls]) => `<div class="document-effect ${esc(cls || "")}"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`).join("")}</div>` : ""}
+            <div class="document-administration">
+              <span><small>Правовое основание</small><strong>${esc(basis)}</strong></span>
+              <span><small>Ответственный исполнитель</small><strong>${esc(responsible)}</strong></span>
+            </div>
+            <div class="document-signatures">
+              ${signatures.map(([name, role]) => `<div class="document-signature"><strong>${esc(name)}</strong><small>${esc(role)}</small></div>`).join("")}
+            </div>
+            <div class="document-status-stamp">${esc(status)}</div>
+          </article>
+        `;
+      }
+
       function showDecision(title, result, details = [], tone = "good") {
-        const blocked = /недостаточно|не профинансирован|невозможно|не найден|уже закрыт|заблокирован/i.test(`${title} ${result}`);
+        const doc = decisionDocumentMeta(title, result, tone);
+        const blocked = doc.blocked;
         const chainChoice = state?.narrative?.activeChains?.some(chain => chain.history?.some(item => item.date === formatDate(state.date) && item.choice === title));
         if (state?.narrative && !blocked && !chainChoice) recordDecisionMemory(state, title, result, tone, { weight:36 });
+        const terms = doc.blocked ? [
+          `Не вводить меру «${title}» в действие до устранения указанных ограничений.`,
+          `Поручить ведомству уточнить ресурсы, правовые основания и возможные альтернативы.`,
+          "После устранения препятствий решение может быть внесено на повторное согласование."
+        ] : [
+          `Утвердить решение «${title}» и считать изложенный результат официальной позицией государства.`,
+          `Поручить ответственному исполнителю начать реализацию в пределах утвержденных полномочий и ресурсов.`,
+          "Контроль фактических последствий возложить на профильное ведомство и Контрольное управление Президента."
+        ];
         modal = {
           title,
           tone,
+          wide: true,
           body: `
-            <div class="decision-brief">
-              <div class="decision-banner ${tone}">
-                <strong>${esc(result)}</strong>
-                <span class="subtle">${dateLabel(state.date)} · ${esc(state.country.capital)}</span>
-              </div>
-              ${details.length ? `<div class="decision-grid">${details.map(([label, value, cls]) => `<div class="kpi"><span>${esc(label)}</span><strong class="${cls ? `delta ${cls}` : ""}">${esc(value)}</strong></div>`).join("")}</div>` : ""}
-              <div class="actions"><button class="primary" data-action="close-modal">Принять доклад</button></div>
-            </div>
+            ${renderStateDocument({
+              title,
+              documentType: doc.documentType,
+              issuer: doc.issuer,
+              responsible: doc.responsible,
+              basis: doc.basis,
+              prefix: doc.prefix,
+              seal: doc.seal,
+              preamble: result,
+              terms,
+              effects: details,
+              tone,
+              status: doc.blocked ? "НЕ СОГЛАСОВАНО" : "ПОДПИСАНО"
+            })}
+            <div class="document-actions"><button class="primary" data-action="close-modal">Передать в архив</button></div>
           `
         };
         render({ force: true, preserveScroll: true });
@@ -14654,7 +14978,7 @@
             preamble: `${state.country.name} и ${c.name} фиксируют взаимный интерес к расширению торговли без политической эскалации.`,
             terms: [
               `Открыть ускоренный таможенный коридор и страхование поставок. Цена для бюджета: ${money(160)}.`,
-              `Ожидаемый прирост торговли: ${money(600)}-${money(2200)}, отношения +3 п.п.`,
+              `Ожидаемый прирост торговли: ${money(600)} — ${money(2200)}, отношения +3 п.п.`,
               `Санкции или эмбарго снизят эффект и могут сорвать часть поставок.`
             ],
             tone: "good"
@@ -14749,25 +15073,25 @@
           tone: doc.tone,
           wide: true,
           body: `
-            <div class="treaty-paper">
-              <header>
-                <div>
-                  <small>${esc(doc.subtitle)}</small>
-                  <h3>${esc(doc.title)}</h3>
-                  <p class="subtle">${esc(doc.date)} · ${esc(doc.place)} · документ передан на подпись</p>
-                </div>
-                <div class="treaty-seal">МИД<br>${esc(state.country.name.slice(0, 8))}</div>
-              </header>
-              <p>${esc(doc.preamble)}</p>
-              <div class="treaty-terms">
-                ${doc.terms.map(term => `<div class="treaty-term">${esc(term)}</div>`).join("")}
-              </div>
-              <div class="treaty-signatures">
-                <div class="signature-line">${esc(state.country.president.name)}<small class="subtle"> ${esc(state.country.name)}</small></div>
-                <div class="signature-line">${esc(c.name)}<small class="subtle"> уполномоченная сторона</small></div>
-              </div>
-            </div>
-            <div class="actions">
+            ${renderStateDocument({
+              title: doc.title,
+              documentType: "Международный договор",
+              issuer: doc.subtitle,
+              responsible: "Министерство иностранных дел и уполномоченные органы сторон",
+              basis: "Венские принципы договорного права, национальное законодательство и согласованные полномочия сторон",
+              prefix: "МД",
+              seal: "МИД",
+              preamble: doc.preamble,
+              terms: doc.terms,
+              tone: doc.tone,
+              pending: true,
+              status: "НА ПОДПИСИ",
+              signatures: [
+                [state.country.president.name, `${state.country.name} · глава государства`],
+                [c.name, "уполномоченная сторона"]
+              ]
+            })}
+            <div class="document-actions">
               <button class="primary" data-action="confirm-diplo-document" data-diplo="${esc(type)}" data-country="${esc(c.id)}">Подписать</button>
               <button data-action="close-modal">Отмена</button>
             </div>
@@ -14810,25 +15134,25 @@
           tone: doc.tone,
           wide: true,
           body: `
-            <div class="treaty-paper">
-              <header>
-                <div>
-                  <small>${esc(doc.subtitle)}</small>
-                  <h3>${esc(doc.title)}</h3>
-                  <p class="subtle">${dateLabel(state.date)} · получено от ${esc(offer.countryName)}</p>
-                </div>
-                <div class="treaty-seal">НОТА<br>${esc(offer.countryName.slice(0, 8))}</div>
-              </header>
-              <p>${esc(doc.preamble)}</p>
-              <div class="treaty-terms">
-                ${doc.terms.map(term => `<div class="treaty-term">${esc(term)}</div>`).join("")}
-              </div>
-              <div class="treaty-signatures">
-                <div class="signature-line">${esc(offer.countryName)}<small class="subtle"> инициатор</small></div>
-                <div class="signature-line">${esc(state.country.president.name)}<small class="subtle"> решение президента</small></div>
-              </div>
-            </div>
-            <div class="actions">
+            ${renderStateDocument({
+              title: doc.title,
+              documentType: "Входящая дипломатическая нота",
+              issuer: `${offer.countryName} · дипломатическое представительство`,
+              responsible: "Министерство иностранных дел и Администрация Президента",
+              basis: "официальная дипломатическая переписка и действующие двусторонние обязательства",
+              prefix: "НД",
+              seal: "НОТА",
+              preamble: doc.preamble,
+              terms: doc.terms,
+              tone: doc.tone,
+              pending: true,
+              status: "ТРЕБУЕТ РЕШЕНИЯ",
+              signatures: [
+                [offer.countryName, "инициатор предложения"],
+                [state.country.president.name, "решение главы государства"]
+              ]
+            })}
+            <div class="document-actions">
               <button class="primary" data-action="foreign-offer-confirm" data-offer="${esc(offer.id)}" data-choice="accept">Принять условия</button>
               <button class="danger" data-action="foreign-offer-confirm" data-offer="${esc(offer.id)}" data-choice="decline">Отклонить</button>
               <button data-action="close-modal">Вернуться</button>
@@ -15023,7 +15347,6 @@
         else if (action === "demography-action") demographyAction(actionEl.dataset.mode);
         else if (action === "information-action") informationAction(actionEl.dataset.mode);
         else if (action === "generate-news") generateNews(actionEl.dataset.category);
-        else if (action === "event") triggerEvent(actionEl.dataset.event);
         else if (action === "add-law") addLaw();
         else if (action === "add-party") addParty();
         else if (action === "normalize") normalizePercentages();
@@ -17524,43 +17847,13 @@
         })[category] || "Сводка дня";
       }
 
-      function triggerRandomEvent(game) {
-        triggerEvent(pick(["natural","economic","scandal","epidemic","unrest","terror","discovery"]), game);
-      }
-
-      function triggerEvent(type, game = state) {
-        const region = pick(game.regions);
-        const e = game.economy;
-        const p = game.politics;
-        const pop = game.population;
-        if (type === "natural") {
-          const emergency = spawnClimateEmergency(game, "", region, rnd(42, 76));
-          if (emergency) {
-            e.budget -= 120;
-            game.climate.emergencyReserve = Math.max(0, game.climate.emergencyReserve - 90);
-          }
-          return emergency;
-        }
-        const data = {
-          economic: ["Экономика", "Финансовый кризис", "Кредитный рынок сжимается, растёт риск банкротств и давления на валюту.", () => { e.stockIndex *= .94; e.bankruptcies += 1.1; e.exchangeRate *= 1.025; p.popularity -= 1.4; }],
-          scandal: ["Скандалы", "Коррупционный скандал", `Прокуратура проверяет закупки в регионе ${region.name}.`, () => { p.corruption += 2.2; p.popularity -= 1.8; p.protests += 1; }],
-          epidemic: ["Эпидемии", "Очаг заболевания", "Минздрав вводит санитарные меры и мобилизует больницы.", () => { pop.happiness -= 1.5; pop.deathRate += .2; e.budget -= 310; }],
-          unrest: ["Политика", "Митинги и забастовки", "Профсоюзы требуют повышения зарплат и снижения инфляции.", () => { p.protests += 3.4; p.strikes += 2.6; e.growth -= .18; }],
-          terror: ["Безопасность", "Теракт предотвращён частично", `${game.country.intelligenceName} задержала часть группы, но общество требует ответов.`, () => { pop.happiness -= 2; pop.crime += 1.6; p.popularity -= .9; game.military.readiness += 1; }],
-          discovery: ["Открытия", "Научный прорыв", "Исследовательский консорциум представил технологию с экспортным потенциалом.", () => { game.tech.points += 55; e.investments += 650; p.popularity += 1.2; }]
-        }[type];
-        data[3]();
-        pushNews(game, data[0], data[1], data[2]);
-      }
-
       function buildInRegion(key) {
         const region = state.regions.find(r => r.id === selectedRegionId);
         const spec = buildingTypes.find(b => b[0] === key);
         if (!region || !spec) return;
         const cost = spec[2];
         if (state.economy.budget < cost) {
-          notify("Недостаточно бюджета.");
-          return;
+          return showBlockedDecision("Региональный проект не профинансирован", `${spec[1]} требует утвержденного капитального лимита.`, [["Нужно", money(cost), "bad"], ["Бюджет", money(state.economy.budget), "bad"]]);
         }
         state.economy.budget -= cost;
         region.buildings[key] = (region.buildings[key] || 0) + 1;
@@ -17581,7 +17874,9 @@
         if (effects.army) state.military.readiness = clamp(state.military.readiness + effects.army, 0, 100);
         if (effects.security) region.security = clamp(region.security + effects.security, 0, 100);
         if (effects.pollution) region.pollution = clamp(region.pollution + effects.pollution, 0, 100);
-        pushNews(state, "Экономика", "Инфраструктурный проект", `${spec[1]} построен в регионе ${region.name}. Проект уже отражён в бюджете и статистике.`);
+        const result = `${spec[1]} построен в регионе ${region.name}. Проект уже отражён в бюджете и статистике.`;
+        pushNews(state, "Экономика", "Инфраструктурный проект", result);
+        showDecision(`Объект введен: ${spec[1]}`, result, [["Регион", region.name, "good"], ["Стоимость", `-${money(cost)}`, "bad"], ["Основной эффект", buildingEffectText(effects), "good"], ["Объектов этого типа", String(region.buildings[key]), "warn"]], effects.pollution > 0 ? "warn" : "good");
       }
 
       function regionAdministrationAction(regionId, mode) {
@@ -17746,6 +18041,8 @@
 
       function policyAction(policy) {
         const e = state.economy, p = state.politics, pop = state.population;
+        const plannedCost = { stimulus:1800, anticorruption:420, health:900, education:760, security:520, summit:280 }[policy];
+        if (plannedCost != null && e.budget < plannedCost) return showBlockedDecision("Быстрое решение не профинансировано", "Кабинет не может начать программу без подтвержденного бюджетного лимита.", [["Нужно", money(plannedCost), "bad"], ["Бюджет", money(e.budget), "bad"]]);
         let report = null;
         const actions = {
           stimulus: () => { e.budget -= 1800; e.growth += .7; e.unemployment -= .35; e.inflation += .25; report = ["Пакет стимулов принят", "Кабинет запускает инвестиции в занятость, инфраструктуру и спрос.", [["Бюджет", "-1.80 млрд", "bad"], ["Рост", "+0.7 п.п.", "good"], ["Инфляция", "+0.25 п.п.", "warn"]]]; pushNews(state, "Экономика", "Пакет стимулов", "Правительство запускает инвестиции в занятость, инфраструктуру и спрос."); },
@@ -18364,6 +18661,8 @@
           return;
         }
         const e = state.economy;
+        const plannedCost = { relations:90, trade:160, milAid:540, humanAid:220 }[type];
+        if (plannedCost != null && e.budget < plannedCost) return showBlockedDecision("Дипломатическое решение не профинансировано", "МИД не получил бюджет на переговоры, логистику и исполнение обязательств.", [["Нужно", money(plannedCost), "bad"], ["Бюджет", money(e.budget), "bad"]]);
         let report = null;
         if (type === "relations") {
           const gain = rnd(4, 10);
@@ -19066,17 +19365,19 @@
 
       function techLab() {
         const cost = 900 + state.tech.labs * 180;
-        if (state.economy.budget < cost) return notify("Недостаточно бюджета на лабораторию.");
+        if (state.economy.budget < cost) return showBlockedDecision("Лаборатория не профинансирована", "Строительство требует капитального лимита, оборудования и кадрового конкурса.", [["Нужно", money(cost), "bad"], ["Бюджет", money(state.economy.budget), "bad"]]);
         state.economy.budget -= cost;
         state.tech.labs++;
         state.tech.points += 15;
+        showDecision("Национальная лаборатория учреждена", "Новый исследовательский центр получил оборудование, штат и начальный научный портфель.", [["Лаборатории", String(state.tech.labs), "good"], ["Наука", "+15 очков", "good"], ["Бюджет", `-${money(cost)}`, "bad"]], "good");
       }
 
       function techFund() {
-        if (state.economy.budget < 420) return notify("Недостаточно бюджета.");
+        if (state.economy.budget < 420) return showBlockedDecision("Научные гранты не профинансированы", "Конкурсный фонд не может быть открыт без подтвержденного бюджетного лимита.", [["Нужно", money(420), "bad"], ["Бюджет", money(state.economy.budget), "bad"]]);
         state.economy.budget -= 420;
         state.tech.points += 90;
         state.population.education += .5;
+        showDecision("Конкурс научных грантов утвержден", "Университеты и исследовательские консорциумы получили открытый конкурс на приоритетные разработки.", [["Наука", "+90 очков", "good"], ["Образование", "+0.5 п.п.", "good"], ["Бюджет", `-${money(420)}`, "bad"]], "good");
       }
 
       function demographyAction(mode) {
@@ -19264,11 +19565,21 @@
         const p = state.population, e = state.economy;
         if (type === "family") return demographyAction("family");
         if (type === "migration") return demographyAction("immigration");
-        if (type === "police") { e.budget -= 360; p.crime -= 2.5; state.politics.protests += .4; }
+        if (type === "police") {
+          if (e.budget < 360) return showBlockedDecision("Полицейская программа не профинансирована", "Подготовка личного состава и обновление участковой службы требуют отдельного лимита.", [["Нужно", money(360), "bad"], ["Бюджет", money(e.budget), "bad"]]);
+          e.budget -= 360; p.crime -= 2.5; state.politics.protests += .4;
+        }
         if (type === "housing") return demographyAction("housing");
-        if (type === "culture") { e.budget -= 180; p.happiness += 1.1; state.politics.popularity += .8; }
+        if (type === "culture") {
+          if (e.budget < 180) return showBlockedDecision("Культурная программа не профинансирована", "Региональные учреждения и открытый конкурс проектов требуют подтвержденного бюджета.", [["Нужно", money(180), "bad"], ["Бюджет", money(e.budget), "bad"]]);
+          e.budget -= 180; p.happiness += 1.1; state.politics.popularity += .8;
+        }
         normalizeCore();
-        pushNews(state, "Политика", "Социальная политика", "Обновлены демография, уровень жизни и общественные настроения.");
+        const police = type === "police";
+        const title = police ? "Программа общественной безопасности утверждена" : "Национальная культурная программа утверждена";
+        const result = police ? "Полиция усиливает участковую службу, профилактику и подготовку личного состава под общественным надзором." : "Учреждения культуры и региональные проекты получили конкурсное финансирование.";
+        pushNews(state, "Политика", title, result);
+        showDecision(title, result, police ? [["Преступность", "-2.5 п.п.", "good"], ["Протесты", "+0.4 п.п.", "warn"], ["Бюджет", `-${money(360)}`, "bad"]] : [["Счастье", "+1.1 п.п.", "good"], ["Популярность", "+0.8 п.п.", "good"], ["Бюджет", `-${money(180)}`, "bad"]], police ? "warn" : "good");
       }
 
       function generateNews(category) {
