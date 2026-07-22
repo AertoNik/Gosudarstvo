@@ -3651,9 +3651,10 @@
 
       const STORAGE_KEY = "aaa_president_sim_state_v4";
       const SLOTS_KEY = "aaa_president_sim_slots_v4";
-      const SAVE_VERSION = 23;
-      const ECONOMY_MODEL_VERSION = 4;
+      const SAVE_VERSION = 24;
+      const ECONOMY_MODEL_VERSION = 5;
       const FOREIGN_STATE_MODEL_VERSION = 1;
+      const BILATERAL_MODEL_VERSION = 1;
       const GEOGRAPHY_MODEL_VERSION = 2;
       const NARRATIVE_MODEL_VERSION = 1;
       const SAVE_DB_NAME = "aaa_president_sim_storage";
@@ -4104,6 +4105,16 @@
         if (copy.chronicle?.yearlyReports) copy.chronicle.yearlyReports = copy.chronicle.yearlyReports.slice(0, 12);
         if (copy.economy?.financial?.history) copy.economy.financial.history = copy.economy.financial.history.slice(0, level === "normal" ? 30 : 12);
         if (copy.economy?.privateSector?.history) copy.economy.privateSector.history = copy.economy.privateSector.history.slice(0, level === "normal" ? 36 : 14);
+        if (copy.economy?.cycle?.history) copy.economy.cycle.history = copy.economy.cycle.history.slice(0, level === "normal" ? 24 : 10);
+        if (copy.economy?.cycle?.quarters) copy.economy.cycle.quarters = copy.economy.cycle.quarters.slice(0, level === "normal" ? 32 : 12);
+        if (copy.diplomacy?.countries) copy.diplomacy.countries.forEach(country => {
+          if (!country.bilateral) return;
+          const activeAgreements=(country.bilateral.agreements||[]).filter(item=>item.status==="active"&&item.daysLeft>0);
+          const relevantHistory=(country.bilateral.history||[]).slice(0,level==="normal"?18:7);
+          if(!activeAgreements.length&&!relevantHistory.length){delete country.bilateral;return;}
+          country.bilateral.history=relevantHistory;
+          country.bilateral.agreements=activeAgreements.concat((country.bilateral.agreements||[]).filter(item=>item.status!=="active").slice(0,level==="normal"?4:1)).slice(0,level==="normal"?14:8);
+        });
         if (copy.infrastructure?.history) copy.infrastructure.history = copy.infrastructure.history.slice(0, level === "normal" ? 36 : 14);
         if (copy.population?.demography?.history) copy.population.demography.history = copy.population.demography.history.slice(0, level === "normal" ? 36 : 14);
         if (copy.information?.history) copy.information.history = copy.information.history.slice(0, level === "normal" ? 40 : 16);
@@ -4542,6 +4553,7 @@
         repairEconomicScale(game);
         migrateEconomicCalibration(game);
         migrateNationalAccounts(game);
+        migrateBusinessCycle(game);
         refreshFiscalProjections(game);
       }
 
@@ -4632,6 +4644,9 @@
           identityGap: 0,
           potentialGrowth: 1.7,
           productivityGrowth: 1.1,
+          convergenceGrowth: 0,
+          convergenceEligibility: 50,
+          institutionQuality: 55,
           laborGrowth: .2,
           capitalGrowth: .2,
           demandImpulse: 0,
@@ -4644,6 +4659,7 @@
           debtServiceRatio: 0,
           sovereignRisk: 18,
           arrears: 0,
+          forcedAusterity: 0,
           drivers: { growth: [], inflation: [], unemployment: [], budget: [] },
           lastDay: { gdp: gdp, inflation: num(e.inflation), unemployment: num(e.unemployment), budget: num(e.budget), debt: num(e.debt) }
         };
@@ -4666,6 +4682,7 @@
         accounts.capitalStock = clamp(num(accounts.capitalStock, game.economy.gdp * num(game.economy.calibration?.capitalOutputRatio, 2.8)), game.economy.gdp * .8, game.economy.gdp * 8);
         accounts.productivity = clamp(num(accounts.productivity, 100), 20, 1000);
         accounts.arrears = Math.max(0, num(accounts.arrears));
+        accounts.forcedAusterity = clamp(num(accounts.forcedAusterity), 0, 100);
         game.economy.nationalAccounts = accounts;
         reconcileNationalAccounts(game);
         return accounts;
@@ -4903,6 +4920,7 @@
         e.exchangeRate = profileId === "advanced" ? 1.2 : profileId === "fragile" ? 185 : profileId === "transforming" ? 96 : 58;
         e.calibration = null;
         migrateEconomicCalibration(game, profileId);
+        e.cycle = defaultBusinessCycle(game);
         e.macro.structuralGrowth = spec.trendGrowth;
         e.macro.inflationTarget = spec.neutralInflation;
       }
@@ -4949,7 +4967,8 @@
             { name: "Северный Чип", sector: "Технологии", value: 6200, state: false, trend: .8 },
             { name: "Гражданский Банк", sector: "Финансы", value: 9300, state: false, trend: -.2 },
             { name: "АгроСоюз", sector: "Агросектор", value: 4100, state: false, trend: .4 }
-          ]
+          ],
+          cycle: null
         };
       }
 
@@ -7762,6 +7781,155 @@
         law.sanctionsExposure = clamp(law.sanctionsExposure + value * .18, 0, 100);
       }
 
+      function bilateralAgreementCatalog() {
+        return {
+          trade: { title: "Торгово-логистический договор", minRelation: 32, cost: 160, annualCost: 55, duration: 1460, dimension: "economicInterdependence", gain: 7, tone: "good" },
+          security: { title: "Консультации по безопасности", minRelation: 58, cost: 360, annualCost: 140, duration: 1095, dimension: "securityAlignment", gain: 9, tone: "institution" },
+          investment: { title: "Соглашение о защите инвестиций", minRelation: 42, cost: 420, annualCost: 95, duration: 1825, dimension: "investmentAccess", gain: 11, tone: "good" },
+          technology: { title: "Научно-технологическое партнерство", minRelation: 54, cost: 520, annualCost: 180, duration: 1460, dimension: "technologyAccess", gain: 12, tone: "civic" },
+          energy: { title: "Энергетический контракт", minRelation: 38, cost: 360, annualCost: 80, duration: 1825, dimension: "energySecurity", gain: 12, tone: "warn" },
+          migration: { title: "Миграционное и трудовое соглашение", minRelation: 44, cost: 240, annualCost: 70, duration: 1095, dimension: "migrationCoordination", gain: 11, tone: "civic" },
+          climate: { title: "Климатический и ресурсный пакт", minRelation: 36, cost: 280, annualCost: 85, duration: 1460, dimension: "climateCoordination", gain: 12, tone: "good" },
+          legal: { title: "Договор о правовой помощи", minRelation: 40, cost: 190, annualCost: 58, duration: 1460, dimension: "legalCooperation", gain: 12, tone: "institution" },
+          mediation: { title: "Механизм предотвращения кризисов", minRelation: 34, cost: 310, annualCost: 88, duration: 900, dimension: "politicalAccess", gain: 9, tone: "warn" },
+          cultural: { title: "Культурно-образовательный обмен", minRelation: 30, cost: 210, annualCost: 64, duration: 1095, dimension: "culturalAffinity", gain: 13, tone: "good" }
+        };
+      }
+
+      function defaultBilateralPortfolio(game, country) {
+        const relation = clamp(num(country?.relations, 50), 0, 100);
+        const tradeShare = clamp(num(country?.trade) / Math.max(1, num(country?.gdp, 100000)) * 100, 0, 100);
+        const resources = country?.resources || {};
+        return {
+          modelVersion: BILATERAL_MODEL_VERSION,
+          politicalAccess: clamp(relation * .72 + (country?.embassy ? 18 : 4), 0, 100),
+          economicInterdependence: clamp(tradeShare * 1.8 + relation * .28, 0, 100),
+          investmentAccess: clamp(relation * .54 + num(country?.stability,50) * .22, 0, 100),
+          securityAlignment: clamp(relation * .45 + (country?.alliance ? 36 : 0) - num(country?.strategy?.threat,30) * .22, 0, 100),
+          technologyAccess: clamp(relation * .48 + num(country?.intelligence,50) * .16 - num(country?.spy,20) * .08, 0, 100),
+          energySecurity: clamp(relation * .36 + (num(resources.oil)+num(resources.gas)+num(resources.energy)) * 1.4, 0, 100),
+          migrationCoordination: clamp(relation * .52 + (country?.visa === "свободный" ? 26 : country?.visa === "строгий" ? -12 : 8), 0, 100),
+          legalCooperation: clamp(relation * .5 + num(game?.diplomacy?.law?.treatyReliability,60) * .22, 0, 100),
+          climateCoordination: clamp(relation * .4 + num(game?.climate?.preparedness,50) * .2, 0, 100),
+          culturalAffinity: clamp(relation * .58 + num(game?.softPower?.prestige,50) * .2, 0, 100),
+          ourInfluence: clamp(relation * .34 + num(game?.softPower?.prestige,50) * .28 + num(country?.aid) / 80, 0, 100),
+          partnerInfluence: clamp(Math.log10(Math.max(1000,num(country?.gdp,100000))) * 8 + num(country?.military,50) * .22 + tradeShare * .35, 0, 100),
+          disputeRisk: clamp(58 - relation * .5 + num(country?.strategy?.threat,30) * .35 + (country?.sanctions ? 18 : 0) + (country?.embargo ? 24 : 0), 0, 100),
+          agreements: [],
+          history: [],
+          reviewDays: 30,
+          lastBriefing: "Двусторонние ведомства поддерживают рабочие каналы и оценивают взаимные зависимости."
+        };
+      }
+
+      function ensureBilateralPortfolio(game, country) {
+        const base = defaultBilateralPortfolio(game, country);
+        const incoming = country.bilateral && typeof country.bilateral === "object" && !Array.isArray(country.bilateral) ? country.bilateral : {};
+        const portfolio = Object.assign(base, incoming);
+        portfolio.modelVersion = BILATERAL_MODEL_VERSION;
+        ["politicalAccess","economicInterdependence","investmentAccess","securityAlignment","technologyAccess","energySecurity","migrationCoordination","legalCooperation","climateCoordination","culturalAffinity","ourInfluence","partnerInfluence","disputeRisk"].forEach(key => portfolio[key] = clamp(num(portfolio[key], base[key]), 0, 100));
+        portfolio.reviewDays = clamp(Math.round(num(portfolio.reviewDays,30)), 0, 45);
+        const catalog = bilateralAgreementCatalog();
+        portfolio.agreements = (Array.isArray(portfolio.agreements) ? portfolio.agreements : []).filter(item => item && catalog[item.type]).map(item => {
+          const spec = catalog[item.type];
+          item.id ||= uid("bilateral");item.title ||= spec.title;item.started ||= formatDate(game.date);item.status ||= "active";item.source ||= "player";item.strength=clamp(num(item.strength,58),0,100);item.daysLeft=Math.max(0,Math.round(num(item.daysLeft,spec.duration)));return item;
+        }).slice(0, 18);
+        portfolio.history = Array.isArray(portfolio.history) ? portfolio.history.filter(Boolean).slice(0, 24) : [];
+        country.bilateral = portfolio;
+        return portfolio;
+      }
+
+      function migrateBilateralDiplomacy(game) {
+        game.diplomacy.countries.forEach(country => ensureBilateralPortfolio(game, country));
+      }
+
+      function activeBilateralAgreement(country, type) {
+        return country?.bilateral?.agreements?.find(item => item.type === type && item.status === "active" && item.daysLeft > 0) || null;
+      }
+
+      function bilateralAgreementChance(game, country, type) {
+        const spec = bilateralAgreementCatalog()[type], portfolio = ensureBilateralPortfolio(game,country), strategy = ensureDiplomaticAI(country).strategy;
+        if (!spec) return 0;
+        const sanctionsPenalty = country.sanctions ? 32 : 0, embargoPenalty = country.embargo ? 38 : 0;
+        const sectorFit = type === "technology" ? portfolio.technologyAccess * .14 : type === "security" ? portfolio.securityAlignment * .13 : type === "energy" ? portfolio.energySecurity * .14 : portfolio.politicalAccess * .1;
+        return clamp(country.relations * .48 + strategy.trust * .22 + game.diplomacy.law.treatyReliability * .13 + sectorFit - strategy.threat * .12 - sanctionsPenalty - embargoPenalty, 0, 96);
+      }
+
+      function registerBilateralAgreement(game, country, type, source = "player") {
+        const spec = bilateralAgreementCatalog()[type];
+        if (!spec) return null;
+        const portfolio = ensureBilateralPortfolio(game,country);
+        const existing = activeBilateralAgreement(country,type);
+        if (existing) {
+          existing.daysLeft = Math.max(existing.daysLeft, spec.duration);
+          existing.strength = clamp(existing.strength + 8, 0, 100);
+          existing.status = "active";
+          portfolio.lastBriefing = `${spec.title} продлено; ведомства согласовали новый цикл исполнения.`;
+          return existing;
+        }
+        const agreement = { id: uid("bilateral"), type, title: spec.title, started: formatDate(game.date), daysLeft: spec.duration, strength: clamp(48 + country.relations * .28, 42, 82), status: "active", source };
+        portfolio.agreements.unshift(agreement);
+        portfolio.agreements = portfolio.agreements.slice(0,18);
+        portfolio[spec.dimension] = clamp(portfolio[spec.dimension] + spec.gain, 0, 100);
+        portfolio.history.unshift({ date:formatDate(game.date), title:spec.title, text:`Соглашение вступило в силу на ${Math.round(spec.duration/365)} г.`, tone:"good" });
+        portfolio.history = portfolio.history.slice(0,24);
+        portfolio.lastBriefing = `${spec.title} вступило в силу; выгоды зависят от прочности отношений и фактического исполнения.`;
+        country.treaties ||= [];
+        if (!country.treaties.includes(spec.title)) country.treaties.push(spec.title);
+        return agreement;
+      }
+
+      function simulateBilateralDiplomacy(game) {
+        const e = game.economy, law = game.diplomacy.law;
+        for (const country of game.diplomacy.countries) {
+          const portfolio = ensureBilateralPortfolio(game,country), strategy = ensureDiplomaticAI(country).strategy;
+          portfolio.reviewDays = Math.max(0, portfolio.reviewDays - 1);
+          const tradeShare = clamp(country.trade / Math.max(1,country.gdp) * 100,0,100);
+          const active = portfolio.agreements.filter(item=>item.status==="active"&&item.daysLeft>0);
+          const agreementBonus = active.length * 2.2;
+          const politicalTarget = clamp(country.relations*.64+(country.embassy?18:3)+strategy.trust*.18-strategy.threat*.14,0,100);
+          const economicTarget = clamp(tradeShare*1.65+country.relations*.24+active.filter(item=>["trade","investment","energy"].includes(item.type)).length*8,0,100);
+          portfolio.politicalAccess=clamp(portfolio.politicalAccess+(politicalTarget-portfolio.politicalAccess)*.0018,0,100);
+          portfolio.economicInterdependence=clamp(portfolio.economicInterdependence+(economicTarget-portfolio.economicInterdependence)*.0016,0,100);
+          portfolio.ourInfluence=clamp(portfolio.ourInfluence+((country.relations*.28+num(game.softPower?.prestige,50)*.34+num(country.aid)/90+agreementBonus)-portfolio.ourInfluence)*.0012,0,100);
+          portfolio.partnerInfluence=clamp(portfolio.partnerInfluence+((Math.log10(Math.max(1000,country.gdp))*8+country.military*.22+strategy.leverage*.16+portfolio.economicInterdependence*.12)-portfolio.partnerInfluence)*.0012,0,100);
+          const disputeTarget=clamp(62-country.relations*.52+strategy.threat*.38+(country.sanctions?20:0)+(country.embargo?26:0)+Math.max(0,portfolio.partnerInfluence-portfolio.ourInfluence)*.08-num(law?.treatyReliability,60)*.08,0,100);
+          portfolio.disputeRisk=clamp(portfolio.disputeRisk+(disputeTarget-portfolio.disputeRisk)*.0018,0,100);
+          for (const agreement of active) {
+            const spec = bilateralAgreementCatalog()[agreement.type], scale = agreement.strength/100;
+            agreement.daysLeft=Math.max(0,agreement.daysLeft-1);
+            const complianceTarget=clamp(country.relations*.56+strategy.trust*.28+law.treatyReliability*.16-(country.sanctions?38:0)-(country.embargo?48:0)-portfolio.disputeRisk*.18,0,100);
+            agreement.strength=clamp(agreement.strength+(complianceTarget-agreement.strength)*.0026-(country.war ? .12 : 0),0,100);
+            const upkeep=spec.annualCost/DAYS_PER_YEAR;
+            if(e.budget>=upkeep)e.budget-=upkeep;else agreement.strength=clamp(agreement.strength-.035,0,100);
+            if(agreement.type==="trade"){country.trade+=e.gdp*.00000035*scale;e.exports+=e.gdp*.00000006*scale;}
+            if(agreement.type==="investment"){e.investments+=e.gdp*.00000052*scale;e.privateSector.businessConfidence=clamp(e.privateSector.businessConfidence+.0007*scale,0,100);e.privateSector.foreignInvestment=clamp(e.privateSector.foreignInvestment+.0012*scale,0,100);}
+            if(agreement.type==="technology"){game.tech.points+=.012*scale;game.tech.research=clamp(game.tech.research+.00045*scale,0,100);portfolio.technologyAccess=clamp(portfolio.technologyAccess+.0009*scale,0,100);}
+            if(agreement.type==="energy"){e.supply.energy=clamp(e.supply.energy+.005*scale,0,180);if(game.worldMarket)game.worldMarket.reserveCoverage=clamp(game.worldMarket.reserveCoverage+.0007*scale,0,100);}
+            if(agreement.type==="migration"&&game.population.demography){game.population.demography.inboundRate=clamp(game.population.demography.inboundRate+.000006*scale,0,40);portfolio.migrationCoordination=clamp(portfolio.migrationCoordination+.001*scale,0,100);}
+            if(agreement.type==="climate"){game.climate.preparedness=clamp(game.climate.preparedness+.0011*scale,0,100);portfolio.climateCoordination=clamp(portfolio.climateCoordination+.001*scale,0,100);}
+            if(agreement.type==="legal"){law.treatyReliability=clamp(law.treatyReliability+.00065*scale,0,100);portfolio.legalCooperation=clamp(portfolio.legalCooperation+.001*scale,0,100);}
+            if(agreement.type==="mediation"){game.diplomacy.globalTension=clamp(game.diplomacy.globalTension-.0022*scale,0,100);strategy.threat=clamp(strategy.threat-.0012*scale,0,100);}
+            if(agreement.type==="cultural"){game.softPower.prestige=clamp(game.softPower.prestige+.0008*scale,0,100);portfolio.culturalAffinity=clamp(portfolio.culturalAffinity+.0012*scale,0,100);}
+            if(agreement.type==="security"){portfolio.securityAlignment=clamp(portfolio.securityAlignment+.001*scale,0,100);strategy.threat=clamp(strategy.threat-.001*scale,0,100);}
+            if(agreement.daysLeft<=0||agreement.strength<=8){agreement.status=agreement.strength<=8?"suspended":"expired";portfolio.history.unshift({date:formatDate(game.date),title:agreement.title,text:agreement.status==="suspended"?"Исполнение приостановлено из-за утраты доверия.":"Срок действия завершен без автоматического продления.",tone:agreement.status==="suspended"?"bad":"warn"});portfolio.lastBriefing=`${agreement.title}: ${agreement.status==="suspended"?"обязательства приостановлены":"срок завершен"}.`;}
+          }
+          if(portfolio.reviewDays===0){portfolio.reviewDays=30;if(portfolio.disputeRisk>72&&active.length&&simulationRandom()<.08){const vulnerable=active.slice().sort((a,b)=>a.strength-b.strength)[0];vulnerable.strength=clamp(vulnerable.strength-rnd(6,14),0,100);portfolio.lastBriefing=`${country.name} потребовала пересмотра условий: ${vulnerable.title}.`;pushWorldDiplomacyLog(game,country.name,game.country.name,`требует пересмотра соглашения «${vulnerable.title}»`,"напряжение");}}
+          portfolio.history=portfolio.history.slice(0,24);
+        }
+      }
+
+      function renderBilateralPortfolio(country) {
+        const b=ensureBilateralPortfolio(state,country),active=b.agreements.filter(item=>item.status==="active"&&item.daysLeft>0);
+        const metric=(label,value)=>`<span><small>${esc(label)}</small><strong class="delta ${value>=65?"good":value<35?"bad":"warn"}">${pct(value,0)}</strong></span>`;
+        return `<details class="action-fold" style="margin-top:10px;" open><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Двустороннее досье</strong><small>сектора влияния, зависимости, споры и исполняемые договоры</small></span><span class="pill">${active.length} соглаш.</span></summary><div class="action-fold-body">
+          <div class="fiscal-ledger">${metric("Политический доступ",b.politicalAccess)}${metric("Торговая связь",b.economicInterdependence)}${metric("Инвестиции",b.investmentAccess)}${metric("Безопасность",b.securityAlignment)}${metric("Технологии",b.technologyAccess)}${metric("Энергетика",b.energySecurity)}${metric("Миграция",b.migrationCoordination)}${metric("Правовая помощь",b.legalCooperation)}${metric("Культура",b.culturalAffinity)}${metric("Климат",b.climateCoordination)}</div>
+          <div class="kpi-strip" style="margin-top:10px;"><div class="kpi"><span>Наше влияние</span><strong>${pct(b.ourInfluence,0)}</strong></div><div class="kpi"><span>Влияние партнера</span><strong>${pct(b.partnerInfluence,0)}</strong></div><div class="kpi"><span>Риск спора</span><strong class="delta ${b.disputeRisk>65?"bad":b.disputeRisk>38?"warn":"good"}">${pct(b.disputeRisk,0)}</strong></div></div>
+          <p class="subtle" style="margin:10px 0 0;">${esc(b.lastBriefing)}</p>
+          <div class="list" style="margin-top:10px;">${active.length?active.map(item=>`<div class="row"><span><strong>${esc(item.title)}</strong><br><small class="subtle">осталось ${item.daysLeft} дн. · фактическое исполнение зависит от отношений и бюджета</small></span><span class="pill ${item.strength<35?"bad":item.strength<60?"warn":"good"}">прочность ${pct(item.strength,0)}</span></div>`).join(""):`<div class="row"><span>Долгосрочных двусторонних соглашений пока нет</span><span class="pill">базовые контакты</span></div>`}</div>
+        </div></details>`;
+      }
+
       function ensureDiplomaticAI(country) {
         ensureCountryLegalProfile(country);
         const base = defaultDiplomaticStrategy(country);
@@ -7783,12 +7951,17 @@
         game.diplomacy.globalTension = clamp(num(game.diplomacy.globalTension, 34), 0, 100);
         game.diplomacy.lastStrategicDay ||= "";
         migrateForeignStateSystem(game);
+        migrateBilateralDiplomacy(game);
       }
 
       function diplomaticIntent(country) {
         const s = ensureDiplomaticAI(country).strategy;
+        const b = country.bilateral;
         if (country.war) return "ведение войны и поиск внешней поддержки";
         if (s.threat >= 72 && country.relations < 35) return "сдерживание, санкции или силовое давление";
+        if (b?.disputeRisk >= 68) return "пересмотр договоров и получение уступок по спорным условиям";
+        if (b?.technologyAccess < 42 && s.trust >= 58 && country.aiMood === "реформистский") return "технологическое и образовательное партнерство";
+        if (b?.energySecurity < 45 && s.dependence >= 30) return "долгосрочный ресурсный или энергетический контракт";
         if (s.trust >= 68 && !country.alliance) return "договор о партнерстве или безопасности";
         if (s.dependence >= 38 || country.aiMood === "торговый") return "расширение торговли и защита цепочек поставок";
         if (country.sanctions && country.relations > 44) return "постепенная дипломатическая разрядка";
@@ -11035,12 +11208,14 @@
               <span class="pill ${Math.abs(a.outputGap) > 6 ? "warn" : "good"}">разрыв выпуска ${a.outputGap > 0 ? "+" : ""}${pct(a.outputGap,1)}</span>
             </div>
             <div class="kpi-strip" style="margin-top:12px;">
-              <div class="kpi"><span>Фактический ВВП</span><strong>${money(e.gdp)}</strong><small class="subtle">индекс ${a.realGdpIndex.toFixed(1)}</small></div>
+              <div class="kpi"><span>Реальный ВВП</span><strong>${money(e.gdp)}</strong><small class="subtle">индекс ${a.realGdpIndex.toFixed(1)}</small></div>
+              <div class="kpi"><span>Номинальный ВВП</span><strong>${money(a.nominalGdp)}</strong><small class="subtle">индекс цен ${a.priceIndex.toFixed(1)}</small></div>
               <div class="kpi"><span>Потенциальный ВВП</span><strong>${money(a.potentialGdp)}</strong><small class="subtle">рост потенциала ${pct(a.potentialGrowth,2)}</small></div>
               <div class="kpi"><span>Загрузка мощностей</span><strong>${pct(a.capacityUtilization,1)}</strong><small class="subtle">капитал ${money(a.capitalStock)}</small></div>
               <div class="kpi"><span>Риск заимствований</span><strong class="delta ${a.sovereignRisk > 55 ? "bad" : a.sovereignRisk > 30 ? "warn" : "good"}">${pct(a.sovereignRisk,1)}</strong><small class="subtle">ставка долга ${pct(effectiveDebtRate(game),1)}</small></div>
               <div class="kpi"><span>Обслуживание долга</span><strong>${pct(a.debtServiceRatio,1)}</strong><small class="subtle">доля доходов бюджета</small></div>
               <div class="kpi"><span>Просроченные обязательства</span><strong class="delta ${a.arrears > e.gdp * .01 ? "bad" : a.arrears > 0 ? "warn" : "good"}">${money(a.arrears)}</strong><small class="subtle">непрофинансированные платежи</small></div>
+              <div class="kpi"><span>Бюджетный секвестр</span><strong class="delta ${a.forcedAusterity > 45 ? "bad" : a.forcedAusterity > 12 ? "warn" : "good"}">${pct(a.forcedAusterity,1)}</strong><small class="subtle">фактически отмененные лимиты</small></div>
             </div>
             <div class="fiscal-ledger" style="margin-top:12px;">
               <span><small>Потребление граждан</small><strong>${money(a.privateConsumption)}</strong></span>
@@ -11075,8 +11250,8 @@
             <div class="kpi"><span>Макроэкономический стресс</span><strong class="delta ${tone}">${pct(stress,1)}</strong><small class="subtle">цены, занятость, долг и шоки</small></div>
           </div>
           <details class="action-fold" style="margin-top:12px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Параметры модели и ограничения</strong><small>Почему экономика не может бесконечно расти одинаковым темпом</small></span></summary><div class="action-fold-body"><div class="fiscal-ledger">
-            <span><small>Производительность</small><strong>${pct(c.productivityTrend,2)}</strong></span><span><small>Конвергенция</small><strong>${c.convergenceSpeed.toFixed(2)}</strong></span><span><small>Фискальный мультипликатор</small><strong>${c.fiscalMultiplier.toFixed(2)}</strong></span><span><small>Инвестиционная норма</small><strong>${pct(c.investmentShare*100,1)}</strong></span><span><small>Налоговая дееспособность</small><strong>${pct(c.taxCapacity*100,0)}</strong></span><span><small>Волатильность</small><strong>${c.volatility.toFixed(2)}</strong></span>
-          </div><p class="subtle" style="margin:10px 0 0;">Коридор цикла: от ${pct(c.recessionFloor,1)} до ${pct(c.growthCeiling,1)}. Потенциальный выпуск ${money(a.potentialGdp)}; рост выше потенциала повышает цены и загрузку, а не создаёт бесплатное богатство.</p></div></details>
+            <span><small>Производительность</small><strong>${pct(c.productivityTrend,2)}</strong></span><span><small>Доступ к конвергенции</small><strong>${pct(a.convergenceEligibility||0,0)}</strong></span><span><small>Фактическая конвергенция</small><strong>${pct(a.convergenceGrowth||0,2)}</strong></span><span><small>Инвестиционная норма</small><strong>${pct(c.investmentShare*100,1)}</strong></span><span><small>Качество институтов</small><strong>${pct(a.institutionQuality||0,0)}</strong></span><span><small>Волатильность</small><strong>${c.volatility.toFixed(2)}</strong></span>
+          </div><p class="subtle" style="margin:10px 0 0;">Коридор цикла: от ${pct(c.recessionFloor,1)} до ${pct(c.growthCeiling,1)}. Потенциальный выпуск ${money(a.potentialGdp)}; низкий доход сам по себе больше не гарантирует быстрый рост без капитала, образования, институтов и рынков.</p></div></details>
         </section>`;
       }
 
@@ -11095,12 +11270,13 @@
             </div>
             ${e.lastScaleRepair ? `<div class="decision-banner good"><strong>Экономические показатели сохранения восстановлены</strong><span class="subtle">${esc(e.lastScaleRepair)} Новая модель удерживает денежные показатели в пропорции к ВВП.</span></div>` : ""}
             <div class="kpi-strip">
-              <div class="kpi"><span>Структурный рост</span><strong>${pct(e.macro?.structuralGrowth || 0,1)}</strong><small class="subtle">текущий ${pct(e.growth,1)}</small></div>
+              <div class="kpi"><span>Фаза экономики</span><strong>${esc(businessCycleCatalog()[e.cycle?.regime]?.label||"оценка")}</strong><small class="subtle">текущий рост ${pct(e.growth,1)}</small></div>
               <div class="kpi"><span>Расчетная инфляция</span><strong>${pct(e.macro?.inflationTarget || 0,1)}</strong><small class="subtle">фактическая ${pct(e.inflation,1)}</small></div>
               <div class="kpi"><span>Целевой экспорт</span><strong>${money(e.macro?.exportTarget || 0)}</strong><small class="subtle">доступ к рынкам ${pct(e.macro?.tradeAccess || 0,0)}</small></div>
               <div class="kpi"><span>Стоимость долга</span><strong>${pct(effectiveDebtRate(state),1)}</strong><small class="subtle">эффективная годовая ставка</small></div>
             </div>
             ${renderEconomicCalibrationPanel(state)}
+            ${renderBusinessCyclePanel(state)}
             ${renderNationalAccountsPanel(state)}
             ${renderShadowEconomyPanel()}
             <div class="grid split">
@@ -11435,6 +11611,14 @@
           embargo: [c?.embargo ? "Отменить эмбарго" : "Эмбарго", "торговая война", "Резкое ограничение торговли.", `эмбарго ${c?.embargo ? "активно" : "нет"}, торговля ${c ? money(c.trade) : "нет"}`, "Когда отношения почти разрушены и нужен максимальный экономический сигнал.", "Торговля резко меняется, давление на партнера выше.", "Сильно бьет по отношениям и бизнесу.", c?.embargo ? "Отменить эмбарго" : "Ввести эмбарго", "bad"],
           milAid: ["Военная помощь", "поддержка", "Поставка вооружений, инструкторов и штабной поддержки.", `армия партнера ${c ? pct(c.military,0) : "нет"}, бюджет ${money(state.economy.budget)}`, "Когда партнер важен для баланса сил или сдерживания угроз.", "Отношения и армия партнера растут.", "Дорого и может раздражать противников партнера.", "Отправить помощь", "institution"],
           humanAid: ["Гуманитарная помощь", "мягкая сила", "Медицина, продовольствие и стабилизационный пакет.", `стабильность ${c ? pct(c.stability,0) : "нет"}, отношения ${relation}`, "Когда страна нестабильна, но нужна мягкая дипломатия.", "Улучшает отношения и стабильность партнера.", "Стоит бюджету, не дает военного эффекта.", "Отправить помощь", "good"],
+          investment: ["Защита инвестиций", "капитал", "Пятилетние гарантии инвесторам, арбитраж и доступ компаний к проектам.", `доступ ${c ? pct(ensureBilateralPortfolio(state,c).investmentAccess,0) : "нет"}, шанс ${c ? pct(bilateralAgreementChance(state,c,"investment"),0) : "нет"}`, "Когда отношения устойчивы и стране нужен долгий частный капитал.", "Постепенно повышает инвестиции, деловую уверенность и торговую связь.", "Требует ежегодных расходов; санкции или нарушение арбитража остановят эффект.", activeBilateralAgreement(c,"investment") ? "Продлить договор" : "Предложить договор", "good"],
+          technology: ["Технологическое партнерство", "наука", "Совместные исследования, стандарты, кадры и защита разработок.", `доступ ${c ? pct(ensureBilateralPortfolio(state,c).technologyAccess,0) : "нет"}, доверие ${c ? pct(ensureDiplomaticAI(c).strategy.trust,0) : "нет"}`, "Когда есть доверие, исследовательская база и защита интеллектуальных прав.", "Постепенно приносит исследования и технологический доступ.", "Разведывательный скандал или санкции способны заморозить программу.", activeBilateralAgreement(c,"technology") ? "Продлить партнерство" : "Открыть партнерство", "civic"],
+          energy: ["Энергетический контракт", "ресурсы", "Долгосрочные поставки, резервы и согласованная ценовая формула.", `энергобезопасность ${c ? pct(ensureBilateralPortfolio(state,c).energySecurity,0) : "нет"}`, "Когда стране нужны устойчивые запасы и диверсификация поставок.", "Укрепляет энергетические запасы и логистическую устойчивость.", "Создает зависимость от партнера и политический рычаг в случае кризиса.", activeBilateralAgreement(c,"energy") ? "Продлить контракт" : "Согласовать контракт", "warn"],
+          migration: ["Трудовая мобильность", "миграция", "Легальные трудовые каналы, признание квалификаций и реадмиссия.", `координация ${c ? pct(ensureBilateralPortfolio(state,c).migrationCoordination,0) : "нет"}, визы ${c?.visa||"нет"}`, "Когда рынку труда нужны люди, а нелегальные потоки требуют контроля.", "Повышает управляемость миграции и образовательную мобильность.", "Может усилить нагрузку на услуги и вызвать внутренний политический спор.", activeBilateralAgreement(c,"migration") ? "Продлить соглашение" : "Начать переговоры", "civic"],
+          climate: ["Климатический пакт", "устойчивость", "Общий мониторинг воды, выбросов и чрезвычайных ситуаций.", `координация ${c ? pct(ensureBilateralPortfolio(state,c).climateCoordination,0) : "нет"}`, "Для адаптации к трансграничным природным рискам и обмена технологиями.", "Постепенно повышает готовность к бедствиям и репутацию.", "Требует длительного финансирования, быстрых экономических выгод не дает.", activeBilateralAgreement(c,"climate") ? "Продлить пакт" : "Предложить пакт", "good"],
+          legal: ["Правовая помощь", "право", "Экстрадиция, финансовые расследования и признание судебных решений.", `сотрудничество ${c ? pct(ensureBilateralPortfolio(state,c).legalCooperation,0) : "нет"}`, "При трансграничной преступности, коррупционных активах и сложных спорах.", "Повышает надежность договоров и возможности расследований.", "Различия судебных стандартов могут вызвать политический конфликт.", activeBilateralAgreement(c,"legal") ? "Продлить договор" : "Заключить договор", "institution"],
+          mediation: ["Кризисная горячая линия", "деэскалация", "Посредничество, военная связь и процедура срочных консультаций.", `риск спора ${c ? pct(ensureBilateralPortfolio(state,c).disputeRisk,0) : "нет"}, напряженность ${pct(state.diplomacy.globalTension,0)}`, "Когда риск инцидента растет, но стороны еще способны договариваться.", "Постепенно снижает угрозу и глобальную напряженность.", "Не сработает без доверия и быстро разрушится при войне.", activeBilateralAgreement(c,"mediation") ? "Продлить механизм" : "Открыть канал", "warn"],
+          cultural: ["Культурный обмен", "мягкая сила", "Стипендии, языковые центры и совместные культурные сезоны.", `близость ${c ? pct(ensureBilateralPortfolio(state,c).culturalAffinity,0) : "нет"}, престиж ${pct(state.softPower.prestige,0)}`, "Для долгосрочного доверия, туризма и общественных связей.", "Медленно повышает культурную близость и международный престиж.", "Не перекрывает ущерб от санкций, войны или нарушения договоров.", activeBilateralAgreement(c,"cultural") ? "Продлить программу" : "Запустить обмен", "good"],
           spy: ["Разведоперация", "разведка", "Расширение сети источников и кибердоступа.", `разведка ${c ? pct(c.spy,0) : "нет"}, отношения ${relation}`, "Когда нужно знать намерения сильного или враждебного государства.", "Разведданные и киберкомпетенции растут.", "Есть риск утечки и ухудшения отношений.", "Провести операцию", "warn"],
           visa: ["Изменить визы", "люди", "Переключение визового режима: свободный, обычный или строгий.", `режим ${c?.visa || "нет"}, отношения ${relation}`, "Когда нужно регулировать туризм, бизнес и миграционные риски.", "Свободный режим улучшает отношения, строгий снижает риски.", "Строгий режим ухудшает тон переговоров.", "Изменить режим", "civic"],
           war: ["Объявить войну", "война", "Перед началом открывается детальная оценка сил и риска.", war ? `соотношение ${war.ratio.toFixed(2)}:1, шанс ${pct(war.victoryChance,0)}` : "нет оценки", "Только если дипломатия провалена, есть ресурс армии и понятная цель.", "Открывает предвоенную оценку и может начать конфликт.", "Бьет по рынку, рейтингу, бюджету и может привести к поражению.", "Открыть оценку войны", "bad"],
@@ -12303,6 +12487,9 @@
             </section>
             <aside class="grid">
               ${renderSoftPowerPanel(selected)}
+            </aside>
+          </section>
+          <section class="grid" style="margin-top:14px;">
               ${selected ? `
               <section class="panel pad">
                 <h3 class="section-title">${esc(selected.name)}</h3>
@@ -12325,6 +12512,7 @@
                   <div class="resource-line">${strategy.interests.map(item => `<span class="resource-badge">${esc(item)}</span>`).join("")}</div>
                   <p class="intent-line"><strong>Вероятный следующий шаг:</strong> ${esc(diplomaticIntent(selected))}.<br><strong>Последнее действие:</strong> ${esc(strategy.recentAction)}.</p>
                 </article>
+                ${renderBilateralPortfolio(selected)}
                 ${renderForeignStatePanel(selected)}
                 <details class="action-fold" style="margin-top:10px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>География и доступ</strong><small>${esc(selectedGeo.zoneName)} · ${assessment.geography.neighbor?"общая граница":`${compact(assessment.geography.distance)} км`}</small></span></summary><div class="action-fold-body"><div class="geography-chip-grid"><div><span>Положение</span><strong>${selectedGeo.landlocked?"без выхода к морю":selectedGeo.island?"островное":"есть морской выход"}</strong></div><div><span>Транспорт</span><strong>${pct(selectedGeo.transport,0)}</strong></div><div><span>Порты</span><strong>${pct(selectedGeo.ports,0)}</strong></div><div><span>Военный театр</span><strong>${esc(assessment.geography.mode)}</strong></div><div><span>Проекция наших сил</span><strong>${pct(assessment.geography.projectionFactor*100,0)}</strong></div><div><span>Предел снабжения</span><strong>${pct(assessment.geography.supplyCeiling,0)}</strong></div></div></div></details>
                 <div class="resource-line" style="margin-top: 10px;">${renderResourceBadges(selected.resources || {}, 6)}</div>
@@ -12347,8 +12535,9 @@
                     </div>
                   `).join("")}
                 </div>
-                <p class="subtle" style="margin: 12px 0 0;">Дипломатические действия меняют отношения, торговлю, санкционный режим, разведку и риск войны. Карточка войны сначала откроет предвоенную оценку, а не начнет конфликт сразу.</p>
+                <p class="subtle" style="margin: 12px 0 0;">Каждый договор имеет срок, ежегодную стоимость и фактическую прочность. Плохие отношения, санкции, война или недостаток бюджета способны остановить его исполнение.</p>
                 ${actionCardGrid(["relations","trade","alliance","sanctions","embargo","milAid","humanAid","spy","visa","war","peace"].map(id => renderActionCard(diplomacyDecisionMeta(id, selected), { "data-action": "diplo", "data-diplo": id }, { compact: true })), true)}
+                <details class="action-fold" style="margin-top:10px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Отраслевые международные соглашения</strong><small>инвестиции, технологии, энергетика, миграция, право, климат и культура</small></span></summary><div class="action-fold-body">${actionCardGrid(["investment","technology","energy","migration","climate","legal","mediation","cultural"].map(id => renderActionCard(diplomacyDecisionMeta(id, selected), { "data-action":"diplo", "data-diplo":id }, {compact:true})),true)}</div></details>
               </section>` : ""}
               ${renderWorldStatePanel()}
               <section class="panel pad">
@@ -12403,7 +12592,6 @@
                   ${(state.diplomacy.pressureLog || []).length ? state.diplomacy.pressureLog.slice(0, 5).map(item => `<div class="row"><span><strong>${esc(item.title)}</strong><br><small class="subtle">${esc(item.date)} · ${esc(item.text)}</small></span><span class="pill">${esc(item.tone || "МИД")}</span></div>`).join("") : `<div class="row"><span>Серьезного внешнего давления сейчас нет</span><span class="pill">норма</span></div>`}
                 </div>
               </section>
-            </aside>
           </section>
         `;
       }
@@ -12439,6 +12627,8 @@
         if (c.alliance) bits.push("союз");
         if (c.sanctions) bits.push("санкции");
         if (c.embargo) bits.push("эмбарго");
+        const agreements=c.bilateral?.agreements?.filter(item=>item.status==="active"&&item.daysLeft>0).length||0;
+        if(agreements)bits.push(`${agreements} соглаш.`);
         if (!bits.length) bits.push(c.embassy ? "посольство" : "нет посольства");
         return bits.map(b => `<span class="pill">${b}</span>`).join(" ");
       }
@@ -14960,7 +15150,7 @@
       }
 
       function diplomaticDocumentTypes() {
-        return new Set(["trade", "alliance", "sanctions", "embargo", "milAid", "humanAid", "visa", "peace"]);
+        return new Set(["trade", "alliance", "sanctions", "embargo", "milAid", "humanAid", "visa", "peace", "investment", "technology", "energy", "migration", "climate", "legal", "mediation", "cultural"]);
       }
 
       function diplomaticDocumentMeta(type, country) {
@@ -15059,6 +15249,54 @@
               "Для детальных условий войны лучше вести переговоры через карточку активного фронта."
             ],
             tone: "warn"
+          },
+          investment: {
+            title: "Соглашение о защите инвестиций",
+            subtitle: "О гарантиях капитала, арбитраже и взаимном доступе компаний",
+            preamble: `${state.country.name} и ${c.name} создают долгосрочные правила для частных инвесторов и инфраструктурных проектов.`,
+            terms: [`Разовый взнос в механизм гарантий: ${money(420)}; ежегодное администрирование ${money(95)}.`, "Срок пять лет; инвестиционный доступ и деловая уверенность растут постепенно.", "Санкции, экспроприация или нарушение арбитража снижают прочность договора и могут остановить приток капитала."], tone:"good"
+          },
+          technology: {
+            title: "Научно-технологическое партнерство",
+            subtitle: "О совместных исследованиях, стандартах и защите разработок",
+            preamble: `${state.country.name} и ${c.name} согласуют исследовательские программы, стандарты и обмен научными кадрами.`,
+            terms: [`Стартовое финансирование: ${money(520)}; ежегодные программы ${money(180)}.`, "Срок четыре года; постепенно растут исследования и доступ к технологиям.", "Недоверие, разведывательные скандалы и санкции способны заморозить обмен данными."], tone:"civic"
+          },
+          energy: {
+            title: "Межправительственный энергетический контракт",
+            subtitle: "О поставках, резервных мощностях и ценовой формуле",
+            preamble: `${state.country.name} и ${c.name} формируют пятилетний контур энергетической безопасности.`,
+            terms: [`Гарантийный платеж: ${money(360)}; ежегодное сопровождение ${money(80)}.`, "Контракт укрепляет энергетические запасы и устойчивость поставок.", "Зависимость от одного партнера создаёт политический рычаг и риск ценового давления."], tone:"warn"
+          },
+          migration: {
+            title: "Соглашение о трудовой мобильности",
+            subtitle: "О законной миграции, квалификациях и возвращении нарушителей",
+            preamble: `${state.country.name} и ${c.name} создают управляемый канал трудовой и образовательной мобильности.`,
+            terms: [`Административный пакет: ${money(240)}; ежегодная стоимость ${money(70)}.`, "Срок три года; координация снижает нелегальные потоки и облегчает найм.", "Рост миграции может вызвать внутреннее политическое сопротивление и нагрузку на услуги."], tone:"civic"
+          },
+          climate: {
+            title: "Климатический и ресурсный пакт",
+            subtitle: "О воде, выбросах, чрезвычайных ситуациях и технологиях адаптации",
+            preamble: `${state.country.name} и ${c.name} объединяют мониторинг рисков и программы климатической адаптации.`,
+            terms: [`Первый взнос: ${money(280)}; ежегодные программы ${money(85)}.`, "Срок четыре года; повышается готовность к бедствиям и международная репутация.", "Эффект медленный и зависит от реального исполнения ведомствами обеих сторон."], tone:"good"
+          },
+          legal: {
+            title: "Договор о взаимной правовой помощи",
+            subtitle: "Об экстрадиции, финансовых расследованиях и признании решений",
+            preamble: `${state.country.name} и ${c.name} согласуют процессуальные каналы против трансграничной преступности.`,
+            terms: [`Стоимость запуска: ${money(190)}; ежегодное сопровождение ${money(58)}.`, "Срок четыре года; растут правовое сотрудничество и надежность обязательств.", "Различия судебных стандартов и политические дела могут вызвать спор об экстрадиции."], tone:"institution"
+          },
+          mediation: {
+            title: "Механизм предотвращения кризисов",
+            subtitle: "О горячей линии, посредничестве и мерах доверия",
+            preamble: `${state.country.name} и ${c.name} создают постоянный канал для урегулирования инцидентов до эскалации.`,
+            terms: [`Организация механизма: ${money(310)}; ежегодная стоимость ${money(88)}.`, "Срок 30 месяцев; постепенно снижаются угроза и международная напряженность.", "Механизм не заменяет договор и перестанет работать при войне или систематических нарушениях."], tone:"warn"
+          },
+          cultural: {
+            title: "Программа культурно-образовательного обмена",
+            subtitle: "О стипендиях, языковых центрах и совместных культурных сезонах",
+            preamble: `${state.country.name} и ${c.name} создают устойчивый общественный канал вне текущей политической конъюнктуры.`,
+            terms: [`Стартовый бюджет: ${money(210)}; ежегодные программы ${money(64)}.`, "Срок три года; растут культурная близость, престиж и долгосрочное доверие.", "Результат появляется постепенно и не компенсирует серьёзные нарушения договоров."], tone:"good"
           }
         };
         return Object.assign(common, map[type] || map.trade);
@@ -16242,6 +16480,218 @@
         const regionalTotal=game.regions.reduce((sum,r)=>sum+r.population,0),difference=p.total-regionalTotal;if(game.regions[0])game.regions[0].population=Math.max(1000,game.regions[0].population+difference);
       }
 
+      function businessCycleCatalog() {
+        return {
+          expansion: { label: "устойчивое расширение", growth: .18, inflation: .08, unemployment: -.12, min: 720, max: 1500, tone: "good" },
+          overheating: { label: "перегрев", growth: .72, inflation: .75, unemployment: -.28, min: 210, max: 480, tone: "warn" },
+          slowdown: { label: "замедление", growth: -1.15, inflation: -.12, unemployment: .38, min: 180, max: 420, tone: "warn" },
+          recession: { label: "рецессия", growth: -4.15, inflation: -.48, unemployment: 1.35, min: 330, max: 780, tone: "bad" },
+          crisis: { label: "системный кризис", growth: -7.2, inflation: 1.15, unemployment: 2.6, min: 240, max: 570, tone: "bad" },
+          recovery: { label: "восстановление", growth: 1.05, inflation: .12, unemployment: -.55, min: 300, max: 690, tone: "good" },
+          stagnation: { label: "стагнация", growth: -1.45, inflation: .22, unemployment: .62, min: 600, max: 1320, tone: "warn" }
+        };
+      }
+
+      function defaultBusinessCycle(game) {
+        const gdp = Math.max(1000, num(game?.economy?.gdp, 642000));
+        return {
+          modelVersion: 1,
+          regime: "expansion",
+          phaseDays: 0,
+          phaseTargetDays: 1080,
+          reviewDays: 30,
+          stabilizationDays: 0,
+          demandShock: 0,
+          supplyShock: 0,
+          financialShock: 0,
+          externalShock: 0,
+          scarring: 0,
+          stress: 24,
+          recessionRisk: 18,
+          technicalRecession: false,
+          gdpPeak: gdp,
+          recessionDepth: 0,
+          lastQuarter: "",
+          lastReason: "экономика находится в обычной фазе расширения",
+          history: [],
+          quarters: []
+        };
+      }
+
+      function migrateBusinessCycle(game) {
+        const e = game.economy;
+        const base = defaultBusinessCycle(game);
+        const incoming = e.cycle && typeof e.cycle === "object" && !Array.isArray(e.cycle) ? e.cycle : {};
+        const cycle = Object.assign(base, incoming);
+        const catalog = businessCycleCatalog();
+        if (!catalog[cycle.regime]) cycle.regime = "expansion";
+        cycle.modelVersion = 1;
+        cycle.phaseDays = Math.max(0, Math.round(num(cycle.phaseDays)));
+        cycle.phaseTargetDays = clamp(Math.round(num(cycle.phaseTargetDays, 1080)), 120, 2200);
+        cycle.reviewDays = clamp(Math.round(num(cycle.reviewDays, 30)), 0, 45);
+        cycle.stabilizationDays = Math.max(0, Math.round(num(cycle.stabilizationDays)));
+        ["demandShock","supplyShock","financialShock","externalShock"].forEach(key => cycle[key] = clamp(num(cycle[key]), -8, 5));
+        cycle.scarring = clamp(num(cycle.scarring), 0, 30);
+        cycle.stress = clamp(num(cycle.stress, 24), 0, 100);
+        cycle.recessionRisk = clamp(num(cycle.recessionRisk, 18), 0, 100);
+        cycle.gdpPeak = Math.max(1000, num(cycle.gdpPeak, e.gdp));
+        cycle.recessionDepth = clamp(num(cycle.recessionDepth), 0, 95);
+        cycle.history = Array.isArray(cycle.history) ? cycle.history.filter(Boolean).slice(0, 30) : [];
+        cycle.quarters = Array.isArray(cycle.quarters) ? cycle.quarters.filter(Boolean).slice(0, 40) : [];
+        e.cycle = cycle;
+        return cycle;
+      }
+
+      function businessCycleStress(game) {
+        const e = game.economy, c = e.calibration || migrateEconomicCalibration(game), a = e.nationalAccounts || migrateNationalAccounts(game);
+        const debtRatio = e.debt / Math.max(1, e.gdp) * 100;
+        const confidence = (num(e.privateSector?.businessConfidence, 50) + num(e.privateSector?.consumerConfidence, 50)) / 2;
+        const worldRisk = num(game.diplomacy?.worldSystem?.worldRisk, 34);
+        const industryGap = Math.max(0, 1 - calcIndustryHealth(game));
+        return clamp(
+          Math.max(0, e.inflation - c.neutralInflation - 2) * 2.1
+          + Math.max(0, debtRatio - c.debtTolerance * .72) * .28
+          + num(e.financial?.crisisLevel) * .42
+          + num(e.supplyShock) * .32
+          + industryGap * 35
+          + Math.max(0, 44 - confidence) * .7
+          + Math.max(0, a.outputGap - 4) * 1.8
+          + Math.max(0, worldRisk - 45) * .24
+          + game.military.wars.length * 12
+          + Math.max(0, num(a.arrears) / Math.max(1, e.gdp) * 100) * 1.6
+          + num(a.forcedAusterity) * .28,
+          0,
+          100
+        );
+      }
+
+      function setBusinessCycleRegime(game, regime, reason) {
+        const e = game.economy, cycle = e.cycle || migrateBusinessCycle(game), catalog = businessCycleCatalog();
+        if (!catalog[regime] || cycle.regime === regime) return cycle;
+        const previousRegime = cycle.regime;
+        const previous = catalog[previousRegime] || catalog.expansion;
+        const next = catalog[regime];
+        cycle.history.unshift({ date: formatDate(game.date), from: cycle.regime, to: regime, title: next.label, reason });
+        cycle.history = cycle.history.slice(0, 30);
+        cycle.regime = regime;
+        cycle.phaseDays = 0;
+        cycle.phaseTargetDays = Math.round(rnd(next.min, next.max));
+        cycle.lastReason = reason;
+        if (regime === "slowdown") cycle.demandShock = clamp(cycle.demandShock - .35, -8, 5);
+        if (regime === "recession") cycle.demandShock = clamp(cycle.demandShock - 1.15, -8, 5);
+        if (regime === "crisis") {
+          cycle.demandShock = clamp(cycle.demandShock - 1.8, -8, 5);
+          cycle.financialShock = clamp(cycle.financialShock - 1.25, -8, 5);
+        }
+        if (regime === "recovery") {
+          cycle.demandShock = clamp(cycle.demandShock + .75, -8, 5);
+          cycle.stabilizationDays = Math.max(cycle.stabilizationDays, previousRegime === "crisis" ? 720 : 360);
+        }
+        if (game.news) pushNews(game, "Экономика", `Деловой цикл: ${next.label}`, `${previous.label} сменяется новой фазой. ${reason}`);
+        return cycle;
+      }
+
+      function updateBusinessCycle(game) {
+        const e = game.economy, cycle = e.cycle || migrateBusinessCycle(game), catalog = businessCycleCatalog();
+        cycle.phaseDays++;
+        cycle.reviewDays = Math.max(0, cycle.reviewDays - 1);
+        cycle.stabilizationDays = Math.max(0, cycle.stabilizationDays - 1);
+        cycle.demandShock *= .9982;
+        cycle.supplyShock *= .9988;
+        cycle.financialShock *= .9985;
+        cycle.externalShock *= .9986;
+        cycle.stress = businessCycleStress(game);
+        const a = e.nationalAccounts;
+        const outputGap = num(a?.outputGap);
+        const confidence = (num(e.privateSector?.businessConfidence, 50) + num(e.privateSector?.consumerConfidence, 50)) / 2;
+        const worldGrowth = num(game.diplomacy?.worldSystem?.globalGrowth, 2.5);
+        cycle.recessionRisk = clamp(10 + cycle.stress * .72 + Math.max(0, 46 - confidence) * .75 + Math.max(0, -worldGrowth) * 4 + Math.max(0, outputGap - 4) * 2.2, 2, 96);
+        if (cycle.regime === "crisis") {
+          if (e.financial) e.financial.crisisLevel = clamp(e.financial.crisisLevel - .012, 0, 100);
+          if (a) a.arrears = Math.max(0, a.arrears * .99955);
+          e.supplyShock = clamp(e.supplyShock - .006, 0, 100);
+        } else if (cycle.regime === "recession") {
+          if (e.financial) e.financial.crisisLevel = clamp(e.financial.crisisLevel - .004, 0, 100);
+          e.supplyShock = clamp(e.supplyShock - .002, 0, 100);
+        } else if (cycle.regime === "recovery") {
+          if (e.financial) e.financial.crisisLevel = clamp(e.financial.crisisLevel - .009, 0, 100);
+          if (a) a.arrears = Math.max(0, a.arrears * .99975);
+          e.supplyShock = clamp(e.supplyShock - .004, 0, 100);
+        }
+        if (cycle.reviewDays === 0) {
+          cycle.reviewDays = 30;
+          const shockChance = clamp(.006 + num(e.calibration?.volatility, .8) * .007 + num(game.diplomacy?.worldSystem?.worldRisk, 34) * .00008, .006, .028);
+          if (simulationRandom() < shockChance) {
+            const source = pick(["demand","supply","financial","external"]);
+            const severity = rnd(.35, 1.35) * num(e.calibration?.volatility, .8);
+            const direction = simulationRandom() < .24 ? 1 : -1;
+            if (source === "demand") cycle.demandShock = clamp(cycle.demandShock + severity * direction, -8, 5);
+            if (source === "supply") cycle.supplyShock = clamp(cycle.supplyShock + severity * direction, -8, 5);
+            if (source === "financial") cycle.financialShock = clamp(cycle.financialShock + severity * direction, -8, 5);
+            if (source === "external") cycle.externalShock = clamp(cycle.externalShock + severity * direction, -8, 5);
+            cycle.lastReason = direction < 0
+              ? `накопился ${source === "demand" ? "шок внутреннего спроса" : source === "supply" ? "шок предложения" : source === "financial" ? "финансовый шок" : "внешнеторговый шок"}`
+              : `положительный импульс ${source === "demand" ? "спроса" : source === "supply" ? "предложения" : source === "financial" ? "финансирования" : "внешней торговли"} поддержал выпуск`;
+          }
+          const mature = cycle.phaseDays >= cycle.phaseTargetDays;
+          const severe = cycle.stress > 76 || num(e.financial?.crisisLevel) > 72 || game.military.wars.length > 1 && e.supplyShock > 45;
+          if (severe && cycle.stabilizationDays <= 0 && !["crisis","recession"].includes(cycle.regime)) setBusinessCycleRegime(game, "crisis", "финансовые, военные или производственные риски перешли системный порог");
+          else if (cycle.regime === "expansion" && (mature || cycle.stress > 52)) setBusinessCycleRegime(game, outputGap > 3.5 && e.inflation > num(e.calibration?.neutralInflation, 4.5) + 2 ? "overheating" : "slowdown", mature ? "длительное расширение исчерпало часть свободных мощностей" : "рост ограничен накопившимися дисбалансами");
+          else if (cycle.regime === "overheating" && (mature || cycle.stress > 58)) setBusinessCycleRegime(game, "slowdown", "дорогой кредит, цены и перегруженные мощности охлаждают спрос");
+          else if (cycle.regime === "slowdown" && mature) {
+            const recessionChance = clamp(.24 + cycle.recessionRisk * .006 + Math.max(0, -cycle.demandShock) * .08, .22, .88);
+            setBusinessCycleRegime(game, simulationRandom() < recessionChance ? "recession" : Math.abs(e.growth) < .7 ? "stagnation" : "recovery", "спрос, кредит и загрузка предприятий определили итог фазы замедления");
+          } else if (cycle.regime === "recession" && severe && cycle.stabilizationDays <= 0 && cycle.phaseDays > 180) setBusinessCycleRegime(game, "crisis", "спад распространился на банки, бюджет и производственные цепочки");
+          else if (cycle.regime === "recession" && (mature && cycle.stress < 68 || cycle.phaseDays > cycle.phaseTargetDays * 1.45)) setBusinessCycleRegime(game, "recovery", "запасы скорректированы, финансовые условия стабилизируются, а незагруженные мощности возвращаются в работу");
+          else if (cycle.regime === "crisis" && (mature && cycle.stress < 74 || cycle.phaseDays > cycle.phaseTargetDays * 1.4)) setBusinessCycleRegime(game, cycle.phaseDays > cycle.phaseTargetDays * 1.4 ? "recovery" : cycle.stress > 55 ? "recession" : "recovery", "острая системная фаза завершилась, но последствия сохраняются");
+          else if (cycle.regime === "stagnation" && mature) setBusinessCycleRegime(game, cycle.stress > 52 ? "recession" : "recovery", "длительная слабость инвестиций потребовала смены фазы");
+          else if (cycle.regime === "recovery" && mature) setBusinessCycleRegime(game, cycle.stress > 58 ? "slowdown" : "expansion", cycle.stress > 58 ? "восстановление столкнулось с новыми ограничениями" : "спрос и инвестиции вернулись к устойчивой траектории");
+        }
+        const meta = catalog[cycle.regime] || catalog.expansion;
+        return {
+          meta,
+          growthImpulse: meta.growth + cycle.demandShock + cycle.supplyShock * .72 + cycle.financialShock * .9 + cycle.externalShock * .65 - cycle.scarring * .055,
+          inflationImpulse: meta.inflation - cycle.supplyShock * .42 + Math.max(0, -cycle.externalShock) * .18,
+          unemploymentImpulse: meta.unemployment + Math.max(0, -cycle.demandShock) * .3
+        };
+      }
+
+      function updateQuarterlyEconomy(game) {
+        const e = game.economy, cycle = e.cycle || migrateBusinessCycle(game), a = e.nationalAccounts;
+        const quarter = Math.floor((game.date.month - 1) / 3) + 1;
+        const key = `${game.date.year}-Q${quarter}`;
+        if (cycle.lastQuarter !== key) {
+          const previous = cycle.quarters[0];
+          const qoq = previous ? clamp((e.gdp / Math.max(1, previous.realGdp) - 1) * 400, -45, 45) : 0;
+          cycle.quarters.unshift({ key, date: formatDate(game.date), realGdp: e.gdp, nominalGdp: a.nominalGdp, perCapita: e.gdp * 1000000 / Math.max(1, game.population.total), qoq, regime: cycle.regime });
+          cycle.quarters = cycle.quarters.slice(0, 40);
+          cycle.lastQuarter = key;
+        }
+        cycle.technicalRecession = cycle.quarters.length >= 3 && cycle.quarters[0].qoq < 0 && cycle.quarters[1].qoq < 0;
+        cycle.gdpPeak = Math.max(cycle.gdpPeak, e.gdp);
+        cycle.recessionDepth = clamp((1 - e.gdp / Math.max(1, cycle.gdpPeak)) * 100, 0, 95);
+        if (e.growth < 0) cycle.scarring = clamp(cycle.scarring + Math.abs(e.growth) * .00055 + num(e.financial?.crisisLevel) * .00002, 0, 30);
+        else cycle.scarring = clamp(cycle.scarring - .0007 * Math.max(.4, e.growth), 0, 30);
+      }
+
+      function renderBusinessCyclePanel(game = state) {
+        const e = game.economy, cycle = e.cycle || migrateBusinessCycle(game), a = e.nationalAccounts, meta = businessCycleCatalog()[cycle.regime];
+        const latest = cycle.quarters[0], tone = meta?.tone || "warn";
+        return `<section class="panel pad">
+          <div class="panel-section-head"><span><h3 class="section-title">Деловой цикл и реальный ВВП</h3><p class="subtle">Экономика проходит продолжительные фазы расширения, перегрева, спада и восстановления. Догоняющий рост возникает только при достаточных инвестициях, институтах и доступе к рынкам.</p></span><span class="pill ${tone}">${esc(meta?.label || cycle.regime)}</span></div>
+          <div class="kpi-strip" style="margin-top:12px;">
+            <div class="kpi"><span>Реальный ВВП</span><strong>${money(e.gdp)}</strong><small class="subtle">без влияния роста цен</small></div>
+            <div class="kpi"><span>Номинальный ВВП</span><strong>${money(a.nominalGdp)}</strong><small class="subtle">в текущих ценах</small></div>
+            <div class="kpi"><span>На человека</span><strong>${compact(e.gdp * 1000000 / Math.max(1,game.population.total))}</strong><small class="subtle">реальный выпуск</small></div>
+            <div class="kpi"><span>Квартальный темп</span><strong class="delta ${latest?.qoq < 0 ? "bad" : "good"}">${latest ? `${latest.qoq >= 0 ? "+" : ""}${latest.qoq.toFixed(1)}%` : "нет ряда"}</strong><small class="subtle">годовой пересчет</small></div>
+            <div class="kpi"><span>Риск рецессии</span><strong class="delta ${cycle.recessionRisk > 60 ? "bad" : cycle.recessionRisk > 35 ? "warn" : "good"}">${pct(cycle.recessionRisk,0)}</strong><small class="subtle">макростресс ${pct(cycle.stress,0)}</small></div>
+            <div class="kpi"><span>Потеря от пика</span><strong class="delta ${cycle.recessionDepth > 4 ? "bad" : cycle.recessionDepth > 1 ? "warn" : "good"}">${pct(cycle.recessionDepth,1)}</strong><small class="subtle">долгосрочный ущерб ${pct(cycle.scarring,1)}</small></div>
+          </div>
+          <div class="decision-banner ${cycle.technicalRecession ? "bad" : tone}" style="margin-top:12px;"><strong>${cycle.technicalRecession ? "Техническая рецессия подтверждена" : `Текущая фаза длится ${cycle.phaseDays} дней`}</strong><span class="subtle">${esc(cycle.lastReason)}. Ориентир следующей переоценки фазы: примерно через ${Math.max(0,cycle.phaseTargetDays-cycle.phaseDays)} дней.</span></div>
+          <details class="action-fold" style="margin-top:10px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Квартальная динамика</strong><small>реальный выпуск, ВВП на человека и фаза цикла</small></span><span class="pill">${cycle.quarters.length}</span></summary><div class="action-fold-body"><div class="list">${cycle.quarters.length ? cycle.quarters.slice(0,8).map(item=>`<div class="row"><span><strong>${esc(item.key)}</strong><br><small class="subtle">реальный ВВП ${money(item.realGdp)} · на человека ${compact(item.perCapita)} · ${esc(businessCycleCatalog()[item.regime]?.label||item.regime)}</small></span><span class="pill ${item.qoq<0?"bad":item.qoq>.8?"good":"warn"}">${item.qoq>=0?"+":""}${item.qoq.toFixed(1)}%</span></div>`).join("") : `<div class="row"><span>Квартальный ряд будет сформирован по мере течения времени</span><span class="pill">наблюдение</span></div>`}</div></div></details>
+        </section>`;
+      }
+
       function economicDriver(label, impact, detail = "") {
         return { label, impact: num(impact), detail };
       }
@@ -16277,13 +16727,21 @@
         const capitalGrowth = clamp((grossCapitalFormation / Math.max(1, accounts.capitalStock) - depreciationRate) * 100, -4, 7);
         accounts.capitalStock = Math.max(e.gdp * .8, accounts.capitalStock + (grossCapitalFormation - accounts.capitalStock * depreciationRate) / DAYS_PER_YEAR);
         const gdpPerCapita = e.gdp * 1000000 / Math.max(1, pop.total);
-        const convergenceGrowth = clamp(Math.log(Math.max(1, 42000 / Math.max(1200, gdpPerCapita))) * num(calibration.convergenceSpeed,.7), 0, 2.6);
+        const institutionQuality = clamp((num(game.politics?.justice?.ruleOfLaw,50) + num(game.politics?.cabinet?.execution,50) + num(game.statistics?.quality,50) + infrastructure * 60 + pop.education) / 5, 0, 100);
+        const investmentAdequacy = clamp(grossCapitalFormation / Math.max(1, e.gdp * num(calibration.investmentShare,.21)), .12, 1.12);
+        const marketAccess = clamp((num(e.macro?.tradeAccess,50) - 18) / 68, .08, 1.08);
+        const humanCapitalAccess = clamp((pop.education - 28) / 58, .08, 1.08);
+        const convergenceEligibility = clamp((institutionQuality - 28) / 62, 0, 1) * investmentAdequacy * marketAccess * humanCapitalAccess;
+        const convergenceGrowth = clamp(Math.log(Math.max(1, 42000 / Math.max(1200, gdpPerCapita))) * num(calibration.convergenceSpeed,.7) * convergenceEligibility, 0, 2.35);
+        const governanceDrag = Math.max(0, 43 - institutionQuality) * .035;
+        const cycleScarring = num(e.cycle?.scarring);
         const productivityGrowth = clamp(
-          num(calibration.productivityTrend,1.1) + convergenceGrowth + (education - .5) * 1.35 + (num(game.tech.research, 50) - 50) * .01
+          num(calibration.productivityTrend,1.1) * clamp(.28 + institutionQuality / 125, .28, 1.08) + convergenceGrowth + (education - .5) * 1.15 + (num(game.tech.research, 50) - 50) * .009
           + (infrastructure - .9) * .7 + (calcServiceScore(game) - 50) * .006
           - e.supplyShock * .011 - game.military.wars.length * .38
-          - Math.max(0, 55 - calibration.policyConsistency) * num(calibration.institutionalSensitivity,1) * .012,
-          -2.2,
+          - Math.max(0, 55 - calibration.policyConsistency) * num(calibration.institutionalSensitivity,1) * .012
+          - governanceDrag - cycleScarring * .045,
+          -3.2,
           num(calibration.growthCeiling,7) * .58
         );
         accounts.productivity = clamp(accounts.productivity * (1 + productivityGrowth / 100 / DAYS_PER_YEAR), 20, 1000);
@@ -16294,6 +16752,10 @@
         accounts.capitalGrowth = capitalGrowth;
         accounts.laborGrowth = laborGrowth;
         accounts.laborForce = laborForce;
+        accounts.convergenceGrowth = convergenceGrowth;
+        accounts.convergenceEligibility = clamp(convergenceEligibility * 100, 0, 100);
+        accounts.institutionQuality = institutionQuality;
+        const cycleState = updateBusinessCycle(game);
 
         const incomeAnnualBefore = calcIncomeBreakdown(game);
         const expenseAnnualBefore = calcExpenseBreakdown(game);
@@ -16301,7 +16763,8 @@
         const consumerImpulse = clamp((privateSector.consumerConfidence - 50) * .015 + (pop.happiness - 50) * .008 - Math.max(0, e.inflation - 6) * .035, -1.5, 1.2);
         const investmentImpulse = clamp((privateSector.businessConfidence - 50) * .012 + finance.investmentGrowth * .035 - Math.max(0, e.keyRate - e.inflation - 2) * .045, -1.5, 1.3);
         const fiscalImpulse = clamp((-primaryBalanceRatio - .01) * 7 * num(calibration.fiscalMultiplier,.8), -1.35, 1.5);
-        const externalImpulse = clamp((e.exports - e.imports) / Math.max(1, e.gdp) * 3.2 + (num(e.macro?.tradeAccess, 50) - 50) * .006, -.9, 1.1);
+        const austerityPenalty = -clamp(num(accounts.forcedAusterity) * .024, 0, 1.65);
+        const externalImpulse = clamp((e.exports - e.imports) / Math.max(1, e.gdp) * 3.2 + (num(e.macro?.tradeAccess, 50) - 50) * .006 + (num(game.diplomacy?.worldSystem?.globalGrowth,2.5)-2.5)*.16, -1.35, 1.25);
         const outputGapImpulse = clamp(-num(accounts.outputGap) * .16, -1.4, 1.4);
         const industryImpulse = clamp((industryHealth - .9) * 2.8, -2.2, .7);
         const institutionalImpulse = clamp((stability - .55) * 1.25 + (calcServiceScore(game) - 55) * .009 + clamp(calcProjectEffect(game), 0, 100) * .005, -.9, 1.25);
@@ -16319,10 +16782,12 @@
           economicDriver("Потенциальный выпуск", potentialGrowth, "капитал, труд и производительность"),
           economicDriver("Частный спрос", (consumerImpulse + investmentImpulse) * .45, "циклическое влияние потребления и инвестиций"),
           economicDriver("Бюджетный импульс", fiscalImpulse * .65, "временное влияние первичного баланса"),
+          economicDriver("Принудительный секвестр", austerityPenalty, "непрофинансированные расходы сокращают государственный спрос"),
           economicDriver("Внешний спрос", externalImpulse * .5, "экспорт, импорт и доступ к рынкам"),
           economicDriver("Загрузка отраслей", industryImpulse * .55, "производственные цепочки"),
           economicDriver("Институты и услуги", (institutionalImpulse + infrastructureImpulse) * .35, "стабильность и инфраструктура"),
           economicDriver("Финансовые условия", financeImpulse * .65 + pricePenalty + debtPenalty, "банки, инфляция и долг"),
+          economicDriver("Деловой цикл", cycleState.growthImpulse, `${cycleState.meta.label}: инерция спроса, кредита и ожиданий`),
           economicDriver("Дефициты и война", shortagePenalty + warPenalty, "шоки предложения и конфликты")
         ];
         const targetAnnualGrowth = clamp(growthDrivers.reduce((sum, item) => sum + item.impact, 0) + outputGapImpulse * .55 + taxPenalty, num(calibration.recessionFloor,-9), num(calibration.growthCeiling,8));
@@ -16337,6 +16802,7 @@
         const income = incomeBreakdown.total / DAYS_PER_YEAR;
         const expenses = expenseBreakdown.total / DAYS_PER_YEAR;
         const fiscalBalance = income - expenses;
+        accounts.forcedAusterity = clamp(num(accounts.forcedAusterity) * .992, 0, 100);
         if (fiscalBalance >= 0) {
           const arrearsPayment = Math.min(accounts.arrears, fiscalBalance * .72);
           accounts.arrears -= arrearsPayment;
@@ -16353,6 +16819,12 @@
           const borrowed = Math.min(financingNeed - cashUse, borrowingRoom);
           e.debt += borrowed;
           accounts.arrears += Math.max(0, financingNeed - cashUse - borrowed);
+          const arrearsCap = e.gdp * .08;
+          if (accounts.arrears > arrearsCap) {
+            const unfunded = accounts.arrears - arrearsCap;
+            accounts.arrears = arrearsCap;
+            accounts.forcedAusterity = clamp(accounts.forcedAusterity + unfunded / Math.max(1,e.gdp) * 240, 0, 100);
+          }
         }
         e.budget = Math.max(0, e.budget);
         e.debt = clamp(e.debt, 0, e.gdp * 6);
@@ -16394,7 +16866,7 @@
         const centralCredibility = clamp(num(e.financial?.centralBank?.credibility,60)/100,0,1);
         const calibratedAnchor = centralTarget * centralCredibility + num(calibration.neutralInflation,4.5) * (1-centralCredibility);
         const inflationTarget = clamp(
-          calibratedAnchor + importedInflation + e.supplyShock * .065 + outputGapPressure
+          calibratedAnchor + importedInflation + e.supplyShock * .065 + outputGapPressure + cycleState.inflationImpulse
           + Math.max(0, e.spending.welfare - 24) * .04 + emissionPressure
           + Math.max(0, e.growth - accounts.potentialGrowth) * .12 - realRate * .18,
           .2,
@@ -16408,7 +16880,7 @@
           num(calibration.naturalUnemployment,6.4) - e.growth * .38 - factories * .055 - farms * .018
           + Math.max(0, e.taxes.corporate - 20) * .065
           + Math.max(0, .9 - industryHealth) * 7.5 + e.bankruptcies * .04
-          + Math.max(0, -accounts.outputGap) * .16,
+          + Math.max(0, -accounts.outputGap) * .16 + cycleState.unemploymentImpulse,
           2.5,
           25
         );
@@ -16447,6 +16919,7 @@
         calibration.policyConsistency=clamp(calibration.policyConsistency+(game.politics.cabinet.execution+game.governance.delivery.fiscalDiscipline-game.politics.protests-calibration.policyConsistency)*.00035,0,100);
         calibration.dataConfidence=clamp(statisticsConfidence(game),0,100);
         reconcileNationalAccounts(game);
+        updateQuarterlyEconomy(game);
         storeEconomicDrivers(accounts, "growth", growthDrivers.concat(economicDriver("Циклический разрыв", outputGapImpulse, "возврат к потенциальному выпуску")));
         storeEconomicDrivers(accounts, "inflation", [
           economicDriver("Цель Центрального банка", centralTarget, "якорь инфляционных ожиданий"),
@@ -17130,15 +17603,17 @@
 
       function updateCountryStrategy(game, country, playerPower = calcArmyPower(game) / 4.2, elapsedDays = 1) {
         const s = country.strategy || ensureDiplomaticAI(country).strategy;
+        const bilateral = ensureBilateralPortfolio(game,country);
         const reputation = game.diplomacy.law?.reputation ?? 60;
         const treatyReliability = game.diplomacy.law?.treatyReliability ?? 60;
-        const trustTarget = clamp(country.relations * .64 + country.stability * .12 + reputation * .12 + treatyReliability * .08 + (country.alliance ? 17 : 0) - (country.sanctions ? 24 : 0) - (country.embargo ? 18 : 0), 0, 100);
-        const threatTarget = clamp((playerPower - country.military) * .34 + Math.max(0, 42 - country.relations) * .9 + game.military.wars.length * 8 + game.diplomacy.globalTension * .18, 0, 100);
-        const dependenceTarget = clamp(country.trade / Math.max(1, country.gdp) * 100 + (country.aiMood === "торговый" ? 12 : 0), 0, 100);
+        const activeAgreements=bilateral.agreements.filter(item=>item.status==="active"&&item.daysLeft>0);
+        const trustTarget = clamp(country.relations * .58 + country.stability * .1 + reputation * .1 + treatyReliability * .08 + bilateral.politicalAccess*.12 + activeAgreements.length*1.8 + (country.alliance ? 15 : 0) - (country.sanctions ? 24 : 0) - (country.embargo ? 18 : 0), 0, 100);
+        const threatTarget = clamp((playerPower - country.military) * .34 + Math.max(0, 42 - country.relations) * .9 + game.military.wars.length * 8 + game.diplomacy.globalTension * .18 + bilateral.disputeRisk*.16 - bilateral.securityAlignment*.12, 0, 100);
+        const dependenceTarget = clamp(country.trade / Math.max(1, country.gdp) * 100 + bilateral.economicInterdependence*.28 + bilateral.energySecurity*.08 + (country.aiMood === "торговый" ? 10 : 0), 0, 100);
         s.trust = clamp(s.trust * .985 + trustTarget * .015, 0, 100);
         s.threat = clamp(s.threat * .985 + threatTarget * .015, 0, 100);
         s.dependence = clamp(s.dependence * .99 + dependenceTarget * .01, 0, 100);
-        s.leverage = clamp(country.gdp / 90000 + country.military * .42 + country.intelligence * .18 + (country.greatPower ? 12 : 0), 5, 100);
+        s.leverage = clamp(country.gdp / 90000 + country.military * .36 + country.intelligence * .16 + bilateral.partnerInfluence*.18 + (country.greatPower ? 12 : 0), 5, 100);
         s.cooldown = Math.max(0, s.cooldown - elapsedDays);
         s.stance = country.war ? "война" : s.trust >= 66 && country.relations >= 58 ? "партнерство" : s.threat >= 65 || country.relations <= 27 ? "давление" : "наблюдение";
         s.goal = s.threat >= 70 ? "сдерживание" : s.dependence >= 38 ? "рынки" : s.interests[0];
@@ -17146,12 +17621,18 @@
 
       function strategicOfferType(country) {
         const s = country.strategy;
+        const b = country.bilateral;
         if (country.relations < 18 && country.military > 62 && s.threat > 58) return "border";
         if (country.relations < 34 && (s.threat > 50 || country.aiMood === "силовой")) return "pressure";
+        if (b?.disputeRisk > 62 && country.relations > 34) return "mediation";
         if (country.relations > 64 && s.trust > 62 && !country.alliance) return "pact";
         if (country.stability < 45) return "aid";
+        if ((country.aiMood === "реформистский" || s.trust > 62) && !activeBilateralAgreement(country,"technology")) return "technology";
+        if ((country.aiMood === "торговый" || s.dependence > 30) && !activeBilateralAgreement(country,"investment") && b?.investmentAccess < 66) return "investment";
+        if ((country.aiMood === "торговый" || s.dependence > 34) && !activeBilateralAgreement(country,"energy") && b?.energySecurity < 62) return "energy";
+        if (country.relations > 48 && b?.migrationCoordination < 45 && !activeBilateralAgreement(country,"migration")) return "migration";
         if (country.aiMood === "торговый" || s.dependence > 30) return "trade";
-        if (country.aiMood === "реформистский" || s.trust > 55) return "summit";
+        if (country.aiMood === "реформистский" || s.trust > 55) return simulationRandom()<.35?"climate":"summit";
         return country.relations > 48 ? "trade" : "summit";
       }
 
@@ -17162,6 +17643,12 @@
           summit: `${country.name} предлагает встречу лидеров по теме «${interest}», инвестициям и региональной устойчивости.`,
           aid: `${country.name} просит стабилизационный гуманитарный пакет и предлагает взамен политическую координацию.`,
           pact: `${country.name} предлагает консультационный пакт безопасности с обменом разведданными и совместным планированием.`,
+          investment: `${country.name} предлагает взаимные гарантии частному капиталу, арбитраж и пятилетний инвестиционный режим.`,
+          technology: `${country.name} предлагает совместную научную программу, обмен исследователями и согласование технологических стандартов.`,
+          energy: `${country.name} предлагает долгосрочные поставки энергии с резервной мощностью и пересматриваемой ценовой формулой.`,
+          migration: `${country.name} предлагает соглашение о трудовой мобильности, признании квалификаций и реадмиссии.`,
+          climate: `${country.name} предлагает общий механизм климатического мониторинга, воды и реагирования на чрезвычайные ситуации.`,
+          mediation: `${country.name} предлагает горячую линию и взаимное посредничество, чтобы спор не перешел в санкционный или военный кризис.`,
           pressure: `${country.name} требует уступок по теме «${interest}» и связывает отказ с возможными ограничениями.`,
           border: `${country.name} повысила готовность у границы и предлагает срочный канал деэскалации на ограниченный срок.`
         };
@@ -17172,7 +17659,7 @@
         game.diplomacy.inbox ||= [];
         const existing = game.diplomacy.inbox.some(item => item.countryId === country.id);
         if (existing || game.diplomacy.inbox.length >= 8) return false;
-        const titles = { trade: "Отраслевое торговое предложение", summit: "Запрос на стратегический саммит", aid: "Запрос стабилизационной помощи", pact: "Пакт о безопасности", pressure: "Дипломатическое требование", border: "Канал пограничной деэскалации" };
+        const titles = { trade: "Отраслевое торговое предложение", summit: "Запрос на стратегический саммит", aid: "Запрос стабилизационной помощи", pact: "Пакт о безопасности", investment:"Инвестиционный договор", technology:"Научно-технологическое партнерство", energy:"Энергетический контракт", migration:"Соглашение о трудовой мобильности", climate:"Климатический пакт", mediation:"Механизм предотвращения кризисов", pressure: "Дипломатическое требование", border: "Канал пограничной деэскалации" };
         const text = strategicOfferText(country, type);
         const offer = { id: uid("offer"), countryId: country.id, countryName: country.name, type, title: titles[type] || "Инициатива МИД", text, daysLeft: Math.round(rnd(30, 90)), rationale: diplomaticIntent(country), expectedTrust: country.strategy.trust };
         game.diplomacy.inbox.unshift(offer);
@@ -17353,6 +17840,7 @@
         for (const offer of game.diplomacy.inbox) offer.daysLeft = Math.max(0, (offer.daysLeft || 0) - 1);
         game.diplomacy.inbox = game.diplomacy.inbox.filter(offer => offer.daysLeft > 0).slice(0, 8);
         const worldUpdated=simulateForeignStateSystem(game);
+        simulateBilateralDiplomacy(game);
         simulateStrategicDiplomacy(game);
         if(worldUpdated&&game.military.wars.length<4){
           const candidates=game.diplomacy.countries.filter(country=>!country.war&&country.relations<9&&country.military>68&&country.strategy.threat>58).sort((a,b)=>(num(b.aggression)+b.strategy.threat)-(num(a.aggression)+a.strategy.threat));
@@ -18653,6 +19141,32 @@
         normalizeCore();
       }
 
+      function concludeBilateralAgreement(type, country) {
+        const spec=bilateralAgreementCatalog()[type];
+        if(!spec)return null;
+        const e=state.economy,portfolio=ensureBilateralPortfolio(state,country),strategy=ensureDiplomaticAI(country).strategy;
+        const chance=bilateralAgreementChance(state,country,type),existing=activeBilateralAgreement(country,type);
+        if(country.war)return showBlockedDecision("Соглашение невозможно",`Активный вооруженный конфликт с ${country.name} исключает подписание отраслевого договора.`,[["Статус","война","bad"]]);
+        if(country.sanctions||country.embargo)return showBlockedDecision("Переговоры заблокированы",`Санкционный или торговый режим с ${country.name} несовместим с долгосрочными гарантиями.`,[["Санкции",country.sanctions?"действуют":"нет",country.sanctions?"bad":"good"],["Эмбарго",country.embargo?"действует":"нет",country.embargo?"bad":"good"]]);
+        if(country.relations<spec.minRelation||chance<46)return showBlockedDecision("Договор не согласован",`${country.name} не готова принять обязательства: сначала нужны рабочие отношения, доверие и снижение взаимной угрозы.`,[["Отношения",pct(country.relations,0),country.relations>=spec.minRelation?"good":"bad"],["Минимум",pct(spec.minRelation,0),"warn"],["Шанс согласования",pct(chance,0),chance>=46?"good":"bad"],["Риск спора",pct(portfolio.disputeRisk,0),portfolio.disputeRisk>60?"bad":"warn"]]);
+        if(e.budget<spec.cost)return showBlockedDecision("Соглашение не профинансировано","Правительство не обеспечило гарантийный взнос и запуск совместных ведомств.",[["Нужно",money(spec.cost),"bad"],["Бюджет",money(e.budget),"bad"]]);
+        e.budget-=spec.cost;
+        const agreement=registerBilateralAgreement(state,country,type,"player");
+        country.relations=clamp(country.relations+(existing?1.5:2.8),0,100);strategy.trust=clamp(strategy.trust+(existing?1.2:2.4),0,100);
+        const details=[["Срок",`${Math.round(spec.duration/365)} г.`,"good"],["Прочность",pct(agreement.strength,0),agreement.strength>=60?"good":"warn"],["Запуск",`-${money(spec.cost)}`,"bad"],["Ежегодное исполнение",money(spec.annualCost),"warn"]];
+        let consequence="Ведомства сторон открыли постоянный механизм исполнения и ежегодной оценки обязательств.";
+        if(type==="investment"){e.investments+=spec.cost*1.25;e.privateSector.foreignInvestment=clamp(e.privateSector.foreignInvestment+3,0,100);details.push(["Инвестиционный импульс",money(spec.cost*1.25),"good"]);}
+        if(type==="technology"){state.tech.points+=12;portfolio.technologyAccess=clamp(portfolio.technologyAccess+4,0,100);details.push(["Исследования","+12 очков","good"]);}
+        if(type==="energy"){e.supply.energy=clamp(e.supply.energy+9,0,180);portfolio.partnerInfluence=clamp(portfolio.partnerInfluence+2.5,0,100);details.push(["Энергетические запасы","+9 п.п.","good"],["Влияние партнера","+2.5 п.п.","warn"]);consequence="Поставки укрепляют резервы, но одновременно увеличивают способность партнера влиять на внутренний рынок.";}
+        if(type==="migration"){country.visa=country.visa==="строгий"?"обычный":country.visa;portfolio.migrationCoordination=clamp(portfolio.migrationCoordination+4,0,100);details.push(["Миграционная координация","+4 п.п.","good"]);}
+        if(type==="climate"){state.climate.preparedness=clamp(state.climate.preparedness+2.5,0,100);state.diplomacy.law.reputation=clamp(state.diplomacy.law.reputation+1,0,100);details.push(["Готовность к ЧС","+2.5 п.п.","good"]);}
+        if(type==="legal"){state.diplomacy.law.treatyReliability=clamp(state.diplomacy.law.treatyReliability+1.8,0,100);details.push(["Надежность договоров","+1.8 п.п.","good"]);}
+        if(type==="mediation"){state.diplomacy.globalTension=clamp(state.diplomacy.globalTension-3.5,0,100);strategy.threat=clamp(strategy.threat-4,0,100);details.push(["Международная напряженность","-3.5 п.п.","good"],["Оценка угрозы","-4 п.п.","good"]);}
+        if(type==="cultural"){state.softPower.prestige=clamp(state.softPower.prestige+2.6,0,100);portfolio.ourInfluence=clamp(portfolio.ourInfluence+3,0,100);details.push(["Международный престиж","+2.6 п.п.","good"]);}
+        pushWorldDiplomacyLog(state,state.country.name,country.name,`${existing?"продлила":"заключила"} ${spec.title.toLowerCase()}`,"договор");
+        return [existing?"Международный договор продлен":spec.title,`${state.country.name} и ${country.name} завершили переговоры. ${consequence}`,details,spec.tone];
+      }
+
       function diplomacyAction(type, confirmed = false) {
         const c = state.diplomacy.countries.find(x => x.id === selectedCountryId);
         if (!c) return;
@@ -18661,9 +19175,13 @@
           return;
         }
         const e = state.economy;
-        const plannedCost = { relations:90, trade:160, milAid:540, humanAid:220 }[type];
+        const plannedCost = Object.assign({ relations:90, trade:160, milAid:540, humanAid:220 },Object.fromEntries(Object.entries(bilateralAgreementCatalog()).map(([id,spec])=>[id,spec.cost])))[type];
         if (plannedCost != null && e.budget < plannedCost) return showBlockedDecision("Дипломатическое решение не профинансировано", "МИД не получил бюджет на переговоры, логистику и исполнение обязательств.", [["Нужно", money(plannedCost), "bad"], ["Бюджет", money(e.budget), "bad"]]);
         let report = null;
+        if (["investment","technology","energy","migration","climate","legal","mediation","cultural"].includes(type)) {
+          report=concludeBilateralAgreement(type,c);
+          if(!report)return;
+        }
         if (type === "relations") {
           const gain = rnd(4, 10);
           e.budget -= 90; c.relations += gain; c.embassy = true;
@@ -18673,6 +19191,7 @@
           const tradeGain = rnd(600, 2200);
           e.budget -= 160; c.trade += tradeGain; c.treaties.push("торговый контракт"); c.relations += 3;
           const route=ensureBilateralTradeRoute(state,c);
+          registerBilateralAgreement(state,c,"trade","player");
           report = ["Торговый контракт подписан", `${c.name} расширяет закупки; создан или усилен маршрут «${route.name}».`, [["Торговля", `+${money(tradeGain)}`, "good"], ["Географический доступ", pct(route.geographicAccess,0), route.geographicAccess>=55?"good":"warn"], ["Срок доставки", `${route.geography.deliveryDays} дн.`, route.geography.deliveryDays<22?"good":"warn"], ["Отношения", "+3 п.п.", "good"], ["Бюджет", "-160 млн", "bad"]], "good"];
         }
         if (type === "alliance") {
@@ -18682,22 +19201,27 @@
             return;
           }
           c.alliance = true; c.treaties.push("союз"); c.relations += 5; state.diplomacy.law.treatyReliability = clamp(state.diplomacy.law.treatyReliability + .8, 0, 100);
+          registerBilateralAgreement(state,c,"security","player");
           report = ["Союз подписан", `${state.country.name} и ${c.name} создают политико-военный контур координации.`, [["Отношения", "+5 п.п.", "good"], ["Союз", "активен", "good"], ["Риск войны", "ниже", "good"]], "good"];
         }
         if (type === "sanctions") {
           c.sanctions = !c.sanctions; c.relations += c.sanctions ? -12 : 6; e.exports -= c.sanctions ? c.trade * .04 : -c.trade * .02;
+          ensureBilateralPortfolio(state,c).agreements.filter(item=>item.status==="active").forEach(item=>item.strength=clamp(item.strength+(c.sanctions?-12:3),0,100));
           report = [c.sanctions ? "Санкции введены" : "Санкции сняты", c.sanctions ? `Ограничения ударят по отношениям с ${c.name}, но покажут жесткую позицию.` : `Дипломаты открывают окно для восстановления торговли с ${c.name}.`, [["Отношения", c.sanctions ? "-12 п.п." : "+6 п.п.", c.sanctions ? "bad" : "good"], ["Экспорт", c.sanctions ? "снижен" : "частично восстановлен", c.sanctions ? "bad" : "good"]], c.sanctions ? "warn" : "good"];
         }
         if (type === "embargo") {
           c.embargo = !c.embargo; c.relations += c.embargo ? -16 : 5; c.trade *= c.embargo ? .62 : 1.18;
+          ensureBilateralPortfolio(state,c).agreements.filter(item=>item.status==="active").forEach(item=>item.strength=clamp(item.strength+(c.embargo?-18:4),0,100));
           report = [c.embargo ? "Эмбарго введено" : "Эмбарго отменено", c.embargo ? "Торговля резко ограничена, бизнес готовит компенсационные маршруты." : "Торговля начинает восстанавливаться.", [["Торговля", c.embargo ? "-38%" : "+18%", c.embargo ? "bad" : "good"], ["Отношения", c.embargo ? "-16 п.п." : "+5 п.п.", c.embargo ? "bad" : "good"]], c.embargo ? "bad" : "good"];
         }
         if (type === "milAid") {
           e.budget -= 540; c.relations += 8; c.military += 2; c.aid += 540;
+          const bilateral=ensureBilateralPortfolio(state,c);bilateral.securityAlignment=clamp(bilateral.securityAlignment+5,0,100);bilateral.ourInfluence=clamp(bilateral.ourInfluence+3,0,100);
           report = ["Военная помощь отправлена", `${c.name} получает помощь, союзники воспринимают это как сигнал готовности к обязательствам.`, [["Бюджет", "-540 млн", "bad"], ["Отношения", "+8 п.п.", "good"], ["Армия партнера", "+2 п.п.", "good"]], "good"];
         }
         if (type === "humanAid") {
           e.budget -= 220; c.relations += 6; c.stability += 3; c.aid += 220;
+          const bilateral=ensureBilateralPortfolio(state,c);bilateral.culturalAffinity=clamp(bilateral.culturalAffinity+3,0,100);bilateral.ourInfluence=clamp(bilateral.ourInfluence+4,0,100);
           report = ["Гуманитарная помощь отправлена", "Поставка медикаментов и продовольствия улучшила гуманитарный фон переговоров.", [["Бюджет", "-220 млн", "bad"], ["Отношения", "+6 п.п.", "good"], ["Стабильность", "+3 п.п.", "good"]], "good"];
         }
         if (type === "spy") {
@@ -18706,6 +19230,7 @@
         }
         if (type === "visa") {
           c.visa = c.visa === "свободный" ? "строгий" : c.visa === "строгий" ? "обычный" : "свободный"; c.relations += c.visa === "свободный" ? 3 : -2;
+          const bilateral=ensureBilateralPortfolio(state,c);bilateral.migrationCoordination=clamp(bilateral.migrationCoordination+(c.visa==="свободный"?5:c.visa==="строгий"?-6:2),0,100);
           report = ["Визовый режим изменен", `Новый режим: ${c.visa}. Это влияет на туризм, бизнес и тон переговоров.`, [["Визы", c.visa, "warn"], ["Отношения", c.visa === "свободный" ? "+3 п.п." : "-2 п.п.", c.visa === "свободный" ? "good" : "warn"]], "warn"];
         }
         if (type === "war") {
@@ -18835,11 +19360,22 @@
           state.diplomacy.inbox = inbox.filter(x => x.id !== id);
           return;
         }
+        ensureDiplomaticAI(c);
+        ensureBilateralPortfolio(state,c);
         const accept = choice === "accept";
         let title = accept ? "Инициатива принята" : "Инициатива отклонена";
         let result = "";
         let details = [];
         let tone = accept ? "good" : "warn";
+        const agreementOfferMap={investment:"investment",technology:"technology",energy:"energy",migration:"migration",climate:"climate",mediation:"mediation"};
+        const offerCosts={trade:140,summit:180,aid:320,pact:260,border:240};
+        if(accept&&agreementOfferMap[offer.type])offerCosts[offer.type]=bilateralAgreementCatalog()[agreementOfferMap[offer.type]].cost;
+        if(accept&&num(offerCosts[offer.type])>state.economy.budget)return showBlockedDecision("Внешняя инициатива не профинансирована",`Для принятия предложения ${c.name} нужен подтвержденный бюджет на запуск обязательств.`,[["Нужно",money(offerCosts[offer.type]),"bad"],["Бюджет",money(state.economy.budget),"bad"]]);
+        if(agreementOfferMap[offer.type]){
+          const type=agreementOfferMap[offer.type],spec=bilateralAgreementCatalog()[type],portfolio=ensureBilateralPortfolio(state,c);
+          if(accept){state.economy.budget-=spec.cost;const agreement=registerBilateralAgreement(state,c,type,c.id);c.relations+=3.5;c.strategy.trust=clamp(c.strategy.trust+3,0,100);result=`${spec.title} вступило в силу. Выгоды будут накапливаться по мере реального исполнения, а не начисляться мгновенно.`;details=[["Запуск",`-${money(spec.cost)}`,"bad"],["Срок",`${Math.round(spec.duration/365)} г.`,"good"],["Прочность",pct(agreement.strength,0),"good"],["Ежегодные расходы",money(spec.annualCost),"warn"]];if(type==="technology")state.tech.points+=8;if(type==="energy")state.economy.supply.energy=clamp(state.economy.supply.energy+6,0,180);if(type==="climate")state.climate.preparedness=clamp(state.climate.preparedness+1.8,0,100);if(type==="mediation"){state.diplomacy.globalTension=clamp(state.diplomacy.globalTension-3,0,100);c.strategy.threat=clamp(c.strategy.threat-3,0,100);}portfolio.lastBriefing=`${c.name} выступила инициатором: ${spec.title}.`;}
+          else{c.relations-=2.6;portfolio.disputeRisk=clamp(portfolio.disputeRisk+3.5,0,100);result=`Предложение «${spec.title}» отклонено. ${c.name} пересмотрит альтернативных партнеров и собственные рычаги влияния.`;details=[["Отношения","-2.6 п.п.","warn"],["Риск спора","+3.5 п.п.","bad"]];}
+        }
         if (offer.type === "trade") {
           if (accept) { state.economy.budget -= 140; c.trade += rnd(600, 1800); c.relations += 4.5; Object.keys(state.economy.supply || {}).slice(0, 6).forEach(key => state.economy.supply[key] = clamp(state.economy.supply[key] + 1.5, 0, 180)); const route=ensureBilateralTradeRoute(state,c); result = `${c.name} получает расширенный торговый коридор, а наши производственные цепочки — маршрут через ${route.geography.path}.`; details = [["Бюджет", "-140 млн", "bad"], ["Торговля", "выше", "good"], ["Срок доставки", `${route.geography.deliveryDays} дн.`, route.geography.deliveryDays<22?"good":"warn"], ["Запасы", "+1.5 по базовым позициям", "good"], ["Отношения", "+4.5 п.п.", "good"]]; }
           else { c.relations -= 1.6; result = "МИД оставил предложение без развития."; details = [["Отношения", "-1.6 п.п.", "warn"], ["Торговля", "без изменений", "warn"]]; }
@@ -18853,7 +19389,7 @@
           else { c.relations -= 3.2; c.stability -= 1.4; result = "Партнер начинает искать помощь у конкурентов."; details = [["Отношения", "-3.2 п.п.", "warn"], ["Стабильность", "-1.4 п.п.", "bad"]]; }
         }
         if (offer.type === "pact") {
-          if (accept) { state.economy.budget -= 260; c.relations += 5; c.treaties.push("пакт безопасности"); state.military.readiness += 1.2; result = "Пакт о безопасности повышает координацию штабов."; details = [["Бюджет", "-260 млн", "bad"], ["Боеготовность", "+1.2 п.п.", "good"], ["Отношения", "+5 п.п.", "good"]]; }
+          if (accept) { state.economy.budget -= 260; c.relations += 5; c.treaties.push("пакт безопасности"); state.military.readiness += 1.2; registerBilateralAgreement(state,c,"security",c.id); result = "Пакт о безопасности повышает координацию штабов и открывает постоянный механизм исполнения."; details = [["Бюджет", "-260 млн", "bad"], ["Боеготовность", "+1.2 п.п.", "good"], ["Отношения", "+5 п.п.", "good"]]; }
           else { c.relations -= 2.4; result = "Партнер откладывает военное сотрудничество."; details = [["Отношения", "-2.4 п.п.", "warn"]]; }
         }
         if (offer.type === "pressure") {
