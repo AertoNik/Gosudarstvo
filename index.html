@@ -1031,6 +1031,27 @@
       overflow-wrap: anywhere;
     }
 
+    .strategic-diplomacy-grid .policy-action-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .strategic-diplomacy-grid .policy-action-card {
+      min-width: 0;
+    }
+
+    .strategic-diplomacy-grid .action-fold > summary {
+      align-items: start;
+      min-height: 54px;
+    }
+
+    .strategic-diplomacy-grid .action-summary-main strong {
+      overflow: visible;
+      text-overflow: clip;
+      white-space: normal;
+      overflow-wrap: normal;
+      word-break: normal;
+    }
+
     .action-fold-body {
       display: grid;
       gap: 8px;
@@ -2680,6 +2701,12 @@
       }
     }
 
+    @media (max-width: 820px) {
+      .strategic-diplomacy-grid .policy-action-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
     @media (max-width: 620px) {
       .main, .setup {
         padding: 10px;
@@ -2696,6 +2723,9 @@
         overflow: auto;
       }
       .metric-grid {
+        grid-template-columns: 1fr;
+      }
+      .strategic-diplomacy-grid .policy-action-grid {
         grid-template-columns: 1fr;
       }
       .map-stage,
@@ -3612,7 +3642,11 @@
       .state-document { padding: 17px 14px 22px; background-position: 0, 0, 0; }
       .document-classification { align-items: flex-start; font-size: 9px; }
       .document-head { grid-template-columns: minmax(0, 1fr) 66px; gap: 9px; }
-      .document-title { font-size: 23px; }
+      .document-title {
+        font-size: 21px;
+        overflow-wrap: normal;
+        word-break: normal;
+      }
       .document-seal { width: 64px; height: 64px; border-width: 3px; font-size: 8px; }
       .document-seal strong { font-size: 10px; }
       .document-preamble { font-size: 14px; }
@@ -3651,10 +3685,10 @@
 
       const STORAGE_KEY = "aaa_president_sim_state_v4";
       const SLOTS_KEY = "aaa_president_sim_slots_v4";
-      const SAVE_VERSION = 24;
+      const SAVE_VERSION = 25;
       const ECONOMY_MODEL_VERSION = 5;
       const FOREIGN_STATE_MODEL_VERSION = 1;
-      const BILATERAL_MODEL_VERSION = 1;
+      const BILATERAL_MODEL_VERSION = 2;
       const GEOGRAPHY_MODEL_VERSION = 2;
       const NARRATIVE_MODEL_VERSION = 1;
       const SAVE_DB_NAME = "aaa_president_sim_storage";
@@ -4110,10 +4144,14 @@
         if (copy.diplomacy?.countries) copy.diplomacy.countries.forEach(country => {
           if (!country.bilateral) return;
           const activeAgreements=(country.bilateral.agreements||[]).filter(item=>item.status==="active"&&item.daysLeft>0);
+          const activeInstruments=(country.bilateral.strategicInstruments||[]).filter(item=>item.status==="active"&&item.daysLeft>0);
+          const changedRepresentation=country.bilateral.ambassadorStatus&&country.bilateral.ambassadorStatus!==(country.embassy?"accredited":"none");
+          const activeCooldowns=Object.values(country.bilateral.strategicCooldowns||{}).some(value=>num(value)>0);
           const relevantHistory=(country.bilateral.history||[]).slice(0,level==="normal"?18:7);
-          if(!activeAgreements.length&&!relevantHistory.length){delete country.bilateral;return;}
+          if(!activeAgreements.length&&!activeInstruments.length&&!changedRepresentation&&!activeCooldowns&&!relevantHistory.length){delete country.bilateral;return;}
           country.bilateral.history=relevantHistory;
           country.bilateral.agreements=activeAgreements.concat((country.bilateral.agreements||[]).filter(item=>item.status!=="active").slice(0,level==="normal"?4:1)).slice(0,level==="normal"?14:8);
+          country.bilateral.strategicInstruments=activeInstruments.concat((country.bilateral.strategicInstruments||[]).filter(item=>item.status!=="active").slice(0,level==="normal"?4:1)).slice(0,level==="normal"?14:8);
         });
         if (copy.infrastructure?.history) copy.infrastructure.history = copy.infrastructure.history.slice(0, level === "normal" ? 36 : 14);
         if (copy.population?.demography?.history) copy.population.demography.history = copy.population.demography.history.slice(0, level === "normal" ? 36 : 14);
@@ -7565,13 +7603,16 @@
         const home=game.geography?.home||migrateWorldGeography(game).home,target=ensureCountryGeography(enemy),distance=geographicDistance(home,target),neighbor=(game.country.neighbors||[]).includes(enemy.name);
         const routeMode=neighbor?"приграничный театр":home.coastal&&target.coastal?"морской экспедиционный театр":home.landlocked||target.landlocked?"сухопутный транзит":"воздушно-сухопутный театр";
         const logistics=clamp(game.military.logistics*.35+game.military.airlift*.16+game.military.navalPower*.12+game.military.maintenance*.12+game.infrastructure.reliability*.12+game.geography.networkReliability*.13,0,100);
-        const playerProjection=neighbor?clamp(.88+logistics*.0012,.88,1):home.coastal&&target.coastal?clamp(.42+logistics*.0048-distance/80000,.38,.9):clamp(.46+logistics*.004-distance/70000,.36,.84);
+        const accessPartners=(game.diplomacy?.countries||[]).filter(country=>country.id!==enemy.id&&!country.war&&!country.sanctions&&ensureCountryGeography(country).zoneId===target.zoneId&&activeStrategicInstrument(country,"militaryTransit"));
+        const accessStrength=accessPartners.length?accessPartners.reduce((sum,country)=>sum+activeStrategicInstrument(country,"militaryTransit").strength,0)/accessPartners.length:0;
+        const transitBonus=accessPartners.length?clamp(.05+accessStrength*.0013,.05,.18):0;
+        const playerProjection=neighbor?clamp(.88+logistics*.0012,.88,1):home.coastal&&target.coastal?clamp(.42+logistics*.0048-distance/80000+transitBonus,.38,.96):clamp(.46+logistics*.004-distance/70000+transitBonus,.36,.92);
         const enemyProjectionRaw=clamp(.44+target.transport*.002+target.ports*.0015+enemy.domestic.defense.readiness*.0018+(enemy.greatPower?.08:0)-distance/82000,.36,.91);
         const playerIsExpeditionary=!war||war.aggressor!=="enemy";
         const projectionFactor=playerIsExpeditionary?playerProjection:1;
         const enemyProjection=playerIsExpeditionary?1:enemyProjectionRaw;
-        const supplyCeiling=clamp((playerIsExpeditionary?projectionFactor:1)*72+logistics*.28+(neighbor?8:0),34,96);
-        return {distance,mode:routeMode,neighbor,projectionFactor,enemyProjection,supplyCeiling,logistics,access:clamp(projectionFactor*100,0,100),label:neighbor?"прямая сухопутная граница":`${routeMode}, ${compact(distance)} км`};
+        const supplyCeiling=clamp((playerIsExpeditionary?projectionFactor:1)*72+logistics*.28+(neighbor?8:0)+transitBonus*24,34,98);
+        return {distance,mode:routeMode,neighbor,projectionFactor,enemyProjection,supplyCeiling,logistics,access:clamp(projectionFactor*100,0,100),transitPartner:accessPartners[0]?.name||"",label:neighbor?"прямая сухопутная граница":`${routeMode}, ${compact(distance)} км${accessPartners.length?` · доступ через ${accessPartners.slice(0,2).map(country=>country.name).join(", ")}`:""}`};
       }
 
       function foreignEconomicProfile(country) {
@@ -7796,6 +7837,101 @@
         };
       }
 
+      function strategicDiplomacyCatalog() {
+        return {
+          stateVisit: { title:"Государственный визит", category:"саммит", kind:"initiative", cost:320, cooldown:540, minRelation:25, minTrust:20, tone:"good", desc:"Личная встреча лидеров, совместная декларация и пакет поручений правительствам.", when:"Для политической перезагрузки, подготовки крупных договоров или демонстрации особых отношений.", effect:"Повышает отношения, доверие, политический доступ и международный престиж.", risk:"Протесты, слабая подготовка или публичные разногласия могут превратить визит в дипломатический провал.", cta:"Организовать визит" },
+          strategicPartnership: { title:"Стратегическое партнерство", category:"долгий курс", kind:"instrument", cost:680, annualCost:190, duration:1825, cooldown:365, minRelation:62, minTrust:58, tone:"institution", dimension:"politicalAccess", desc:"Пятилетняя рамка регулярных саммитов, межведомственной координации и приоритетного сотрудничества без союзных обязательств.", when:"Когда отношения устойчивы, но полноценный военный союз не нужен или пока невозможен.", effect:"Постепенно укрепляет доверие, влияние и прочность других совместных программ.", risk:"Соперники партнера могут потребовать разъяснений, а провал исполнения ударит по надежности государства.", cta:"Предложить партнерство" },
+          specialEnvoy: { title:"Специальный посланник", category:"переговоры", kind:"instrument", cost:140, annualCost:0, duration:180, cooldown:240, minRelation:12, minTrust:10, tone:"civic", dimension:"politicalAccess", desc:"Президент направляет уполномоченного представителя с узким мандатом на урегулирование спора или подготовку сделки.", when:"Когда обычные каналы работают медленно, но стороны еще готовы к закрытым консультациям.", effect:"Временно повышает политический доступ, доверие и вероятность согласования договоров.", risk:"Провал миссии раскрывает слабость переговорной позиции и увеличивает риск спора.", cta:"Направить посланника" },
+          recallAmbassador: { title:"Отозвать или вернуть посла", category:"дипсигнал", kind:"unilateral", cost:25, cooldown:240, minRelation:0, minTrust:0, tone:"warn", desc:"Изменение уровня дипломатического представительства без полного разрыва отношений.", when:"Для выражения серьезного недовольства либо восстановления полноценного политического канала.", effect:"Отзыв усиливает давление; возвращение посла восстанавливает политический доступ и переговорные возможности.", risk:"Долгое отсутствие посла ухудшает информацию, доверие и способность управлять кризисами.", cta:"Изменить статус посла" },
+          expelDiplomats: { title:"Высылка дипломатов", category:"контрмеры", kind:"unilateral", cost:40, cooldown:365, minRelation:0, minTrust:0, tone:"bad", desc:"Сокращение дипломатической миссии после шпионажа, провокации или грубого нарушения протокола.", when:"Когда требуется жесткий ответ ниже уровня санкций или разрыва отношений.", effect:"Усиливает контрразведывательную защищенность и демонстрирует политическую решимость.", risk:"Высока вероятность зеркальной высылки, падения доверия и закрытия рабочих каналов.", cta:"Выслать дипломатов" },
+          freeTrade: { title:"Соглашение о свободной торговле", category:"интеграция", kind:"instrument", cost:560, annualCost:125, duration:2555, cooldown:540, minRelation:54, minTrust:48, tone:"good", dimension:"economicInterdependence", desc:"Семилетнее снижение тарифов, признание стандартов и постоянный механизм урегулирования торговых споров.", when:"Когда обычный контракт уже работает, а предприятия готовы к глубокой взаимной конкуренции.", effect:"Постепенно увеличивает торговлю, экспорт, инвестиции и доступ к рынку партнера.", risk:"Неконкурентоспособные отрасли могут потерять долю рынка; санкции быстро разрушат выгоды.", cta:"Предложить соглашение" },
+          stateCredit: { title:"Государственный кредит", category:"финансовое влияние", kind:"instrument", cost:900, annualCost:18, duration:1825, cooldown:730, minRelation:38, minTrust:34, tone:"warn", dimension:"ourInfluence", desc:"Пятилетний целевой заем партнеру на инфраструктуру, стабилизацию или закупки у наших предприятий.", when:"Когда у партнера есть приемлемая платежеспособность, а государству нужен долгосрочный экономический рычаг.", effect:"Создает процентный доход, экспортный спрос и политическое влияние до погашения кредита.", risk:"Кризис, война или смена власти способны привести к реструктуризации и частичному невозврату.", cta:"Предоставить кредит" },
+          debtRestructure: { title:"Реструктуризация долга", category:"долговая дипломатия", kind:"unilateral", cost:80, cooldown:540, minRelation:0, minTrust:0, tone:"warn", desc:"Продление срока государственного кредита и частичное изменение процентной ставки или основной суммы.", when:"Когда заемщик испытывает стресс и риск дефолта становится выше политической цены уступок.", effect:"Снижает текущую нагрузку партнера, улучшает отношения и повышает вероятность возврата оставшейся суммы.", risk:"Часть финансовой стоимости будет списана, а слишком мягкие условия создадут репутацию слабого кредитора.", cta:"Пересмотреть долг" },
+          jointExercises: { title:"Совместные военные учения", category:"оборона", kind:"instrument", cost:460, annualCost:0, duration:180, cooldown:540, minRelation:56, minTrust:50, tone:"institution", dimension:"securityAlignment", desc:"Шестимесячный цикл штабных, сухопутных и воздушных учений с общими стандартами связи.", when:"Для повышения совместимости армий и демонстрации сдерживания без создания нового союза.", effect:"Временно повышает подготовку, командование, готовность и безопасность партнера.", risk:"Соседи и соперники могут воспринять маневры как подготовку к конфликту.", cta:"Согласовать учения" },
+          militaryTransit: { title:"Военный транзит и доступ к базам", category:"логистика", kind:"instrument", cost:420, annualCost:135, duration:1095, cooldown:540, minRelation:64, minTrust:58, tone:"institution", dimension:"securityAlignment", desc:"Разрешение на использование воздушного пространства, портов, аэродромов и узлов снабжения партнера.", when:"Когда стране нужна реальная проекция сил и эвакуационные маршруты в регионе партнера.", effect:"Повышает предел снабжения и долю армии, которую можно развернуть на близком театре.", risk:"Создает политическую зависимость и воспринимается соперниками как военное расширение.", cta:"Запросить доступ" },
+          armsControl: { title:"Контроль вооружений", category:"стратегическая стабильность", kind:"instrument", cost:340, annualCost:75, duration:1460, cooldown:540, minRelation:34, minTrust:38, tone:"good", dimension:"legalCooperation", desc:"Инспекции, уведомления об учениях, ограничения опасного развертывания и проверяемые меры доверия.", when:"При высокой угрозе, гонке вооружений или частых пограничных инцидентах.", effect:"Снижает риск спора, взаимную угрозу, международную напряженность и вероятность случайной войны.", risk:"Ограничивает свободу военного планирования; сокрытие данных станет тяжелым нарушением договора.", cta:"Предложить договор" },
+          hotline: { title:"Горячая линия правительств", category:"деэскалация", kind:"instrument", cost:180, annualCost:45, duration:900, cooldown:365, minRelation:20, minTrust:24, tone:"civic", dimension:"politicalAccess", desc:"Защищенная связь между аппаратами лидеров, МИД и военными центрами предотвращения инцидентов.", when:"Когда отношения напряжены, а ошибка или неверный сигнал могут вызвать кризис.", effect:"Ускоряет консультации и постепенно снижает риск спора, угрозу и пограничные инциденты.", risk:"Канал бесполезен без политической воли и может быть приостановлен после серьезной провокации.", cta:"Открыть линию" },
+          intelligenceSharing: { title:"Обмен разведданными", category:"безопасность", kind:"instrument", cost:390, annualCost:120, duration:730, cooldown:540, minRelation:58, minTrust:58, tone:"civic", dimension:"technologyAccess", desc:"Обмен предупреждениями о терроризме, преступных сетях, киберугрозах и военных рисках.", when:"Когда стороны имеют общую угрозу и достаточные стандарты защиты секретных данных.", effect:"Улучшает анализ, контрразведку, осведомленность о партнере и качество совместного планирования.", risk:"Компрометация источников или утечка сведений нанесет тяжелый ущерб доверию.", cta:"Предложить обмен" },
+          internationalSupport: { title:"Поддержка в международной организации", category:"многосторонняя политика", kind:"instrument", cost:210, annualCost:50, duration:365, cooldown:365, minRelation:30, minTrust:28, tone:"good", dimension:"ourInfluence", desc:"Публичная поддержка резолюции, кандидатуры или согласованной правовой позиции партнера.", when:"Когда голос партнера важен для будущей коалиции или требуется подтвердить политическую солидарность.", effect:"Повышает отношения, влияние и вероятность ответной поддержки на международных площадках.", risk:"Противники инициативы ухудшат отношение к нам, а спорная позиция может повредить правовой репутации.", cta:"Поддержать позицию" },
+          treatyTermination: { title:"Приостановить или расторгнуть договор", category:"выход из обязательств", kind:"unilateral", cost:35, cooldown:365, minRelation:0, minTrust:0, tone:"bad", desc:"Официальное уведомление о прекращении самого слабого или невыгодного действующего механизма.", when:"Когда договор больше не соответствует интересам государства либо партнер систематически его нарушает.", effect:"Останавливает расходы и действие выбранного обязательства.", risk:"Снижает отношения и надежность государства; внезапный выход может вызвать ответные меры.", cta:"Направить уведомление" }
+        };
+      }
+
+      function activeStrategicInstrument(country, type) {
+        return country?.bilateral?.strategicInstruments?.find(item=>item.type===type&&item.status==="active"&&item.daysLeft>0)||null;
+      }
+
+      function strategicDiplomacyChance(game, country, type) {
+        const spec=strategicDiplomacyCatalog()[type];
+        if(!spec||!country)return 0;
+        if(spec.kind==="unilateral")return 100;
+        const b=ensureBilateralPortfolio(game,country),s=ensureDiplomaticAI(country).strategy;
+        const sector=spec.dimension?num(b[spec.dimension],50):b.politicalAccess;
+        let chance=country.relations*.42+s.trust*.24+b.politicalAccess*.12+sector*.08+game.diplomacy.law.treatyReliability*.12-s.threat*.12-b.disputeRisk*.08;
+        if(type==="stateCredit")chance+=country.stability*.12-s.dependence*.04;
+        if(type==="armsControl"||type==="hotline")chance+=Math.max(0,s.threat-45)*.18;
+        if(type==="jointExercises"||type==="militaryTransit")chance+=b.securityAlignment*.08;
+        if(country.sanctions)chance-=34;
+        if(country.embargo)chance-=42;
+        if(country.war)chance-=65;
+        return clamp(chance,0,96);
+      }
+
+      function registerStrategicInstrument(game,country,type,extra={}) {
+        const spec=strategicDiplomacyCatalog()[type];
+        if(!spec||spec.kind==="unilateral"||!spec.duration)return null;
+        const b=ensureBilateralPortfolio(game,country),existing=activeStrategicInstrument(country,type);
+        if(existing){existing.daysLeft=Math.max(existing.daysLeft,spec.duration);existing.strength=clamp(existing.strength+7,0,100);existing.status="active";return existing;}
+        const instrument=Object.assign({id:uid("strategic_diplo"),type,title:spec.title,started:formatDate(game.date),daysLeft:spec.duration,strength:clamp(46+country.relations*.3,42,82),status:"active",source:"player"},extra);
+        if(type==="stateCredit"){instrument.principal=Math.max(100,num(extra.principal,spec.cost));instrument.rate=clamp(num(extra.rate,4.2),1,18);instrument.accrued=0;instrument.restructured=0;}
+        b.strategicInstruments.unshift(instrument);b.strategicInstruments=b.strategicInstruments.slice(0,18);
+        if(spec.dimension)b[spec.dimension]=clamp(num(b[spec.dimension])+3.5,0,100);
+        b.history.unshift({date:formatDate(game.date),title:spec.title,text:`Инструмент вступил в силу${spec.duration?` на ${Math.round(spec.duration/30)} мес.`:""}.`,tone:spec.tone});b.history=b.history.slice(0,24);
+        b.lastBriefing=`${spec.title}: создан постоянный контур исполнения и оценки рисков.`;
+        return instrument;
+      }
+
+      function simulateStrategicDiplomaticInstruments(game,country,portfolio,strategy) {
+        const catalog=strategicDiplomacyCatalog(),e=game.economy,law=game.diplomacy.law;
+        Object.keys(portfolio.strategicCooldowns||{}).forEach(key=>{portfolio.strategicCooldowns[key]=Math.max(0,portfolio.strategicCooldowns[key]-1);if(!portfolio.strategicCooldowns[key])delete portfolio.strategicCooldowns[key];});
+        const active=portfolio.strategicInstruments.filter(item=>item.status==="active"&&item.daysLeft>0);
+        for(const instrument of active){
+          const spec=catalog[instrument.type];if(!spec)continue;
+          instrument.daysLeft=Math.max(0,instrument.daysLeft-1);
+          const complianceTarget=clamp(country.relations*.5+strategy.trust*.28+law.treatyReliability*.14+portfolio.politicalAccess*.08-strategy.threat*.12-portfolio.disputeRisk*.12-(country.sanctions?34:0)-(country.embargo?44:0)-(country.war?46:0),0,100);
+          instrument.strength=clamp(instrument.strength+(complianceTarget-instrument.strength)*.0025,0,100);
+          const upkeep=num(spec.annualCost)/DAYS_PER_YEAR;
+          if(upkeep>0){if(e.budget>=upkeep)e.budget-=upkeep;else instrument.strength=clamp(instrument.strength-.04,0,100);}
+          const scale=instrument.strength/100;
+          if(instrument.type==="strategicPartnership"){country.relations=clamp(country.relations+.0009*scale,0,100);strategy.trust=clamp(strategy.trust+.0011*scale,0,100);portfolio.ourInfluence=clamp(portfolio.ourInfluence+.001*scale,0,100);portfolio.strategicInstruments.filter(item=>item!==instrument&&item.status==="active").forEach(item=>item.strength=clamp(item.strength+.0008*scale,0,100));}
+          if(instrument.type==="specialEnvoy"){portfolio.politicalAccess=clamp(portfolio.politicalAccess+.004*scale,0,100);portfolio.disputeRisk=clamp(portfolio.disputeRisk-.002*scale,0,100);strategy.trust=clamp(strategy.trust+.002*scale,0,100);}
+          if(instrument.type==="freeTrade"){country.trade+=e.gdp*.00000042*scale;e.exports+=e.gdp*.000000055*scale;e.investments+=e.gdp*.00000006*scale;portfolio.economicInterdependence=clamp(portfolio.economicInterdependence+.0018*scale,0,100);}
+          if(instrument.type==="stateCredit"){
+            const paymentFactor=clamp(country.stability*.007+strategy.trust*.0035-(country.sanctions?.32:0)-(country.war?.5:0),0,1);
+            const interest=Math.max(0,num(instrument.principal))*num(instrument.rate,4.2)/100/DAYS_PER_YEAR*paymentFactor*scale;
+            e.budget+=interest;instrument.accrued=num(instrument.accrued)+interest;portfolio.ourInfluence=clamp(portfolio.ourInfluence+.0014*scale,0,100);country.trade+=interest*.08;
+          }
+          if(instrument.type==="jointExercises"){game.military.training=clamp(game.military.training+.0016*scale,0,100);game.military.command=clamp(game.military.command+.0013*scale,0,100);game.military.readiness=clamp(game.military.readiness+.0008*scale,0,100);country.domestic.defense.readiness=clamp(country.domestic.defense.readiness+.0012*scale,0,100);}
+          if(instrument.type==="militaryTransit"){portfolio.securityAlignment=clamp(portfolio.securityAlignment+.0014*scale,0,100);game.military.logistics=clamp(game.military.logistics+.0007*scale,0,100);}
+          if(instrument.type==="armsControl"){portfolio.disputeRisk=clamp(portfolio.disputeRisk-.0032*scale,0,100);strategy.threat=clamp(strategy.threat-.0024*scale,0,100);game.diplomacy.globalTension=clamp(game.diplomacy.globalTension-.0015*scale,0,100);country.legalProfile.borderIncidents=clamp(country.legalProfile.borderIncidents-.0015*scale,0,100);}
+          if(instrument.type==="hotline"){portfolio.disputeRisk=clamp(portfolio.disputeRisk-.0026*scale,0,100);strategy.threat=clamp(strategy.threat-.0015*scale,0,100);portfolio.politicalAccess=clamp(portfolio.politicalAccess+.0012*scale,0,100);}
+          if(instrument.type==="intelligenceSharing"){game.intelligence.analysis=clamp(game.intelligence.analysis+.001*scale,0,100);game.intelligence.counterIntel=clamp(game.intelligence.counterIntel+.0006*scale,0,100);country.spy=clamp(country.spy+.0014*scale,0,100);portfolio.technologyAccess=clamp(portfolio.technologyAccess+.0008*scale,0,100);}
+          if(instrument.type==="internationalSupport"){portfolio.ourInfluence=clamp(portfolio.ourInfluence+.0024*scale,0,100);law.reputation=clamp(law.reputation+.00035*scale,0,100);strategy.trust=clamp(strategy.trust+.001*scale,0,100);}
+          if(instrument.daysLeft<=0||instrument.strength<=8){
+            instrument.status=instrument.strength<=8?"suspended":"expired";
+            let ending=instrument.status==="suspended"?"Исполнение остановлено после утраты доверия.":"Срок действия завершен.";
+            if(instrument.type==="stateCredit"&&instrument.status==="expired"){
+              const repaymentRatio=clamp(country.stability*.007+strategy.trust*.0038+law.treatyReliability*.0015-(country.war?.55:0)-(country.sanctions?.28:0),.08,1.03);
+              const repayment=num(instrument.principal)*repaymentRatio;e.budget+=repayment;
+              ending=`Погашено ${money(repayment)} из ${money(instrument.principal)}; итоговая возвратность ${pct(repaymentRatio*100,0)}.`;
+              if(repaymentRatio<.72){portfolio.disputeRisk=clamp(portfolio.disputeRisk+12,0,100);law.treatyReliability=clamp(law.treatyReliability-1.2,0,100);}
+            }
+            portfolio.history.unshift({date:formatDate(game.date),title:instrument.title,text:ending,tone:instrument.status==="suspended"?"bad":"warn"});portfolio.lastBriefing=`${instrument.title}: ${ending}`;
+          }
+        }
+        portfolio.strategicInstruments=portfolio.strategicInstruments.filter(item=>item.status==="active"||item.daysLeft===0).slice(0,18);
+      }
+
       function defaultBilateralPortfolio(game, country) {
         const relation = clamp(num(country?.relations, 50), 0, 100);
         const tradeShare = clamp(num(country?.trade) / Math.max(1, num(country?.gdp, 100000)) * 100, 0, 100);
@@ -7815,6 +7951,9 @@
           ourInfluence: clamp(relation * .34 + num(game?.softPower?.prestige,50) * .28 + num(country?.aid) / 80, 0, 100),
           partnerInfluence: clamp(Math.log10(Math.max(1000,num(country?.gdp,100000))) * 8 + num(country?.military,50) * .22 + tradeShare * .35, 0, 100),
           disputeRisk: clamp(58 - relation * .5 + num(country?.strategy?.threat,30) * .35 + (country?.sanctions ? 18 : 0) + (country?.embargo ? 24 : 0), 0, 100),
+          ambassadorStatus: country?.embassy ? "accredited" : "none",
+          strategicInstruments: [],
+          strategicCooldowns: {},
           agreements: [],
           history: [],
           reviewDays: 30,
@@ -7829,6 +7968,13 @@
         portfolio.modelVersion = BILATERAL_MODEL_VERSION;
         ["politicalAccess","economicInterdependence","investmentAccess","securityAlignment","technologyAccess","energySecurity","migrationCoordination","legalCooperation","climateCoordination","culturalAffinity","ourInfluence","partnerInfluence","disputeRisk"].forEach(key => portfolio[key] = clamp(num(portfolio[key], base[key]), 0, 100));
         portfolio.reviewDays = clamp(Math.round(num(portfolio.reviewDays,30)), 0, 45);
+        portfolio.ambassadorStatus = ["none","accredited","recalled","reduced"].includes(portfolio.ambassadorStatus) ? portfolio.ambassadorStatus : (country.embassy ? "accredited" : "none");
+        portfolio.strategicCooldowns = portfolio.strategicCooldowns && typeof portfolio.strategicCooldowns === "object" && !Array.isArray(portfolio.strategicCooldowns) ? portfolio.strategicCooldowns : {};
+        Object.keys(portfolio.strategicCooldowns).forEach(key=>{portfolio.strategicCooldowns[key]=Math.max(0,Math.round(num(portfolio.strategicCooldowns[key])));if(!portfolio.strategicCooldowns[key])delete portfolio.strategicCooldowns[key];});
+        const strategicCatalog=strategicDiplomacyCatalog();
+        portfolio.strategicInstruments=(Array.isArray(portfolio.strategicInstruments)?portfolio.strategicInstruments:[]).filter(item=>item&&strategicCatalog[item.type]&&strategicCatalog[item.type].duration).map(item=>{
+          const spec=strategicCatalog[item.type];item.id||=uid("strategic_diplo");item.title||=spec.title;item.started||=formatDate(game.date);item.status||="active";item.strength=clamp(num(item.strength,56),0,100);item.daysLeft=Math.max(0,Math.round(num(item.daysLeft,spec.duration)));if(item.type==="stateCredit"){item.principal=Math.max(0,num(item.principal,spec.cost));item.rate=clamp(num(item.rate,4.2),1,18);item.accrued=Math.max(0,num(item.accrued));item.restructured=Math.max(0,Math.round(num(item.restructured)));}return item;
+        }).slice(0,18);
         const catalog = bilateralAgreementCatalog();
         portfolio.agreements = (Array.isArray(portfolio.agreements) ? portfolio.agreements : []).filter(item => item && catalog[item.type]).map(item => {
           const spec = catalog[item.type];
@@ -7886,14 +8032,17 @@
           portfolio.reviewDays = Math.max(0, portfolio.reviewDays - 1);
           const tradeShare = clamp(country.trade / Math.max(1,country.gdp) * 100,0,100);
           const active = portfolio.agreements.filter(item=>item.status==="active"&&item.daysLeft>0);
-          const agreementBonus = active.length * 2.2;
-          const politicalTarget = clamp(country.relations*.64+(country.embassy?18:3)+strategy.trust*.18-strategy.threat*.14,0,100);
+          simulateStrategicDiplomaticInstruments(game,country,portfolio,strategy);
+          const strategicActive=portfolio.strategicInstruments.filter(item=>item.status==="active"&&item.daysLeft>0);
+          const agreementBonus = active.length * 2.2 + strategicActive.length * 1.7;
+          const representationBonus=portfolio.ambassadorStatus==="accredited"?18:portfolio.ambassadorStatus==="reduced"?7:portfolio.ambassadorStatus==="recalled"?1:3;
+          const politicalTarget = clamp(country.relations*.64+representationBonus+strategy.trust*.18-strategy.threat*.14,0,100);
           const economicTarget = clamp(tradeShare*1.65+country.relations*.24+active.filter(item=>["trade","investment","energy"].includes(item.type)).length*8,0,100);
           portfolio.politicalAccess=clamp(portfolio.politicalAccess+(politicalTarget-portfolio.politicalAccess)*.0018,0,100);
           portfolio.economicInterdependence=clamp(portfolio.economicInterdependence+(economicTarget-portfolio.economicInterdependence)*.0016,0,100);
           portfolio.ourInfluence=clamp(portfolio.ourInfluence+((country.relations*.28+num(game.softPower?.prestige,50)*.34+num(country.aid)/90+agreementBonus)-portfolio.ourInfluence)*.0012,0,100);
           portfolio.partnerInfluence=clamp(portfolio.partnerInfluence+((Math.log10(Math.max(1000,country.gdp))*8+country.military*.22+strategy.leverage*.16+portfolio.economicInterdependence*.12)-portfolio.partnerInfluence)*.0012,0,100);
-          const disputeTarget=clamp(62-country.relations*.52+strategy.threat*.38+(country.sanctions?20:0)+(country.embargo?26:0)+Math.max(0,portfolio.partnerInfluence-portfolio.ourInfluence)*.08-num(law?.treatyReliability,60)*.08,0,100);
+          const disputeTarget=clamp(62-country.relations*.52+strategy.threat*.38+(country.sanctions?20:0)+(country.embargo?26:0)+(portfolio.ambassadorStatus==="recalled"?8:portfolio.ambassadorStatus==="reduced"?3:0)+Math.max(0,portfolio.partnerInfluence-portfolio.ourInfluence)*.08-num(law?.treatyReliability,60)*.08,0,100);
           portfolio.disputeRisk=clamp(portfolio.disputeRisk+(disputeTarget-portfolio.disputeRisk)*.0018,0,100);
           for (const agreement of active) {
             const spec = bilateralAgreementCatalog()[agreement.type], scale = agreement.strength/100;
@@ -7920,13 +8069,13 @@
       }
 
       function renderBilateralPortfolio(country) {
-        const b=ensureBilateralPortfolio(state,country),active=b.agreements.filter(item=>item.status==="active"&&item.daysLeft>0);
+        const b=ensureBilateralPortfolio(state,country),active=b.agreements.filter(item=>item.status==="active"&&item.daysLeft>0),strategic=b.strategicInstruments.filter(item=>item.status==="active"&&item.daysLeft>0),representation=({none:"нет посольства",accredited:"посол аккредитован",recalled:"посол отозван",reduced:"миссия сокращена"})[b.ambassadorStatus]||"рабочий уровень";
         const metric=(label,value)=>`<span><small>${esc(label)}</small><strong class="delta ${value>=65?"good":value<35?"bad":"warn"}">${pct(value,0)}</strong></span>`;
-        return `<details class="action-fold" style="margin-top:10px;" open><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Двустороннее досье</strong><small>сектора влияния, зависимости, споры и исполняемые договоры</small></span><span class="pill">${active.length} соглаш.</span></summary><div class="action-fold-body">
+        return `<details class="action-fold" style="margin-top:10px;" open><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Двустороннее досье</strong><small>сектора влияния, зависимости, споры и исполняемые договоры</small></span><span class="pill">${active.length+strategic.length} механ.</span></summary><div class="action-fold-body">
           <div class="fiscal-ledger">${metric("Политический доступ",b.politicalAccess)}${metric("Торговая связь",b.economicInterdependence)}${metric("Инвестиции",b.investmentAccess)}${metric("Безопасность",b.securityAlignment)}${metric("Технологии",b.technologyAccess)}${metric("Энергетика",b.energySecurity)}${metric("Миграция",b.migrationCoordination)}${metric("Правовая помощь",b.legalCooperation)}${metric("Культура",b.culturalAffinity)}${metric("Климат",b.climateCoordination)}</div>
           <div class="kpi-strip" style="margin-top:10px;"><div class="kpi"><span>Наше влияние</span><strong>${pct(b.ourInfluence,0)}</strong></div><div class="kpi"><span>Влияние партнера</span><strong>${pct(b.partnerInfluence,0)}</strong></div><div class="kpi"><span>Риск спора</span><strong class="delta ${b.disputeRisk>65?"bad":b.disputeRisk>38?"warn":"good"}">${pct(b.disputeRisk,0)}</strong></div></div>
-          <p class="subtle" style="margin:10px 0 0;">${esc(b.lastBriefing)}</p>
-          <div class="list" style="margin-top:10px;">${active.length?active.map(item=>`<div class="row"><span><strong>${esc(item.title)}</strong><br><small class="subtle">осталось ${item.daysLeft} дн. · фактическое исполнение зависит от отношений и бюджета</small></span><span class="pill ${item.strength<35?"bad":item.strength<60?"warn":"good"}">прочность ${pct(item.strength,0)}</span></div>`).join(""):`<div class="row"><span>Долгосрочных двусторонних соглашений пока нет</span><span class="pill">базовые контакты</span></div>`}</div>
+          <p class="subtle" style="margin:10px 0 0;">Представительство: ${esc(representation)}. ${esc(b.lastBriefing)}</p>
+          <div class="list" style="margin-top:10px;">${active.length+strategic.length?[...strategic.map(item=>Object.assign({strategic:true},item)),...active].map(item=>`<div class="row"><span><strong>${esc(item.title)}</strong><br><small class="subtle">${item.strategic?"стратегический инструмент":"отраслевой договор"} · осталось ${item.daysLeft} дн.${item.type==="stateCredit"?` · основной долг ${money(item.principal)}`:""}</small></span><span class="pill ${item.strength<35?"bad":item.strength<60?"warn":"good"}">прочность ${pct(item.strength,0)}</span></div>`).join(""):`<div class="row"><span>Долгосрочных двусторонних механизмов пока нет</span><span class="pill">базовые контакты</span></div>`}</div>
         </div></details>`;
       }
 
@@ -7958,6 +8107,9 @@
         const s = ensureDiplomaticAI(country).strategy;
         const b = country.bilateral;
         if (country.war) return "ведение войны и поиск внешней поддержки";
+        if (activeStrategicInstrument(country,"stateCredit")&&country.stability<42) return "переговоры о графике погашения государственного кредита";
+        if (activeStrategicInstrument(country,"strategicPartnership")) return "исполнение стратегического партнерства и получение новых взаимных уступок";
+        if (activeStrategicInstrument(country,"freeTrade")) return "защита доступа к рынку и расширение зоны свободной торговли";
         if (s.threat >= 72 && country.relations < 35) return "сдерживание, санкции или силовое давление";
         if (b?.disputeRisk >= 68) return "пересмотр договоров и получение уступок по спорным условиям";
         if (b?.technologyAccess < 42 && s.trust >= 58 && country.aiMood === "реформистский") return "технологическое и образовательное партнерство";
@@ -11598,8 +11750,32 @@
         return { title: item[0], category: item[1], desc: item[2], signal: item[3], when: item[4], effect: item[5], risk: item[6], cta: item[7], tone: item[8] };
       }
 
+      function strategicDiplomacyDecisionMeta(id,country) {
+        const spec=strategicDiplomacyCatalog()[id];if(!spec)return null;
+        const c=country||state.diplomacy.countries.find(x=>x.id===selectedCountryId)||state.diplomacy.countries[0],b=c?ensureBilateralPortfolio(state,c):null;
+        const active=c?activeStrategicInstrument(c,id):null,credit=c?activeStrategicInstrument(c,"stateCredit"):null,cooldown=num(b?.strategicCooldowns?.[id]),chance=c?strategicDiplomacyChance(state,c,id):0;
+        const activeAll=c?[...(b?.strategicInstruments||[]).filter(item=>item.status==="active"&&item.daysLeft>0),...(b?.agreements||[]).filter(item=>item.status==="active"&&item.daysLeft>0)]:[];
+        let title=spec.title,cta=active?"Продлить механизм":spec.cta,signal=`шанс ${pct(chance,0)} · отношения ${c?pct(c.relations,0):"нет"}`,disabled=false;
+        if(active)signal=`действует ${active.daysLeft} дн. · прочность ${pct(active.strength,0)}`;
+        if(cooldown>0)signal+=` · повтор через ${cooldown} дн.`;
+        if(id==="recallAmbassador"){
+          const status=b?.ambassadorStatus||"none";
+          title=status==="recalled"||status==="reduced"?"Вернуть посла":"Отозвать посла";
+          cta=status==="recalled"||status==="reduced"?"Восстановить миссию":status==="none"?"Назначить посла":"Отозвать посла";
+          signal=`представительство: ${({none:"нет посла",accredited:"полный уровень",recalled:"посол отозван",reduced:"миссия сокращена"})[status]}${cooldown?` · повтор через ${cooldown} дн.`:""}`;
+        }
+        if(id==="expelDiplomats")signal=`отношения ${c?pct(c.relations,0):"нет"} · риск зеркальной меры ${c?pct(clamp(72-c.relations*.35+ensureDiplomaticAI(c).strategy.threat*.28,12,88),0):"нет"}${cooldown?` · повтор через ${cooldown} дн.`:""}`;
+        if(id==="stateCredit")signal=active?`остаток ${money(active.principal)} · ставка ${num(active.rate,4.2).toFixed(1)}% · ${active.daysLeft} дн.`:`шанс ${pct(chance,0)} · цена ${money(spec.cost)}`;
+        if(id==="debtRestructure"){signal=credit?`долг ${money(credit.principal)} · ставка ${num(credit.rate,4.2).toFixed(1)}% · ${credit.daysLeft} дн.`:"активного государственного кредита нет";disabled=!credit;}
+        if(id==="treatyTermination"){signal=activeAll.length?`действующих обязательств ${activeAll.length}`:"нет договора для прекращения";disabled=!activeAll.length;}
+        if(id==="internationalSupport")signal=`влияние ${c?pct(b.ourInfluence,0):"нет"} · правовая репутация ${pct(state.diplomacy.law.reputation,0)}`;
+        if(id==="militaryTransit")signal=active?`доступ действует ${active.daysLeft} дн. · прочность ${pct(active.strength,0)}`:`шанс ${pct(chance,0)} · безопасность ${c?pct(b.securityAlignment,0):"нет"}`;
+        return {title,category:spec.category,desc:spec.desc,signal,when:spec.when,effect:spec.effect,risk:spec.risk,cta,tone:spec.tone,disabled};
+      }
+
       function diplomacyDecisionMeta(id, country) {
         const c = country || state.diplomacy.countries.find(x => x.id === selectedCountryId) || state.diplomacy.countries[0];
+        const strategicMeta=strategicDiplomacyDecisionMeta(id,c);if(strategicMeta)return strategicMeta;
         const relation = c ? pct(c.relations, 0) : "нет";
         const allianceChance = c ? clamp(c.relations + c.stability * .2 + state.diplomacy.law.reputation * .18 + state.diplomacy.law.treatyReliability * .14 - 16 - c.spy * .12 - (c.sanctions ? 25 : 0) - (c.embargo ? 18 : 0), 0, 100) : 0;
         const war = c ? calcPreWarAssessment(c) : null;
@@ -12469,6 +12645,8 @@
         const strategy = selected ? ensureDiplomaticAI(selected).strategy : null;
         const selectedGeo = selected ? ensureCountryGeography(selected) : null;
         const law = state.diplomacy.law;
+        const strategicActionIds = Object.keys(strategicDiplomacyCatalog());
+        const activeStrategicCount = selected ? ensureBilateralPortfolio(state,selected).strategicInstruments.filter(item=>item.status==="active"&&item.daysLeft>0).length : 0;
         return `
           <section class="grid split">
             <section class="panel">
@@ -12537,6 +12715,7 @@
                 </div>
                 <p class="subtle" style="margin: 12px 0 0;">Каждый договор имеет срок, ежегодную стоимость и фактическую прочность. Плохие отношения, санкции, война или недостаток бюджета способны остановить его исполнение.</p>
                 ${actionCardGrid(["relations","trade","alliance","sanctions","embargo","milAid","humanAid","spy","visa","war","peace"].map(id => renderActionCard(diplomacyDecisionMeta(id, selected), { "data-action": "diplo", "data-diplo": id }, { compact: true })), true)}
+                <details class="action-fold" style="margin-top:10px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Стратегические дипломатические инструменты</strong><small>визиты, послы, финансовое влияние, оборонные меры и международные коалиции</small></span><span class="pill">${activeStrategicCount}/${strategicActionIds.length}</span></summary><div class="action-fold-body"><p class="subtle" style="margin:0 0 10px;">Эти решения учитывают доверие, угрозу, бюджет, международное право и реакцию третьих стран. Долгосрочные механизмы имеют срок, стоимость и фактическую прочность.</p><div class="strategic-diplomacy-grid">${actionCardGrid(strategicActionIds.map(id=>renderActionCard(diplomacyDecisionMeta(id,selected),{"data-action":"diplo","data-diplo":id},{compact:true})),true)}</div></div></details>
                 <details class="action-fold" style="margin-top:10px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Отраслевые международные соглашения</strong><small>инвестиции, технологии, энергетика, миграция, право, климат и культура</small></span></summary><div class="action-fold-body">${actionCardGrid(["investment","technology","energy","migration","climate","legal","mediation","cultural"].map(id => renderActionCard(diplomacyDecisionMeta(id, selected), { "data-action":"diplo", "data-diplo":id }, {compact:true})),true)}</div></details>
               </section>` : ""}
               ${renderWorldStatePanel()}
@@ -12628,7 +12807,8 @@
         if (c.sanctions) bits.push("санкции");
         if (c.embargo) bits.push("эмбарго");
         const agreements=c.bilateral?.agreements?.filter(item=>item.status==="active"&&item.daysLeft>0).length||0;
-        if(agreements)bits.push(`${agreements} соглаш.`);
+        const strategic=c.bilateral?.strategicInstruments?.filter(item=>item.status==="active"&&item.daysLeft>0).length||0;
+        if(agreements+strategic)bits.push(`${agreements+strategic} соглаш.`);
         if (!bits.length) bits.push(c.embassy ? "посольство" : "нет посольства");
         return bits.map(b => `<span class="pill">${b}</span>`).join(" ");
       }
@@ -15150,7 +15330,26 @@
       }
 
       function diplomaticDocumentTypes() {
-        return new Set(["trade", "alliance", "sanctions", "embargo", "milAid", "humanAid", "visa", "peace", "investment", "technology", "energy", "migration", "climate", "legal", "mediation", "cultural"]);
+        return new Set(["trade", "alliance", "sanctions", "embargo", "milAid", "humanAid", "visa", "peace", "investment", "technology", "energy", "migration", "climate", "legal", "mediation", "cultural", ...Object.keys(strategicDiplomacyCatalog())]);
+      }
+
+      function strategicDiplomaticDocumentMeta(type,country) {
+        const spec=strategicDiplomacyCatalog()[type];if(!spec)return null;
+        const meta=strategicDiplomacyDecisionMeta(type,country),b=ensureBilateralPortfolio(state,country),chance=strategicDiplomacyChance(state,country,type),active=activeStrategicInstrument(country,type);
+        const unilateral=spec.kind==="unilateral",duration=spec.duration?`${Math.round(spec.duration/30)} месяцев`:"разовое дипломатическое решение";
+        const terms=[
+          `Предмет решения: ${spec.desc}`,
+          spec.cost?`Финансирование запуска: ${money(spec.cost)}${spec.annualCost?`; ежегодное исполнение: ${money(spec.annualCost)}`:""}.`:`Дополнительное финансирование запуска не требуется.`,
+          `Срок и режим: ${duration}${active?`; действующий механизм будет продлен с текущей прочностью ${pct(active.strength,0)}`:""}.`,
+          `Ожидаемый результат: ${spec.effect}`,
+          `Риск и условия прекращения: ${spec.risk}`
+        ];
+        if(!unilateral)terms.splice(1,0,`Готовность партнера: ${pct(chance,0)}; отношения ${pct(country.relations,0)}, доверие ${pct(ensureDiplomaticAI(country).strategy.trust,0)}, риск спора ${pct(b.disputeRisk,0)}.`);
+        if(type==="stateCredit")terms.push("Основная сумма возвращается при завершении срока; кризис, санкции или война способны привести к частичному погашению.");
+        if(type==="debtRestructure")terms.push("Реструктуризация продлит действующий кредит, снизит ставку и спишет ограниченную часть основной суммы в обмен на повышение платежной дисциплины.");
+        if(type==="recallAmbassador")terms.push(`Текущий уровень представительства: ${({none:"посол отсутствует",accredited:"посол аккредитован",recalled:"посол отозван",reduced:"состав миссии сокращен"})[b.ambassadorStatus]}.`);
+        if(type==="treatyTermination")terms.push("МИД направит уведомление по самому слабому действующему обязательству; расходы прекратятся после регистрации решения.");
+        return {title:meta.title,subtitle:unilateral?"Официальная дипломатическая нота":"Межправительственный дипломатический инструмент",documentType:unilateral?"Дипломатическая нота":"Международный договор",preamble:`Правительство ${state.country.name} рассматривает решение «${meta.title}» в отношениях с ${country.name}.`,terms,tone:spec.tone};
       }
 
       function diplomaticDocumentMeta(type, country) {
@@ -15161,6 +15360,7 @@
           date: dateLabel(state.date),
           place: state.country.capital
         };
+        const strategic=strategicDiplomaticDocumentMeta(type,c);if(strategic)return Object.assign(common,strategic);
         const map = {
           trade: {
             title: "Торговое соглашение",
@@ -15313,7 +15513,7 @@
           body: `
             ${renderStateDocument({
               title: doc.title,
-              documentType: "Международный договор",
+              documentType: doc.documentType || "Международный договор",
               issuer: doc.subtitle,
               responsible: "Министерство иностранных дел и уполномоченные органы сторон",
               basis: "Венские принципы договорного права, национальное законодательство и согласованные полномочия сторон",
@@ -19141,6 +19341,76 @@
         normalizeCore();
       }
 
+      function applyStrategicThirdPartyReaction(partner,severity,actionLabel) {
+        const partnerGeo=ensureCountryGeography(partner);
+        const candidates=state.diplomacy.countries.filter(country=>country.id!==partner.id&&!country.war).map(country=>{
+          const strategy=ensureDiplomaticAI(country).strategy,link=strategy.links?.[partner.id],sameZone=ensureCountryGeography(country).zoneId===partnerGeo.zoneId;
+          const rivalry=link?.status==="соперничество"||num(link?.relation,50)<32;
+          return {country,strategy,score:(country.greatPower?28:0)+(sameZone?24:0)+(rivalry?38:0)+strategy.threat*.2};
+        }).filter(item=>item.score>=42).sort((a,b)=>b.score-a.score).slice(0,3);
+        candidates.forEach(({country,strategy})=>{country.relations=clamp(country.relations-severity,0,100);strategy.threat=clamp(strategy.threat+severity*.8,0,100);pushWorldDiplomacyLog(state,country.name,state.country.name,`выразила обеспокоенность: ${actionLabel.toLowerCase()} с ${partner.name}`,"реакция");});
+        return candidates.map(item=>item.country.name);
+      }
+
+      function executeStrategicDiplomacy(type,country) {
+        const spec=strategicDiplomacyCatalog()[type];if(!spec||!country)return null;
+        const e=state.economy,b=ensureBilateralPortfolio(state,country),strategy=ensureDiplomaticAI(country).strategy,law=state.diplomacy.law;
+        const cooldown=num(b.strategicCooldowns[type]),chance=strategicDiplomacyChance(state,country,type),active=activeStrategicInstrument(country,type);
+        if(cooldown>0)return showBlockedDecision("Решение пока недоступно",`МИД завершает предыдущий цикл по направлению «${spec.title}».`,[["Повтор через",`${cooldown} дн.`,"warn"]]);
+        if(type==="debtRestructure"&&!activeStrategicInstrument(country,"stateCredit"))return showBlockedDecision("Нет долга для реструктуризации",`${country.name} не имеет активного государственного кредита перед ${state.country.name}.`,[["Государственный кредит","не найден","warn"]]);
+        const activeObligations=[...b.strategicInstruments.filter(item=>item.status==="active"&&item.daysLeft>0),...b.agreements.filter(item=>item.status==="active"&&item.daysLeft>0)];
+        if(type==="treatyTermination"&&!activeObligations.length)return showBlockedDecision("Нет действующих обязательств","МИД не нашел договора, который можно приостановить или расторгнуть.",[["Действующие механизмы","0","warn"]]);
+        const positive=!["recallAmbassador","expelDiplomats","debtRestructure","treatyTermination"].includes(type);
+        if(positive&&country.war)return showBlockedDecision("Инструмент заблокирован войной",`Вооруженный конфликт с ${country.name} исключает запуск обычного дипломатического механизма.`,[["Статус","война","bad"]]);
+        if(positive&&(country.sanctions||country.embargo)&&!["armsControl","hotline"].includes(type))return showBlockedDecision("Переговоры заблокированы ограничениями","Сначала требуется снять санкции или эмбарго, несовместимые с новыми гарантиями.",[["Санкции",country.sanctions?"действуют":"нет",country.sanctions?"bad":"good"],["Эмбарго",country.embargo?"действует":"нет",country.embargo?"bad":"good"]]);
+        if(!["recallAmbassador","expelDiplomats","debtRestructure","treatyTermination"].includes(type)&&(country.relations<spec.minRelation||strategy.trust<spec.minTrust||chance<45))return showBlockedDecision("Инициатива не согласована",`${country.name} не готова принять предложенный формат. Требуются более устойчивые отношения, доверие и меньший риск спора.`,[["Отношения",pct(country.relations,0),country.relations>=spec.minRelation?"good":"bad"],["Минимум",pct(spec.minRelation,0),"warn"],["Доверие",pct(strategy.trust,0),strategy.trust>=spec.minTrust?"good":"bad"],["Шанс",pct(chance,0),chance>=45?"good":"bad"]]);
+        if(type==="freeTrade"&&!activeBilateralAgreement(country,"trade"))return showBlockedDecision("Нет базового торгового договора","Зона свободной торговли требует сначала создать работающий торгово-логистический договор.",[["Базовый договор","не подписан","warn"]]);
+        if(type==="stateCredit"&&active)return showBlockedDecision("Кредит уже действует","Новый межгосударственный заем нельзя выдать до погашения или реструктуризации текущего.",[["Остаток",money(active.principal),"warn"],["Срок",`${active.daysLeft} дн.`,"warn"]]);
+        if(e.budget<spec.cost)return showBlockedDecision("Решение не профинансировано","МИД и профильные ведомства не получили необходимый бюджет.",[["Нужно",money(spec.cost),"bad"],["Бюджет",money(e.budget),"bad"]]);
+        if(spec.kind!=="unilateral"&&!active&&simulationRandom()*100>chance){
+          const failedCost=Math.round(spec.cost*.22);e.budget-=failedCost;b.strategicCooldowns[type]=Math.max(90,Math.round(num(spec.cooldown,240)*.45));country.relations=clamp(country.relations-1.2,0,100);b.disputeRisk=clamp(b.disputeRisk+1.5,0,100);
+          return ["Переговоры не завершены",`${country.name} не приняла предложенный формат. Делегации сохранили канал, но проект отправлен на пересмотр.`,[["Вероятность",pct(chance,0),"warn"],["Подготовка",`-${money(failedCost)}`,"bad"],["Отношения","-1.2 п.п.","warn"],["Повтор",`${b.strategicCooldowns[type]} дн.`,"warn"]],"warn"];
+        }
+        e.budget-=spec.cost;b.strategicCooldowns[type]=Math.max(30,Math.round(num(spec.cooldown,240)));
+        let title=spec.title,result=`${state.country.name} и ${country.name} ввели новый дипломатический механизм.`,tone=spec.tone,details=[["Бюджет",`-${money(spec.cost)}`,"bad"]],reaction=[];
+        if(type==="stateVisit"){
+          const gain=clamp(3.5+chance*.045,4,8);country.relations+=gain;strategy.trust+=4.5;b.politicalAccess+=8;b.ourInfluence+=2.5;state.softPower.prestige+=1.4;
+          title="Государственный визит завершен";result=`Лидеры ${state.country.name} и ${country.name} согласовали совместную декларацию и межведомственную дорожную карту.`;details.push(["Отношения",`+${gain.toFixed(1)} п.п.`,"good"],["Доверие","+4.5 п.п.","good"],["Политический доступ","+8 п.п.","good"],["Престиж","+1.4 п.п.","good"]);
+        }else if(type==="recallAmbassador"){
+          const restore=["none","recalled","reduced"].includes(b.ambassadorStatus);
+          if(restore){b.ambassadorStatus="accredited";country.embassy=true;country.relations+=3;strategy.trust+=2;b.politicalAccess+=8;title="Посол возвращен";result=`Полноценная дипломатическая миссия в ${country.name} восстановлена.`;details.push(["Представительство","полный уровень","good"],["Отношения","+3 п.п.","good"],["Политический доступ","+8 п.п.","good"]);tone="good";}
+          else{b.ambassadorStatus="recalled";country.relations-=4;strategy.trust-=3;b.politicalAccess-=10;strategy.threat+=2;title="Посол отозван";result=`МИД понизил уровень контактов с ${country.name}, сохранив техническую работу посольства.`;details.push(["Представительство","понижено","warn"],["Отношения","-4 п.п.","bad"],["Политический доступ","-10 п.п.","bad"]);tone="warn";}
+        }else if(type==="expelDiplomats"){
+          const reciprocal=simulationRandom()*100<clamp(72-country.relations*.35+strategy.threat*.28,12,88);b.ambassadorStatus=reciprocal?"recalled":"reduced";country.relations-=10;strategy.trust-=8;strategy.threat+=6;b.politicalAccess-=14;b.disputeRisk+=9;state.intelligence.counterIntel=clamp(state.intelligence.counterIntel+2.2,0,100);if(reciprocal)country.embassy=false;
+          title="Дипломаты высланы";result=reciprocal?`${country.name} ответила зеркальной высылкой и отозвала нашу дипломатическую миссию.`:`${country.name} выразила протест, но пока сохранила рабочее представительство.`;details.push(["Контрразведка","+2.2 п.п.","good"],["Отношения","-10 п.п.","bad"],["Доверие","-8 п.п.","bad"],["Ответ",reciprocal?"зеркальная высылка":"официальный протест",reciprocal?"bad":"warn"]);tone="bad";
+        }else if(type==="debtRestructure"){
+          const credit=activeStrategicInstrument(country,"stateCredit"),writeDown=credit.principal*.1;credit.principal*=.9;credit.rate=clamp(credit.rate*.82,1,18);credit.daysLeft+=730;credit.strength=clamp(credit.strength+8,0,100);credit.restructured=num(credit.restructured)+1;country.relations+=4;strategy.trust+=2;b.ourInfluence-=1;
+          title="Долг реструктурирован";result=`${country.name} получила два дополнительных года и пониженную ставку; взамен закреплен обновленный график выплат.`;details.push(["Списание",money(writeDown),"bad"],["Новый остаток",money(credit.principal),"warn"],["Новая ставка",`${credit.rate.toFixed(1)}%`,"good"],["Срок",`${credit.daysLeft} дн.`,"warn"],["Отношения","+4 п.п.","good"]);
+        }else if(type==="treatyTermination"){
+          const target=activeObligations.slice().sort((a,b)=>a.strength-b.strength)[0];target.status="suspended";target.daysLeft=0;const orderly=target.strength<42;country.relations-=orderly?2.5:5.5;strategy.trust-=orderly?2:5;law.treatyReliability-=orderly?.7:2.2;b.disputeRisk+=orderly?3:8;
+          title="Договор прекращен";result=`МИД зарегистрировал прекращение обязательства «${target.title}»${orderly?" после неудовлетворительного исполнения":" в одностороннем порядке"}.`;details.push(["Договор",target.title,"warn"],["Отношения",orderly?"-2.5 п.п.":"-5.5 п.п.","bad"],["Надежность",orderly?"-0.7 п.п.":"-2.2 п.п.","bad"]);tone=orderly?"warn":"bad";
+        }else{
+          const instrument=registerStrategicInstrument(state,country,type,{principal:type==="stateCredit"?spec.cost:undefined,rate:type==="stateCredit"?clamp(3.4+(100-country.stability)*.035+strategy.threat*.018,3.2,9.5):undefined});
+          country.relations+=active?1.2:3;strategy.trust+=active?1:2.5;
+          details.push(["Срок",`${Math.round(spec.duration/30)} мес.`,"good"],["Прочность",pct(instrument.strength,0),instrument.strength>=60?"good":"warn"]);
+          if(spec.annualCost)details.push(["Ежегодное исполнение",money(spec.annualCost),"warn"]);
+          if(type==="strategicPartnership"){country.relations+=2;strategy.trust+=2;b.politicalAccess+=5;law.treatyReliability+=1;reaction=applyStrategicThirdPartyReaction(country,1,"Стратегическое партнерство");}
+          if(type==="specialEnvoy"){b.politicalAccess+=5;b.disputeRisk-=3;}
+          if(type==="freeTrade"){b.economicInterdependence+=7;e.investments+=spec.cost*.8;country.trade+=spec.cost*1.4;details.push(["Инвестиционный импульс",money(spec.cost*.8),"good"]);}
+          if(type==="stateCredit"){country.gdp+=spec.cost*.45;country.trade+=spec.cost*.3;b.ourInfluence+=6;details.push(["Основная сумма",money(instrument.principal),"warn"],["Ставка",`${instrument.rate.toFixed(1)}%`,"good"]);}
+          if(type==="jointExercises"){state.military.training+=1.6;state.military.command+=1.2;state.military.readiness+=.8;country.domestic.defense.readiness+=2;state.diplomacy.globalTension+=1.5;reaction=applyStrategicThirdPartyReaction(country,1.6,"Совместные военные учения");details.push(["Подготовка","+1.6 п.п.","good"],["Напряженность","+1.5 п.п.","warn"]);}
+          if(type==="militaryTransit"){state.military.logistics+=1.2;b.securityAlignment+=5;state.diplomacy.globalTension+=1;reaction=applyStrategicThirdPartyReaction(country,2,"Военный доступ");details.push(["Логистика","+1.2 п.п.","good"],["Проекция сил","выше в регионе партнера","good"]);}
+          if(type==="armsControl"){strategy.threat-=5;b.disputeRisk-=6;state.diplomacy.globalTension-=2;law.treatyReliability+=1.2;state.military.missileForces=clamp(state.military.missileForces-.5,0,100);country.military-=.5;details.push(["Оценка угрозы","-5 п.п.","good"],["Риск спора","-6 п.п.","good"],["Свобода развертывания","ограничена","warn"]);}
+          if(type==="hotline"){b.politicalAccess+=4;b.disputeRisk-=4;strategy.threat-=2;details.push(["Риск спора","-4 п.п.","good"],["Экстренная связь","открыта","good"]);}
+          if(type==="intelligenceSharing"){state.intelligence.analysis+=2;state.intelligence.counterIntel+=1;country.spy+=4;b.technologyAccess+=2;const leak=simulationRandom()*100>clamp(strategy.trust+b.legalCooperation*.25,15,95);if(leak){instrument.strength-=18;strategy.trust-=6;country.relations-=4;details.push(["Защита данных","зафиксирована утечка","bad"]);tone=leak?"warn":tone;}else details.push(["Разведанализ","+2 п.п.","good"],["Осведомленность","+4 п.п.","good"]);}
+          if(type==="internationalSupport"){country.relations+=4;b.ourInfluence+=5;const lawful=100-country.legalProfile.humanitarianRisk-country.legalProfile.treatyBreaches*.25;law.reputation+=lawful>=50?1.2:-1.5;reaction=applyStrategicThirdPartyReaction(country,1.2,"Международная поддержка");details.push(["Отношения","+7 п.п.","good"],["Репутация",lawful>=50?"+1.2 п.п.":"-1.5 п.п.",lawful>=50?"good":"bad"]);}
+        }
+        if(reaction.length)details.push(["Реакция третьих стран",reaction.join(", "),"warn"]);
+        country.relations=clamp(country.relations,0,100);country.military=clamp(country.military,0,100);country.stability=clamp(country.stability,0,100);strategy.trust=clamp(strategy.trust,0,100);strategy.threat=clamp(strategy.threat,0,100);b.politicalAccess=clamp(b.politicalAccess,0,100);b.disputeRisk=clamp(b.disputeRisk,0,100);b.ourInfluence=clamp(b.ourInfluence,0,100);law.reputation=clamp(law.reputation,0,100);law.treatyReliability=clamp(law.treatyReliability,0,100);state.diplomacy.globalTension=clamp(state.diplomacy.globalTension,0,100);
+        b.history.unshift({date:formatDate(state.date),title,text:result,tone});b.history=b.history.slice(0,24);b.lastBriefing=result;pushWorldDiplomacyLog(state,state.country.name,country.name,`${title.toLowerCase()}`,"стратегия");
+        return [title,result,details,tone];
+      }
+
       function concludeBilateralAgreement(type, country) {
         const spec=bilateralAgreementCatalog()[type];
         if(!spec)return null;
@@ -19175,9 +19445,13 @@
           return;
         }
         const e = state.economy;
-        const plannedCost = Object.assign({ relations:90, trade:160, milAid:540, humanAid:220 },Object.fromEntries(Object.entries(bilateralAgreementCatalog()).map(([id,spec])=>[id,spec.cost])))[type];
+        const plannedCost = Object.assign({ relations:90, trade:160, milAid:540, humanAid:220 },Object.fromEntries(Object.entries(bilateralAgreementCatalog()).map(([id,spec])=>[id,spec.cost])),Object.fromEntries(Object.entries(strategicDiplomacyCatalog()).map(([id,spec])=>[id,spec.cost])))[type];
         if (plannedCost != null && e.budget < plannedCost) return showBlockedDecision("Дипломатическое решение не профинансировано", "МИД не получил бюджет на переговоры, логистику и исполнение обязательств.", [["Нужно", money(plannedCost), "bad"], ["Бюджет", money(e.budget), "bad"]]);
         let report = null;
+        if (strategicDiplomacyCatalog()[type]) {
+          report=executeStrategicDiplomacy(type,c);
+          if(!report)return;
+        }
         if (["investment","technology","energy","migration","climate","legal","mediation","cultural"].includes(type)) {
           report=concludeBilateralAgreement(type,c);
           if(!report)return;
