@@ -3786,7 +3786,7 @@
 
       const STORAGE_KEY = "aaa_president_sim_state_v4";
       const SLOTS_KEY = "aaa_president_sim_slots_v4";
-      const SAVE_VERSION = 27;
+      const SAVE_VERSION = 28;
       const ECONOMY_MODEL_VERSION = 5;
       const FOREIGN_STATE_MODEL_VERSION = 1;
       const BILATERAL_MODEL_VERSION = 2;
@@ -3796,6 +3796,9 @@
       const HOUSEHOLD_MODEL_VERSION = 1;
       const HOUSING_MODEL_VERSION = 1;
       const ATTENTION_MODEL_VERSION = 1;
+      const PARLIAMENT_BARGAIN_MODEL_VERSION = 1;
+      const LABOR_MARKET_MODEL_VERSION = 1;
+      const PROCUREMENT_MODEL_VERSION = 1;
       const SAVE_DB_NAME = "aaa_president_sim_storage";
       const SAVE_DB_STORE = "saves";
       const DAY_MS = 1800;
@@ -4431,6 +4434,15 @@
         if (copy.population?.households?.segments) copy.population.households.segments.forEach(item=>["name","size","earners","incomeFactor","taxFactor","benefitFactor","rentShare","mortgageShare","foodFactor","unemploymentExposure"].forEach(key=>delete item[key]));
         if (copy.housing?.history) copy.housing.history = copy.housing.history.slice(0, level === "normal" ? 12 : 6);
         if (copy.politics?.attention?.history) copy.politics.attention.history = copy.politics.attention.history.slice(0, level === "normal" ? 14 : 7);
+        if (copy.politics?.parliamentaryBargaining) {
+          copy.politics.parliamentaryBargaining.dossiers = (copy.politics.parliamentaryBargaining.dossiers || []).slice(0, level === "normal" ? 12 : 6);
+          copy.politics.parliamentaryBargaining.log = (copy.politics.parliamentaryBargaining.log || []).slice(0, level === "normal" ? 14 : 5);
+          copy.politics.parliamentaryBargaining.dossiers.forEach(item => (item.caucuses || []).forEach(caucus => { delete caucus.partyName; delete caucus.seats; }));
+        }
+        if (copy.economy?.laborMarket) {
+          copy.economy.laborMarket.history = (copy.economy.laborMarket.history || []).slice(0, level === "normal" ? 12 : 6);
+          (copy.economy.laborMarket.sectors || []).forEach(item => delete item.name);
+        }
         if (copy.economy?.cycle?.history) copy.economy.cycle.history = copy.economy.cycle.history.slice(0, level === "normal" ? 24 : 10);
         if (copy.economy?.cycle?.quarters) copy.economy.cycle.quarters = copy.economy.cycle.quarters.slice(0, level === "normal" ? 32 : 12);
         if (copy.diplomacy?.countries) copy.diplomacy.countries.forEach(country => {
@@ -4481,6 +4493,12 @@
         }
         if (copy.governance?.delivery?.auditTrail) copy.governance.delivery.auditTrail = copy.governance.delivery.auditTrail.slice(0, level === "normal" ? 36 : 12);
         if (copy.governance?.delivery?.programs) copy.governance.delivery.programs = copy.governance.delivery.programs.slice(0, level === "normal" ? 24 : 12);
+        if (copy.governance?.procurement) {
+          copy.governance.procurement.tenders = (copy.governance.procurement.tenders || []).slice(0, level === "normal" ? 10 : 5);
+          copy.governance.procurement.contracts = (copy.governance.procurement.contracts || []).slice(0, level === "normal" ? 16 : 8);
+          copy.governance.procurement.audits = (copy.governance.procurement.audits || []).slice(0, level === "normal" ? 8 : 3);
+          copy.governance.procurement.history = (copy.governance.procurement.history || []).slice(0, level === "normal" ? 12 : 5);
+        }
         if (copy.softPower?.programs) copy.softPower.programs = copy.softPower.programs.slice(0, level === "normal" ? 14 : 7);
         if (copy.softPower?.events) copy.softPower.events = copy.softPower.events.slice(0, level === "normal" ? 14 : 6);
         if (copy.softPower?.log) copy.softPower.log = copy.softPower.log.slice(0, level === "normal" ? 20 : 8);
@@ -4697,6 +4715,7 @@
         migrateStrategicDiplomacy(loaded);
         migrateInternationalLaw(loaded);
         migratePoliticalSystems(loaded);
+        migrateParliamentBargaining(loaded);
         migrateElectionSystem(loaded);
         migrateJusticeSystem(loaded);
         migrateCabinetSystem(loaded);
@@ -4719,6 +4738,7 @@
         migrateWorldGeography(loaded);
         migrateWorldMarketSystem(loaded);
         migrateHousingSystem(loaded);
+        migrateLaborMarketSystem(loaded);
         migrateHouseholdSystem(loaded);
         migratePresidentialAttention(loaded);
         migrateEliteSystem(loaded);
@@ -4728,6 +4748,7 @@
         migratePromiseSystem(loaded);
         migrateSoftPowerSystem(loaded);
         migrateStateDelivery(loaded);
+        migrateProcurementSystem(loaded);
         migrateActorAISystem(loaded);
         migrateNarrativeSystem(loaded);
         migrateGameSettings(loaded);
@@ -4748,7 +4769,9 @@
           projects: mergeById(base.projects, g.projects),
           media: Object.assign(base.media, g.media || {}),
           intelligence: Object.assign(base.intelligence, g.intelligence || {}),
-          crises: Array.isArray(g.crises) ? g.crises.filter(item => item && typeof item === "object" && !Array.isArray(item)) : base.crises
+          crises: Array.isArray(g.crises) ? g.crises.filter(item => item && typeof item === "object" && !Array.isArray(item)) : base.crises,
+          delivery: g.delivery && typeof g.delivery === "object" ? g.delivery : undefined,
+          procurement: g.procurement && typeof g.procurement === "object" ? g.procurement : undefined
         };
       }
 
@@ -5605,18 +5628,24 @@
             }
             if (program.stageProgress >= 100) setDeliveryStage(game, program, "procurement", "Финансирование подтверждено в пределах кассового плана; начаты конкурсные процедуры.");
           } else if (program.stage === "procurement") {
-            const procurementCost = program.plannedCost * .12 / Math.max(20, 32 / speed);
-            const paid = Math.min(procurementCost, Math.max(0, game.economy.budget - game.economy.gdp * .015));
-            game.economy.budget -= paid;
-            program.spent += paid;
-            if (paid + .01 < procurementCost) { program.fundingGap += procurementCost - paid; program.stalledDays++; }
-            else program.stageProgress = clamp(program.stageProgress + speed * 2.5, 0, 100);
-            if (program.daysInStage >= 24 && program.stageProgress >= 100) setDeliveryStage(game, program, program.regionalWeight >= .42 ? "regions" : "delivery", program.regionalWeight >= .42 ? "Контракты заключены; регионы утверждают графики, софинансирование и местные нормативы." : "Контракты заключены; ведомства перешли к непосредственному исполнению.");
+            const tender = ensureProcurementTender(game, program);
+            const contract = game.governance.procurement.contracts.find(item => item.id === tender.contractId);
+            if (!contract) {
+              program.stageProgress = clamp(tender.status === "оценка" ? 72 : 28 + tender.days * 1.8, 0, 86);
+              program.stalledDays = tender.days > tender.bidDeadline + 12 ? program.stalledDays + 1 : Math.max(0, program.stalledDays - 1);
+            } else {
+              program.contractId = contract.id;
+              program.quality = clamp(program.quality * .78 + contract.quality * .22, 0, 100);
+              program.risk = clamp(program.risk + procurementProgramFactor(game, program).risk * .004, 0, 100);
+              program.stageProgress = clamp(program.stageProgress + speed * 4.2, 0, 100);
+            }
+            if (program.daysInStage >= 12 && program.stageProgress >= 100 && contract) setDeliveryStage(game, program, program.regionalWeight >= .42 ? "regions" : "delivery", program.regionalWeight >= .42 ? "Контракт заключён по итогам конкурса; регионы утверждают графики, софинансирование и местные нормативы." : "Контракт заключён по итогам конкурса; ведомства перешли к непосредственному исполнению.");
           } else if (program.stage === "regions") {
             const compliance = clamp(delivery.regionalCompliance + delivery.interagencyCoordination * .25 - program.complexity * .2, 10, 110);
             program.stageProgress = clamp(program.stageProgress + speed * compliance / 48, 0, 100);
             if (program.daysInStage >= 30 && program.stageProgress >= 100) setDeliveryStage(game, program, "delivery", "Региональные соглашения подписаны; началось фактическое предоставление услуг и ввод мощностей.");
           } else if (program.stage === "delivery") {
+            const procurement = procurementProgramFactor(game, program);
             const remainingCost = Math.max(0, program.plannedCost - program.spent);
             const dailyNeed = remainingCost / Math.max(1, program.duration - Math.min(program.duration - 1, program.daysInStage));
             const paid = Math.min(dailyNeed, Math.max(0, game.economy.budget - game.economy.gdp * .012));
@@ -5625,7 +5654,9 @@
             const fundingFactor = dailyNeed > .01 ? clamp(paid / dailyNeed, 0, 1) : 1;
             if (fundingFactor < .75) { program.stalledDays++; program.fundingGap += dailyNeed - paid; }
             else program.stalledDays = Math.max(0, program.stalledDays - 1);
-            const dailyProgress = 100 / program.duration * speed * (.18 + fundingFactor * .82) * (1 - program.risk * .0035);
+            program.risk = clamp(program.risk + procurement.risk * .0008, 0, 100);
+            program.quality = clamp(program.quality + (procurement.quality - program.quality) * .0007, 0, 100);
+            const dailyProgress = 100 / program.duration * speed * procurement.speed * (.18 + fundingFactor * .82) * (1 - program.risk * .0035);
             program.progress = clamp(program.progress + dailyProgress, 0, 98.5);
             program.stageProgress = program.progress;
             const bill = game.politics.legislation.find(item => item.id === program.sourceId);
@@ -6567,7 +6598,7 @@
           "policy":["быстрое решение",4,75],"gov-action":["государственная программа",5,120],"project-action":["национальный проект",5,150],
           "budget-action":["бюджетная политика",6,120],"politics-action":["политическая повестка",5,90],"law-package":["законодательство",6,150],
           "cabinet-action":["правительство",4,75],"demography-action":["демография",5,150],"housing-action":["жилищная политика",6,180],
-          "household-action":["семейная политика",5,150],"climate-action":["климатическая политика",5,150],"federal-action":["федеративная политика",5,120],
+          "household-action":["семейная политика",5,150],"labor-action":["рынок труда",5,180],"procurement-action":["государственные закупки",4,120],"climate-action":["климатическая политика",5,150],"federal-action":["федеративная политика",5,120],
           "statistics-action":["государственная статистика",4,90],"world-market-action":["международная логистика",5,120],"succession-action":["преемственность власти",6,180]
         };
         const spec=specs[action];if(!spec)return null;
@@ -6880,6 +6911,598 @@
         pop.groups.forEach(group => group.approval = clamp(group.approval + approvalOffset, 0, 100));
         p.popularity = calcPublicApproval(game);
         return game;
+      }
+
+      function partyKey(name = "") {
+        return String(name).toLowerCase().replace(/[^a-zа-яё0-9]+/gi, "_").replace(/^_|_$/g, "") || "party";
+      }
+
+      function parliamentDemandCatalog() {
+        return {
+          regional: { label:"региональные трансферты", effect:"Целевые средства регионам и участие губернаторов в контроле.", cost:.14, kind:["regions","social","economy"] },
+          labor: { label:"гарантии труда", effect:"Коллективные договоры, переобучение и защита занятости.", cost:.1, kind:["social","economy"] },
+          business: { label:"предсказуемость для бизнеса", effect:"Переходный период, оценка регулирования и защита инвестиций.", cost:.06, kind:["economy","anticorruption"] },
+          oversight: { label:"парламентский аудит", effect:"Открытая отчётность, контрольная комиссия и публикация контрактов.", cost:.04, kind:["anticorruption","freedoms"] },
+          rights: { label:"правовые гарантии", effect:"Судебное обжалование и защита гражданских прав.", cost:.03, kind:["freedoms","security"] },
+          security: { label:"гарантии безопасности", effect:"Защищённое финансирование критической инфраструктуры и служб.", cost:.12, kind:["security","regions"] }
+        };
+      }
+
+      function partyBillAlignment(party, kind) {
+        const ideology = String(party.ideology || "").toLowerCase();
+        if (kind === "social") return ideology.includes("социал") ? 18 : ideology.includes("либерал") ? 5 : -3;
+        if (kind === "economy") return ideology.includes("либерал") ? 15 : ideology.includes("центр") ? 9 : ideology.includes("социал") ? 2 : 5;
+        if (kind === "anticorruption") return ideology.includes("либерал") ? 15 : ideology.includes("центр") ? 8 : 3;
+        if (kind === "security") return ideology.includes("консер") ? 18 : ideology.includes("либерал") ? -9 : 5;
+        if (kind === "regions") return ideology.includes("консер") ? 8 : ideology.includes("социал") ? 7 : 4;
+        if (kind === "freedoms") return ideology.includes("либерал") ? 20 : ideology.includes("консер") ? -16 : 5;
+        return 0;
+      }
+
+      function defaultParliamentBargainingSystem() {
+        return {
+          modelVersion: PARLIAMENT_BARGAIN_MODEL_VERSION,
+          dossiers: [],
+          whipCapacity: 58,
+          crossPartyTrust: 47,
+          transparency: 61,
+          amendmentQuality: 58,
+          concessionsCost: 0,
+          successfulDeals: 0,
+          failedVotes: 0,
+          log: [],
+          lastBriefing: "Фракции готовы обсуждать законопроекты по отдельным поправкам, срокам и источникам финансирования."
+        };
+      }
+
+      function normalizeParliamentCaucus(item, party, bill, seats) {
+        const catalog = parliamentDemandCatalog();
+        const demandIds = Object.keys(catalog);
+        const preferred = demandIds.filter(id => catalog[id].kind.includes(bill.kind));
+        const demandId = item?.demandId && catalog[item.demandId] ? item.demandId : preferred[(partyKey(party.name).length + seats) % Math.max(1, preferred.length)] || demandIds[0];
+        const alignment = partyBillAlignment(party, bill.kind);
+        const baseDisposition = 38 + alignment + (party.coalition ? 18 : -4) + (party.support - 25) * .25;
+        const disposition = clamp(num(item?.disposition, baseDisposition), 0, 100);
+        return {
+          partyId: partyKey(party.name),
+          partyName: party.name,
+          seats: Math.max(0, Math.round(num(item?.seats, seats))),
+          discipline: clamp(num(item?.discipline, 62 + (party.coalition ? 12 : 0)), 25, 98),
+          trust: clamp(num(item?.trust, 46 + (party.coalition ? 14 : 0)), 0, 100),
+          disposition,
+          demandId,
+          demandCost: Math.max(20, num(item?.demandCost, bill.cost * catalog[demandId].cost + seats * .45)),
+          pledgedVotes: Math.max(0, Math.round(num(item?.pledgedVotes, seats * clamp((disposition - 22) / 95, .05, .72)))),
+          status: item?.status || (disposition >= 68 ? "склонна поддержать" : disposition < 35 ? "против" : "торгуется"),
+          meetings: Math.max(0, Math.round(num(item?.meetings))),
+          accepted: !!item?.accepted,
+          rejected: !!item?.rejected,
+          lastMove: item?.lastMove || "Фракция ждёт предметного предложения правительства."
+        };
+      }
+
+      function normalizeParliamentDossier(item, game, bill) {
+        const stage = item?.stage || bill.stage;
+        const chamberSeats = stage === "upper" ? game.politics.senateSeats : game.politics.parliamentSeats;
+        const partyTotal = game.politics.parties.reduce((sum, party) => sum + party.seats, 0) || chamberSeats;
+        const old = new Map((item?.caucuses || []).map(caucus => [caucus.partyId, caucus]));
+        const caucuses = game.politics.parties.map(party => {
+          const seats = stage === "upper" ? Math.max(1, Math.round(chamberSeats * party.seats / partyTotal)) : party.seats;
+          return normalizeParliamentCaucus(old.get(partyKey(party.name)), party, bill, seats);
+        });
+        const dossier = {
+          id: item?.id || uid("bargain"),
+          billId: bill.id,
+          stage,
+          chamberSeats,
+          requiredVotes: Math.floor(chamberSeats / 2) + 1,
+          caucuses,
+          securedVotes: 0,
+          undecidedVotes: 0,
+          concessions: Array.isArray(item?.concessions) ? item.concessions.slice(-8) : [],
+          days: Math.max(0, Math.round(num(item?.days))),
+          deadline: Math.max(7, Math.round(num(item?.deadline, stage === "upper" ? 21 : 35))),
+          status: item?.status || "переговоры",
+          finalVotes: Math.max(0, Math.round(num(item?.finalVotes))),
+          publicPressure: clamp(num(item?.publicPressure), 0, 100),
+          lastBriefing: item?.lastBriefing || "Руководители фракций формируют позиции и перечень поправок."
+        };
+        updateParliamentVoteCount(dossier);
+        return dossier;
+      }
+
+      function updateParliamentVoteCount(dossier) {
+        dossier.securedVotes = dossier.caucuses.reduce((sum, caucus) => sum + Math.min(caucus.seats, caucus.pledgedVotes), 0);
+        dossier.undecidedVotes = Math.max(0, dossier.chamberSeats - dossier.securedVotes - dossier.caucuses.filter(caucus => caucus.rejected).reduce((sum, caucus) => sum + caucus.seats, 0));
+        return dossier.securedVotes;
+      }
+
+      function migrateParliamentBargaining(game) {
+        const p = game.politics ||= defaultPolitics({});
+        const base = defaultParliamentBargainingSystem();
+        const incoming = p.parliamentaryBargaining && typeof p.parliamentaryBargaining === "object" ? p.parliamentaryBargaining : {};
+        const system = Object.assign(base, incoming);
+        system.modelVersion = PARLIAMENT_BARGAIN_MODEL_VERSION;
+        ["whipCapacity","crossPartyTrust","transparency","amendmentQuality"].forEach(key => system[key] = clamp(num(system[key], base[key]), 0, 100));
+        system.concessionsCost = Math.max(0, num(system.concessionsCost));
+        system.successfulDeals = Math.max(0, Math.round(num(system.successfulDeals)));
+        system.failedVotes = Math.max(0, Math.round(num(system.failedVotes)));
+        const bills = new Map((p.legislation || []).map(bill => [bill.id, bill]));
+        system.dossiers = (Array.isArray(incoming.dossiers) ? incoming.dossiers : []).map(item => {
+          const bill = bills.get(item.billId);
+          return bill ? normalizeParliamentDossier(item, game, bill) : null;
+        }).filter(Boolean).slice(0, 20);
+        system.log = Array.isArray(incoming.log) ? incoming.log.slice(0, 24) : [];
+        system.lastBriefing ||= base.lastBriefing;
+        p.parliamentaryBargaining = system;
+        return system;
+      }
+
+      function ensureParliamentDossier(game, bill) {
+        const system = game.politics.parliamentaryBargaining || migrateParliamentBargaining(game);
+        if (!["lower","upper"].includes(bill.stage)) return null;
+        let dossier = system.dossiers.find(item => item.billId === bill.id && item.stage === bill.stage && item.status === "переговоры");
+        if (!dossier) {
+          dossier = normalizeParliamentDossier({ stage:bill.stage }, game, bill);
+          system.dossiers.unshift(dossier);
+          system.dossiers = system.dossiers.slice(0, 20);
+          system.log.unshift({ date:formatDate(game.date), billId:bill.id, text:`Открыты переговоры: ${bill.name}, ${billStageLabel(bill.stage)}.` });
+          system.log = system.log.slice(0, 24);
+        }
+        return dossier;
+      }
+
+      function applyParliamentConcession(game, bill, dossier, caucus) {
+        const meta = parliamentDemandCatalog()[caucus.demandId];
+        if (!meta || caucus.accepted) return;
+        caucus.accepted = true;
+        caucus.rejected = false;
+        caucus.pledgedVotes = Math.max(caucus.pledgedVotes, Math.round(caucus.seats * caucus.discipline / 100));
+        caucus.disposition = clamp(caucus.disposition + 20, 0, 100);
+        caucus.trust = clamp(caucus.trust + 7, 0, 100);
+        caucus.status = "поправка согласована";
+        caucus.lastMove = `Правительство приняло требование «${meta.label}»; фракция закрепила голоса.`;
+        bill.cost += caucus.demandCost;
+        bill.quality = clamp(bill.quality + 1.4, 0, 100);
+        game.politics.lobbyism = clamp(game.politics.lobbyism + 1.1, 0, 100);
+        game.politics.coalition = clamp(game.politics.coalition + .45, 0, 100);
+        dossier.concessions.push({ partyId:caucus.partyId, demandId:caucus.demandId, cost:caucus.demandCost, date:formatDate(game.date) });
+        dossier.concessions = dossier.concessions.slice(-8);
+        game.politics.parliamentaryBargaining.concessionsCost += caucus.demandCost;
+        if (caucus.demandId === "regional") game.regions.forEach(region => region.budget += caucus.demandCost / Math.max(1, game.regions.length) * .18);
+        if (caucus.demandId === "oversight") game.governance.delivery.procurementIntegrity = clamp(game.governance.delivery.procurementIntegrity + 1.2, 0, 100);
+        if (caucus.demandId === "rights") game.politics.constitution.rights = clamp(game.politics.constitution.rights + .35, 0, 100);
+        if (caucus.demandId === "labor" && game.economy.laborMarket) game.economy.laborMarket.bargainingCoverage = clamp(game.economy.laborMarket.bargainingCoverage + 1.2, 0, 100);
+        if (caucus.demandId === "business") game.economy.privateSector.regulation = clamp(game.economy.privateSector.regulation - .5, 0, 100);
+        if (caucus.demandId === "security") game.military.readiness = clamp(game.military.readiness + .2, 0, 100);
+        updateParliamentVoteCount(dossier);
+      }
+
+      function resolveParliamentBargain(game, bill, forced = false) {
+        const dossier = ensureParliamentDossier(game, bill);
+        if (!dossier || dossier.status !== "переговоры") return false;
+        if (!forced && dossier.days < 3) return false;
+        let votes = 0;
+        for (const caucus of dossier.caucuses) {
+          const remaining = Math.max(0, caucus.seats - caucus.pledgedVotes);
+          const persuasion = clamp((caucus.disposition + caucus.trust * .25 + dossier.publicPressure * .12 + game.politics.parliamentaryBargaining.whipCapacity * .18 - 45) / 100, 0, .72);
+          votes += caucus.pledgedVotes + Math.round(remaining * persuasion * (caucus.rejected ? .18 : 1));
+        }
+        votes = clamp(Math.round(votes + rnd(-Math.max(1,dossier.chamberSeats*.018), Math.max(1,dossier.chamberSeats*.018))), 0, dossier.chamberSeats);
+        dossier.finalVotes = votes;
+        dossier.status = votes >= dossier.requiredVotes ? "принято" : "отклонено";
+        dossier.lastBriefing = `${votes} из ${dossier.chamberSeats} голосов, необходимо ${dossier.requiredVotes}.`;
+        bill.support = clamp(votes / Math.max(1, dossier.chamberSeats) * 100, 0, 100);
+        const system = game.politics.parliamentaryBargaining;
+        system.lastBriefing = `${bill.name}: ${dossier.lastBriefing}`;
+        system.log.unshift({ date:formatDate(game.date), billId:bill.id, text:`${billStageLabel(dossier.stage)}: ${dossier.status}, ${votes}/${dossier.chamberSeats}.` });
+        system.log = system.log.slice(0, 24);
+        if (votes >= dossier.requiredVotes) {
+          system.successfulDeals++;
+          const next = dossier.stage === "lower" ? "upper" : "president";
+          setBillStage(game, bill, next, `${dossier.stage === "lower" ? game.country.parliamentName : "Сенат"} поддержал закон: ${votes} из ${dossier.chamberSeats} голосов.`);
+        } else {
+          system.failedVotes++;
+          rejectBill(game, bill, dossier.stage === "lower" ? game.country.parliamentName : "Сенат", 100 - bill.support);
+        }
+        return votes >= dossier.requiredVotes;
+      }
+
+      function simulateParliamentBargaining(game) {
+        const system = game.politics.parliamentaryBargaining || migrateParliamentBargaining(game);
+        system.whipCapacity = clamp(system.whipCapacity + (game.politics.coalition - system.whipCapacity) * .0008 - game.politics.lobbyism * .00012, 0, 100);
+        system.crossPartyTrust = clamp(system.crossPartyTrust + (game.politics.constitution.rights + game.politics.justice.ruleOfLaw - system.crossPartyTrust * 2) * .00035 - game.politics.protests * .0001, 0, 100);
+        for (const bill of game.politics.legislation || []) {
+          if (!["lower","upper"].includes(bill.stage)) continue;
+          const dossier = ensureParliamentDossier(game, bill);
+          dossier.days++;
+          if (dossier.days % 7 === 0) {
+            for (const caucus of dossier.caucuses) {
+              if (caucus.accepted || caucus.rejected) continue;
+              caucus.disposition = clamp(caucus.disposition + (bill.support - 50) * .025 + (system.crossPartyTrust - 50) * .018 + rnd(-1.8,1.8), 0, 100);
+              caucus.pledgedVotes = clamp(Math.round(caucus.seats * clamp((caucus.disposition - 20) / 100, .04, .78)), 0, caucus.seats);
+              caucus.status = caucus.disposition >= 66 ? "склонна поддержать" : caucus.disposition < 34 ? "против" : "торгуется";
+            }
+            updateParliamentVoteCount(dossier);
+          }
+          if (dossier.days >= dossier.deadline) resolveParliamentBargain(game, bill, true);
+        }
+        system.dossiers = system.dossiers.filter(item => item.status === "переговоры" || item.days < item.deadline + 180).slice(0, 20);
+      }
+
+      function parliamentBargainAction(billId, mode, partyId = "") {
+        const bill = state.politics.legislation.find(item => item.id === billId);
+        const dossier = bill && ensureParliamentDossier(state, bill);
+        if (!bill || !dossier) return notify("Активные парламентские переговоры по этому проекту не найдены.", "warn", "Парламент");
+        const caucus = dossier.caucuses.find(item => item.partyId === partyId);
+        const system = state.politics.parliamentaryBargaining;
+        let title = "Парламентские переговоры", text = "", details = [], tone = "institution";
+        if (mode === "meet" && caucus) {
+          const cost = 35;
+          if (state.economy.budget < cost) return showBlockedDecision("Встреча не обеспечена", "Нужны экспертиза поправок и работа парламентского представительства.", [["Нужно",money(cost),"bad"]]);
+          state.economy.budget -= cost; caucus.meetings++; caucus.trust = clamp(caucus.trust + 6,0,100); caucus.disposition = clamp(caucus.disposition + 4,0,100);
+          caucus.pledgedVotes = clamp(caucus.pledgedVotes + Math.max(1,Math.round(caucus.seats*.08)),0,caucus.seats); caucus.lastMove = "Лидер фракции уточнил красные линии и допустимый текст поправки.";
+          text = `${caucus.partyName}: переговорная группа уточнила условия поддержки без принятия финансовой уступки.`;
+          details = [["Доверие","+6 п.п.","good"],["Предварительные голоса",`${caucus.pledgedVotes}/${caucus.seats}`,"good"],["Бюджет",`-${money(cost)}`,"bad"]];
+        } else if (mode === "accept" && caucus) {
+          applyParliamentConcession(state,bill,dossier,caucus);
+          const meta = parliamentDemandCatalog()[caucus.demandId];
+          text = `${caucus.partyName}: в закон включена поправка «${meta.label}». Расходы и обязательства проекта выросли, голоса закреплены.`;
+          details = [["Закреплено",`${caucus.pledgedVotes}/${caucus.seats} голосов`,"good"],["Обязательства",`+${money(caucus.demandCost)}`,"bad"],["Качество текста","+1.4 п.п.","good"],["Лоббизм","+1.1 п.п.","warn"]]; tone = "warn";
+        } else if (mode === "reject" && caucus) {
+          caucus.rejected = true; caucus.accepted = false; caucus.pledgedVotes = Math.round(caucus.pledgedVotes*.25); caucus.trust = clamp(caucus.trust-8,0,100); caucus.status = "требование отклонено"; caucus.lastMove = "Фракция освобождена от договорённости и готовит собственную редакцию.";
+          state.politics.opposition = clamp(state.politics.opposition+.45,0,100); updateParliamentVoteCount(dossier);
+          text = `${caucus.partyName}: правительство отказалось от требования. Финансовая цена не возникла, но голоса больше не гарантированы.`;
+          details = [["Предварительные голоса",`${caucus.pledgedVotes}/${caucus.seats}`,"bad"],["Доверие","-8 п.п.","bad"],["Оппозиция","+0.45 п.п.","warn"]]; tone = "bad";
+        } else if (mode === "whip") {
+          const cost = 90;
+          if (state.economy.budget < cost) return showBlockedDecision("Аппарат фракций не усилен", "Нужны правовая экспертиза и координация депутатов.", [["Нужно",money(cost),"bad"]]);
+          state.economy.budget -= cost; system.whipCapacity = clamp(system.whipCapacity+5,0,100);
+          dossier.caucuses.filter(item=>!item.rejected).forEach(item=>item.pledgedVotes=clamp(item.pledgedVotes+Math.max(1,Math.round(item.seats*.045)),0,item.seats));
+          updateParliamentVoteCount(dossier); text = "Парламентские организаторы проверили явку, дисциплину и поимённые обязательства депутатов.";
+          details = [["Организация голосов","+5 п.п.","good"],["Закреплено",`${dossier.securedVotes}/${dossier.requiredVotes}`,"good"],["Бюджет",`-${money(cost)}`,"bad"]];
+        } else if (mode === "public") {
+          const cost = 55;
+          if (state.economy.budget < cost) return showBlockedDecision("Публичное разъяснение не обеспечено", "Нужны открытые слушания, публикация расчётов и работа пресс-служб.", [["Нужно",money(cost),"bad"]]);
+          state.economy.budget -= cost; dossier.publicPressure = clamp(dossier.publicPressure+8,0,100); bill.support=clamp(bill.support+1.8,0,100); system.transparency=clamp(system.transparency+1.2,0,100);
+          text = "Правительство опубликовало финансовое обоснование и протокол разногласий. Общественная цена отказа для фракций выросла.";
+          details = [["Общественное давление","+8 п.п.","good"],["Поддержка","+1.8 п.п.","good"],["Прозрачность","+1.2 п.п.","good"],["Бюджет",`-${money(cost)}`,"bad"]];
+        } else if (mode === "vote") {
+          if (dossier.days < 3) return showBlockedDecision("Голосование ещё не подготовлено", "Фракциям нужно минимум три дня для изучения текста и регистрации поправок.", [["Прошло",`${dossier.days} дн.`,"warn"]]);
+          const passed = resolveParliamentBargain(state,bill,false);
+          title = passed ? "Законопроект получил большинство" : "Законопроект провалил голосование";
+          text = dossier.lastBriefing; details = [["За",`${dossier.finalVotes}/${dossier.chamberSeats}`,passed?"good":"bad"],["Необходимо",String(dossier.requiredVotes),"warn"],["Уступки",money(dossier.concessions.reduce((sum,item)=>sum+item.cost,0)),"warn"]]; tone = passed ? "good" : "bad";
+        } else return notify("Действие недоступно.", "warn", "Парламент");
+        system.lastBriefing = text;
+        updateParliamentVoteCount(dossier);
+        normalizeCore();
+        showDecision(title,text,details,tone);
+      }
+
+      function laborSectorDefaults(game) {
+        const e = game.economy, laborForce = estimatedLaborForce(game), employed = laborForce * (1 - e.unemployment / 100);
+        const industries = e.industries || defaultIndustries();
+        const weightTotal = industries.reduce((sum,item)=>sum+Math.max(1,item.jobs),0) || 1;
+        const wageFactor = { agriculture:.68, extraction:1.22, energy:1.18, chemicals:1.08, metals:1.06, components:1.28, machinery:1.03, food:.78, construction:1.02, consumer:.76, defense:1.14, digital:1.42 };
+        return industries.map(industry => {
+          const employment = employed * Math.max(1,industry.jobs) / weightTotal;
+          return { id:industry.id, name:industry.name, employment, vacancies:Math.max(20,employment*.022), avgWage:e.avgSalary*(wageFactor[industry.id]||1), wageGrowth:e.inflation*.65+e.growth*.35, productivity:industry.efficiency, shortage:18, unionization:industry.id==="defense"||industry.id==="energy"?58:industry.id==="digital"?18:38, hires:0, layoffs:0 };
+        });
+      }
+
+      function defaultLaborMarket(game) {
+        const laborForce = estimatedLaborForce(game), employed = laborForce * (1-game.economy.unemployment/100);
+        return {
+          modelVersion: LABOR_MARKET_MODEL_VERSION,
+          laborForce, employed, unemployed:Math.max(0,laborForce-employed), vacancies:Math.max(1000,employed*.022),
+          participationRate:clamp(laborForce/Math.max(1,game.population.total)*100,20,80),
+          employmentRate:clamp(employed/Math.max(1,game.population.total)*100,10,75),
+          vacancyRate:2.2, underemployment:7.8, longTermUnemployment:29, mismatch:34, mobility:46,
+          bargainingCoverage:38, informality:17, wageGrowth:game.economy.inflation*.65+game.economy.growth*.35,
+          realWageGrowth:0, productivityGrowth:1.2, payrollBurden:24, sectors:laborSectorDefaults(game),
+          policies:{ trainingDays:0, mobilityDays:0, wageSubsidyDays:0, bargainingDays:0, insuranceDays:0 },
+          history:[], lastMonthlyKey:"", lastBriefing:"Рынок труда сбалансирован, но дефицит профессий различается по отраслям."
+        };
+      }
+
+      function migrateLaborMarketSystem(game) {
+        const e = game.economy, base = defaultLaborMarket(game);
+        const incoming = e.laborMarket && typeof e.laborMarket === "object" ? e.laborMarket : {};
+        const labor = Object.assign(base,incoming);
+        labor.modelVersion = LABOR_MARKET_MODEL_VERSION;
+        ["laborForce","employed","unemployed","vacancies"].forEach(key=>labor[key]=Math.max(0,num(labor[key],base[key])));
+        ["participationRate","employmentRate","vacancyRate","underemployment","longTermUnemployment","mismatch","mobility","bargainingCoverage","informality"].forEach(key=>labor[key]=clamp(num(labor[key],base[key]),0,100));
+        ["wageGrowth","realWageGrowth","productivityGrowth"].forEach(key=>labor[key]=clamp(num(labor[key],base[key]),-20,30));
+        labor.payrollBurden=clamp(num(labor.payrollBurden,24),0,65);
+        const defaults=laborSectorDefaults(game),map=new Map((incoming.sectors||[]).map(item=>[item.id,item]));
+        labor.sectors=defaults.map(fallback=>{const item=Object.assign({},fallback,map.get(fallback.id)||{});item.name=fallback.name;item.employment=Math.max(0,num(item.employment,fallback.employment));item.vacancies=Math.max(0,num(item.vacancies,fallback.vacancies));item.avgWage=Math.max(100,num(item.avgWage,fallback.avgWage));item.wageGrowth=clamp(num(item.wageGrowth,fallback.wageGrowth),-20,30);item.productivity=clamp(num(item.productivity,fallback.productivity),5,160);item.shortage=clamp(num(item.shortage,fallback.shortage),0,100);item.unionization=clamp(num(item.unionization,fallback.unionization),0,100);item.hires=Math.max(0,num(item.hires));item.layoffs=Math.max(0,num(item.layoffs));return item;});
+        labor.policies=Object.assign(base.policies,incoming.policies||{});
+        Object.keys(labor.policies).forEach(key=>labor.policies[key]=Math.max(0,Math.round(num(labor.policies[key]))));
+        labor.history=Array.isArray(incoming.history)?incoming.history.slice(0,24):[];
+        labor.lastBriefing ||= base.lastBriefing;
+        e.laborMarket=labor;
+        return labor;
+      }
+
+      function simulateLaborMarket(game) {
+        const e=game.economy,labor=e.laborMarket||migrateLaborMarketSystem(game),d=game.population.demography,ps=e.privateSector;
+        Object.keys(labor.policies).forEach(key=>labor.policies[key]=Math.max(0,labor.policies[key]-1));
+        const childcare=num(game.population.households?.policies?.childcareDays)>0?1.4:0;
+        const participationTarget=clamp(42+d.integrationCapacity*.035+d.retirementAge*.08-childcare+childcare*2+(labor.policies.mobilityDays>0?1.1:0)-d.dependencyRatio*.08,30,67);
+        labor.participationRate=clamp(labor.participationRate+(participationTarget-labor.participationRate)*.0012,20,80);
+        labor.laborForce=Math.max(1000,game.population.total*labor.participationRate/100);
+        const industryTotal=(e.industries||[]).reduce((sum,item)=>sum+Math.max(1,item.jobs),0)||1;
+        let totalEmployment=0,totalVacancies=0,weightedWage=0,weightedGrowth=0;
+        for(const sector of labor.sectors){
+          const industry=e.industries.find(item=>item.id===sector.id)||e.industries[0];
+          const companyJobs=ps.companies.filter(company=>company.status!=="банкротство"&&company.industryId===sector.id).reduce((sum,company)=>sum+company.employees,0);
+          const structuralShare=Math.max(1,industry.jobs)/industryTotal;
+          const demandIndex=clamp(industry.demand/Math.max(1,industry.output),.55,1.65);
+          const cycleDemand=clamp(1+e.growth*.012+(ps.laborDemand-50)*.003+(labor.policies.wageSubsidyDays>0?.025:0),.72,1.24);
+          const desiredJobs=Math.max(companyJobs,labor.laborForce*structuralShare*clamp(.78+demandIndex*.2,.72,1.12)*cycleDemand);
+          const change=clamp((desiredJobs-sector.employment)*.0045,-sector.employment*.0018,Math.max(5,sector.employment*.0018));
+          sector.hires=change>0?sector.hires*.96+change:sector.hires*.96;
+          sector.layoffs=change<0?sector.layoffs*.96-change:sector.layoffs*.96;
+          sector.employment=Math.max(0,sector.employment+change);
+          const vacancyTarget=Math.max(10,Math.max(0,desiredJobs-sector.employment)+sector.employment*clamp(.008+(demandIndex-1)*.026+(ps.businessConfidence-50)*.00025,.004,.075));
+          sector.vacancies=Math.max(0,sector.vacancies+(vacancyTarget-sector.vacancies)*.018);
+          const tightness=sector.vacancies/Math.max(1,sector.employment)*100;
+          const skillSupply=clamp(game.population.education*.72+(labor.policies.trainingDays>0?14:0)+labor.mobility*.14,15,105);
+          sector.shortage=clamp((tightness-1.5)*10+Math.max(0,industry.efficiency-skillSupply)*.8+(labor.mismatch-35)*.45,0,100);
+          sector.productivity=clamp(sector.productivity+(industry.efficiency-sector.productivity)*.002+(labor.policies.trainingDays>0?.0025:0),5,160);
+          const realProductivity=(sector.productivity-60)*.018;
+          const collective=(labor.bargainingCoverage+sector.unionization-70)*.012;
+          const wageTarget=clamp(e.inflation*.72+realProductivity+Math.max(0,tightness-2)*.48+collective+(labor.policies.bargainingDays>0?.7:0),-8,18);
+          sector.wageGrowth=clamp(sector.wageGrowth+(wageTarget-sector.wageGrowth)*.003,-12,24);
+          sector.avgWage=Math.max(e.minSalary*.9,sector.avgWage*(1+sector.wageGrowth/100/DAYS_PER_YEAR));
+          industry.laborAvailability=clamp(100-sector.shortage*.55,42,105);
+          totalEmployment+=sector.employment;totalVacancies+=sector.vacancies;weightedWage+=sector.avgWage*sector.employment;weightedGrowth+=sector.wageGrowth*sector.employment;
+        }
+        labor.employed=Math.min(labor.laborForce,totalEmployment);
+        labor.unemployed=Math.max(0,labor.laborForce-labor.employed);
+        const measuredUnemployment=clamp(labor.unemployed/Math.max(1,labor.laborForce)*100,1,45);
+        e.unemployment=clamp(e.unemployment+(measuredUnemployment-e.unemployment)*.012,1,45);
+        labor.vacancies=totalVacancies;labor.vacancyRate=clamp(totalVacancies/Math.max(1,labor.laborForce)*100,0,18);
+        labor.employmentRate=clamp(labor.employed/Math.max(1,game.population.total)*100,0,80);
+        labor.mismatch=clamp(labor.mismatch+(avg(labor.sectors,"shortage")-labor.mismatch)*.002-(labor.policies.trainingDays>0?.012:0),0,100);
+        labor.mobility=clamp(labor.mobility+(game.housing?.affordability-50)*.00045+(labor.policies.mobilityDays>0?.015:0),0,100);
+        labor.underemployment=clamp(labor.underemployment+(e.unemployment*.72+Math.max(0,50-ps.laborDemand)*.12-labor.underemployment)*.0015,0,40);
+        labor.longTermUnemployment=clamp(labor.longTermUnemployment+(e.unemployment*3.2+labor.mismatch*.22-labor.longTermUnemployment)*.001,0,75);
+        labor.informality=clamp(labor.informality+(num(game.shadowEconomy?.informality,17)-labor.informality)*.0015,0,55);
+        labor.wageGrowth=clamp(weightedGrowth/Math.max(1,totalEmployment),-12,24);
+        labor.realWageGrowth=clamp(labor.wageGrowth-e.inflation,-20,20);
+        labor.productivityGrowth=clamp(avg(labor.sectors,"productivity")/60-1+num(e.nationalAccounts?.productivityGrowth),-8,12);
+        e.avgSalary=Math.max(e.minSalary,weightedWage/Math.max(1,totalEmployment));
+        const monthlyKey=`${game.date.year}-${game.date.month}`;
+        if(game.date.day===1&&labor.lastMonthlyKey!==monthlyKey){
+          labor.lastMonthlyKey=monthlyKey;labor.history.unshift({date:formatDate(game.date),employment:labor.employmentRate,unemployment:e.unemployment,vacancies:labor.vacancyRate,wage:e.avgSalary,realWage:labor.realWageGrowth,mismatch:labor.mismatch});labor.history=labor.history.slice(0,24);
+          const worst=labor.sectors.slice().sort((a,b)=>b.shortage-a.shortage)[0];
+          labor.lastBriefing=`Наибольший дефицит кадров: ${worst.name}, ${Math.round(worst.shortage)}%. Реальная зарплата ${labor.realWageGrowth>=0?"+":""}${labor.realWageGrowth.toFixed(1)}% в год.`;
+        }
+        return labor;
+      }
+
+      function laborMarketAction(mode) {
+        const labor=state.economy.laborMarket||migrateLaborMarketSystem(state),e=state.economy;
+        const catalog={
+          training:{title:"Национальная программа переобучения",cost:620,days:540,key:"trainingDays",text:"Колледжи и работодатели открывают программы под фактические отраслевые вакансии.",details:[["Срок","540 дней","good"],["Несоответствие навыков","снижается постепенно","good"]]},
+          mobility:{title:"Трудовая мобильность",cost:480,days:365,key:"mobilityDays",text:"Компенсация переезда, признание квалификаций и аренда рядом с рабочими местами связывают регионы.",details:[["Срок","365 дней","good"],["Мобильность","растёт","good"]]},
+          subsidy:{title:"Субсидия найма",cost:760,days:240,key:"wageSubsidyDays",text:"Государство временно компенсирует часть зарплаты новых работников в секторах с безработицей.",details:[["Срок","240 дней","warn"],["Найм","ускоряется временно","good"]]},
+          bargaining:{title:"Рамка коллективных переговоров",cost:180,days:720,key:"bargainingDays",text:"Отраслевые соглашения связывают рост оплаты с производительностью, инфляцией и безопасностью труда.",details:[["Срок","720 дней","good"],["Охват договоров","+6 п.п.","good"]]},
+          insurance:{title:"Страхование безработицы",cost:520,days:365,key:"insuranceDays",text:"Пособие сохраняет потребление при увольнении и требует участия в поиске работы и переобучении.",details:[["Срок","365 дней","good"],["Долгая безработица","снижается","good"]]},
+          minimum:{title:"Индексация минимальной зарплаты",cost:90,days:0,key:"",text:"Минимальная зарплата повышена на 7%, с проверкой занятости и ценовых последствий.",details:[["Минимальная зарплата","+7%","good"],["Риск цен и сокращений","умеренный","warn"]]}
+        };
+        const item=catalog[mode];if(!item)return;
+        if(item.key&&labor.policies[item.key]>0)return showBlockedDecision("Мера уже действует",item.text,[["Осталось",`${labor.policies[item.key]} дн.`,"warn"]]);
+        if(e.budget<item.cost)return showBlockedDecision("Мера не профинансирована","Казначейство не подтвердило лимит.",[["Нужно",money(item.cost),"bad"],["Бюджет",money(e.budget),"warn"]]);
+        e.budget-=item.cost;if(item.key)labor.policies[item.key]=item.days;
+        if(mode==="bargaining")labor.bargainingCoverage=clamp(labor.bargainingCoverage+6,0,100);
+        if(mode==="insurance")labor.longTermUnemployment=clamp(labor.longTermUnemployment-1.2,0,100);
+        if(mode==="minimum"){e.minSalary*=1.07;labor.payrollBurden=clamp(labor.payrollBurden+.35,0,65);}
+        if(mode==="mobility")labor.mobility=clamp(labor.mobility+2,0,100);
+        if(mode==="training")labor.mismatch=clamp(labor.mismatch-1.5,0,100);
+        labor.lastBriefing=item.text;normalizeCore();showDecision(item.title,item.text,item.details.concat([["Бюджет",`-${money(item.cost)}`,"bad"]]),mode==="subsidy"?"warn":"good");
+      }
+
+      function procurementCategoryForProgram(program) {
+        return ({ economy:"machinery", anticorruption:"digital", social:"consumer", security:"defense", regions:"construction", freedoms:"digital", directive:"digital", decree:"consumer" })[program.kind] || "consumer";
+      }
+
+      function defaultProcurementSystem() {
+        return {
+          modelVersion: PROCUREMENT_MODEL_VERSION,
+          tenders: [], contracts: [], audits: [], history: [],
+          planYear: 0, annualPlan: 0, committed: 0, paid: 0, savings: 0, competition: 58, transparency: 62,
+          integrity: 61, localShare: 54, smeShare: 22, averageBidders: 0, overrunRate: 6, delayRate: 9,
+          policies:{ openData:false, smeLots:false, framework:false, independentReview:false },
+          lastBriefing:"Единый план закупок готов к публикации; крупные обязательства ещё не размещены."
+        };
+      }
+
+      function normalizeProcurementTender(item, game) {
+        const tender=item||{};
+        tender.id ||= uid("tender");tender.programId ||= "";tender.title ||= "Государственная закупка";tender.category ||= "consumer";tender.method ||= "открытый конкурс";
+        tender.budget=Math.max(0,num(tender.budget));tender.days=Math.max(0,Math.round(num(tender.days)));tender.status ||= "подготовка";tender.bidDeadline=Math.max(5,Math.round(num(tender.bidDeadline,18)));
+        tender.bids=Array.isArray(tender.bids)?tender.bids.slice(0,6):[];tender.bids=tender.bids.map(bid=>({companyId:bid.companyId||"",price:Math.max(1,num(bid.price,tender.budget)),quality:clamp(num(bid.quality,50),0,100),delivery:clamp(num(bid.delivery,50),0,100),integrity:clamp(num(bid.integrity,50),0,100),local:!!bid.local,score:clamp(num(bid.score),0,100)}));
+        tender.winnerId ||= "";tender.contractId ||= "";tender.review=clamp(num(tender.review),0,100);tender.competitionRisk=clamp(num(tender.competitionRisk,28),0,100);tender.smeLots=!!tender.smeLots;tender.emergency=!!tender.emergency;tender.lastBriefing ||= "Извещение готовится к публикации.";
+        return tender;
+      }
+
+      function normalizeProcurementContract(item) {
+        const c=item||{};c.id ||= uid("contract");c.tenderId ||= "";c.programId ||= "";c.title ||= "Государственный контракт";c.supplierId ||= "";c.value=Math.max(0,num(c.value));c.spent=Math.max(0,num(c.spent));c.progress=clamp(num(c.progress),0,100);c.quality=clamp(num(c.quality,60),0,100);c.integrity=clamp(num(c.integrity,60),0,100);c.days=Math.max(0,Math.round(num(c.days)));c.duration=Math.max(30,Math.round(num(c.duration,365)));c.delay=clamp(num(c.delay),0,100);c.overrun=clamp(num(c.overrun),-30,80);c.status ||= "подписан";c.performanceBond=clamp(num(c.performanceBond,8),0,30);c.lastReport ||= "Контракт зарегистрирован, поставщик готовит мобилизационный план.";return c;
+      }
+
+      function migrateProcurementSystem(game) {
+        game.governance ||= migrateGovernance(game.governance);
+        const base=defaultProcurementSystem(),incoming=game.governance.procurement&&typeof game.governance.procurement==="object"?game.governance.procurement:{},system=Object.assign(base,incoming);
+        system.modelVersion=PROCUREMENT_MODEL_VERSION;
+        system.planYear=Math.round(num(system.planYear,game.date.year));
+        ["annualPlan","committed","paid","savings"].forEach(key=>system[key]=Math.max(0,num(system[key])));
+        ["competition","transparency","integrity","localShare","smeShare","averageBidders","overrunRate","delayRate"].forEach(key=>system[key]=clamp(num(system[key],base[key]),0,100));
+        system.policies=Object.assign(base.policies,incoming.policies||{});
+        system.tenders=(Array.isArray(incoming.tenders)?incoming.tenders:[]).map(item=>normalizeProcurementTender(item,game)).slice(0,16);
+        system.contracts=(Array.isArray(incoming.contracts)?incoming.contracts:[]).map(normalizeProcurementContract).slice(0,24);
+        system.audits=Array.isArray(incoming.audits)?incoming.audits.slice(0,18):[];
+        system.history=Array.isArray(incoming.history)?incoming.history.slice(0,24):[];
+        system.lastBriefing ||= base.lastBriefing;game.governance.procurement=system;
+        game.governance.delivery.procurementIntegrity=clamp((game.governance.delivery.procurementIntegrity+system.integrity)/2,0,100);
+        return system;
+      }
+
+      function generateProcurementBids(game,tender) {
+        const system=game.governance.procurement,companies=game.economy.privateSector.companies.filter(company=>company.status!=="банкротство");
+        let eligible=companies.filter(company=>company.industryId===tender.category);
+        if(eligible.length<3)eligible=companies.slice().sort((a,b)=>((b.industryId===tender.category?18:0)+b.compliance)-((a.industryId===tender.category?18:0)+a.compliance)).slice(0,5);
+        const count=clamp(Math.round(2+system.competition/28+(tender.smeLots?1:0)-(tender.emergency?2:0)),1,Math.min(6,eligible.length));
+        tender.bids=eligible.slice().sort(()=>simulationRandom()-.5).slice(0,count).map(company=>{
+          const price=tender.budget*clamp(.76+(100-company.productivity)*.0018+rnd(-.07,.12),.62,1.18);
+          return {companyId:company.id,price,quality:clamp(company.productivity*.48+company.innovation*.24+company.compliance*.28+rnd(-8,8),20,98),delivery:clamp(company.productivity*.55+(company.cash>0?18:4)-company.debt/Math.max(1,company.revenue)*12+rnd(-7,7),15,98),integrity:clamp(company.compliance*.72+system.integrity*.28+rnd(-6,6),10,99),local:company.ownership!=="foreign",score:0};
+        });
+        tender.lastBriefing=`Получено ${tender.bids.length} заявок; комиссия проверяет цену, качество, сроки и добросовестность.`;
+        return tender.bids;
+      }
+
+      function procurementBidScore(tender,bid) {
+        const priceScore=clamp(tender.budget/bid.price*76,0,100);
+        bid.score=clamp(priceScore*.36+bid.quality*.28+bid.delivery*.2+bid.integrity*.16+(tender.smeLots&&bid.local?3:0),0,100);
+        return bid.score;
+      }
+
+      function awardProcurementTender(game,tender,forced=false) {
+        const system=game.governance.procurement;
+        if(!tender.bids.length)generateProcurementBids(game,tender);
+        if(!tender.bids.length)return null;
+        tender.bids.forEach(bid=>procurementBidScore(tender,bid));
+        const ranked=tender.bids.slice().sort((a,b)=>b.score-a.score);
+        let winner=ranked[0];
+        if(tender.emergency&&forced)winner=ranked.slice().sort((a,b)=>b.delivery-a.delivery)[0];
+        const supplier=game.economy.privateSector.companies.find(company=>company.id===winner.companyId);
+        const program=game.governance.delivery.programs.find(item=>item.id===tender.programId);
+        const contract=normalizeProcurementContract({tenderId:tender.id,programId:tender.programId,title:tender.title,supplierId:winner.companyId,value:winner.price,quality:winner.quality,integrity:winner.integrity,duration:program?.duration||365,performanceBond:tender.emergency?3:8,status:"подписан",lastReport:`Победитель ${supplier?.name||"поставщик"}; оценка ${winner.score.toFixed(1)}/100.`});
+        tender.winnerId=winner.companyId;tender.contractId=contract.id;tender.status="присуждён";tender.lastBriefing=`Контракт присуждён: ${supplier?.name||"поставщик"}, цена ${money(winner.price)}, оценка ${winner.score.toFixed(1)}.`;
+        system.contracts.unshift(contract);system.contracts=system.contracts.slice(0,24);system.committed+=contract.value;system.savings+=Math.max(0,tender.budget-contract.value);
+        if(program){program.contractId=contract.id;program.plannedCost=Math.max(program.spent,contract.value);}
+        if(supplier){supplier.lastDecision=`выигран государственный контракт ${tender.title}`;supplier.cash+=contract.value*.018;}
+        system.history.unshift({date:formatDate(game.date),title:"Контракт присуждён",text:tender.lastBriefing,type:"award"});system.history=system.history.slice(0,24);system.lastBriefing=tender.lastBriefing;
+        return contract;
+      }
+
+      function ensureProcurementTender(game,program) {
+        const system=game.governance.procurement||migrateProcurementSystem(game);
+        let tender=system.tenders.find(item=>item.programId===program.id&&!["отменён"].includes(item.status));
+        if(tender)return tender;
+        tender=normalizeProcurementTender({programId:program.id,title:program.title,category:procurementCategoryForProgram(program),budget:Math.max(60,program.plannedCost-program.spent),status:"открыт",method:"открытый конкурс",bidDeadline:18,competitionRisk:clamp(45-system.competition*.35+program.risk*.22,4,78),lastBriefing:"Извещение опубликовано; поставщики готовят заявки."},game);
+        system.tenders.unshift(tender);system.tenders=system.tenders.slice(0,16);system.annualPlan+=tender.budget;generateProcurementBids(game,tender);
+        system.history.unshift({date:formatDate(game.date),title:"Открыт конкурс",text:`${tender.title}: лимит ${money(tender.budget)}, метод ${tender.method}.`,type:"tender"});system.history=system.history.slice(0,24);
+        return tender;
+      }
+
+      function procurementProgramFactor(game,program) {
+        const system=game.governance.procurement,contract=system?.contracts.find(item=>item.id===program.contractId);
+        if(!contract)return {speed:.42,quality:45,risk:8};
+        return {speed:clamp(.55+contract.quality*.006+contract.integrity*.003-contract.delay*.004,.35,1.35),quality:contract.quality,risk:clamp(contract.delay*.18+Math.max(0,contract.overrun)*.22+(100-contract.integrity)*.12,0,40)};
+      }
+
+      function simulateProcurementSystem(game) {
+        const system=game.governance.procurement||migrateProcurementSystem(game);
+        const currentYear=game.date.year;
+        if(system.planYear!==currentYear){
+          system.planYear=currentYear;
+          const openTenderPlan=system.tenders.filter(item=>!["присуждён","отменён"].includes(item.status)).reduce((sum,item)=>sum+item.budget,0);
+          const contractCarryover=system.contracts.filter(item=>!["завершён","расторгнут"].includes(item.status)).reduce((sum,item)=>sum+Math.min(Math.max(0,item.value-item.spent),item.value*365/Math.max(30,item.duration)),0);
+          system.annualPlan=openTenderPlan+contractCarryover;
+          system.committed=contractCarryover;
+          system.paid=0;
+          system.savings=0;
+          system.history.unshift({date:formatDate(game.date),title:"Открыт новый плановый год",text:`Лимиты и кассовое исполнение закупок на ${currentYear} год считаются заново; действующие контракты продолжают исполняться.`,type:"year"});
+          system.history=system.history.slice(0,24);
+        }
+        system.integrity=clamp(system.integrity+((100-game.politics.corruption)*.48+game.statistics.auditCapacity*.22+game.politics.justice.ruleOfLaw*.18+system.transparency*.12-system.integrity)*.0014,0,100);
+        system.competition=clamp(system.competition+(game.economy.privateSector.competition-system.competition)*.0012+(system.policies.smeLots?.002:0),0,100);
+        for(const tender of system.tenders){
+          if(["присуждён","отменён"].includes(tender.status))continue;
+          tender.days++;
+          if(tender.status==="открыт"&&tender.days>=tender.bidDeadline){tender.status="оценка";tender.lastBriefing="Приём заявок завершён; комиссия оценивает цену владения, качество и исполнение.";}
+          if(tender.status==="оценка"&&tender.days>=tender.bidDeadline+7)awardProcurementTender(game,tender,true);
+        }
+        for(const contract of system.contracts){
+          if(["завершён","расторгнут"].includes(contract.status))continue;
+          contract.days++;
+          const program=game.governance.delivery.programs.find(item=>item.id===contract.programId);
+          const supplier=game.economy.privateSector.companies.find(company=>company.id===contract.supplierId);
+          if(!program){contract.status="завершён";continue;}
+          if(program.stage==="delivery")contract.status="исполняется";
+          const previousSpent=contract.spent;
+          contract.progress=clamp(program.progress,0,100);contract.spent=Math.min(contract.value,program.spent);
+          system.paid+=Math.max(0,contract.spent-previousSpent);
+          const financialRisk=supplier?Math.max(0,-supplier.profitMargin)*.5+Math.max(0,supplier.debt/Math.max(1,supplier.revenue)-1)*18:12;
+          contract.delay=clamp(contract.delay+(program.stalledDays*.015+financialRisk*.003+(100-contract.quality)*.0015-contract.performanceBond*.002),0,100);
+          contract.overrun=clamp((program.spent/Math.max(1,contract.value)-program.progress/100)*100,-20,80);
+          contract.quality=clamp(contract.quality+(num(program.quality,55)-contract.quality)*.0008-(contract.delay>60?.002:0),0,100);
+          contract.lastReport=contract.delay>55?"График под угрозой: поставщик и заказчик готовят план восстановления.":contract.progress>=100?"Поставка завершена и передана на приёмку.":`Исполнено ${Math.round(contract.progress)}%, оплачено ${money(contract.spent)}.`;
+          if(program.status==="completed"){contract.progress=100;contract.status="завершён";}
+        }
+        const activeContracts=system.contracts.filter(item=>!["завершён","расторгнут"].includes(item.status));
+        system.averageBidders=system.tenders.length?avg(system.tenders.map(item=>({value:item.bids.length})),"value"):0;
+        system.overrunRate=activeContracts.length?avg(activeContracts.map(item=>({value:Math.max(0,item.overrun)})),"value"):0;
+        system.delayRate=activeContracts.length?avg(activeContracts.map(item=>({value:item.delay})),"value"):0;
+        system.localShare=system.contracts.length?system.contracts.filter(item=>game.economy.privateSector.companies.find(company=>company.id===item.supplierId)?.ownership!=="foreign").length/system.contracts.length*100:system.localShare;
+        game.governance.delivery.procurementIntegrity=clamp((game.governance.delivery.procurementIntegrity*4+system.integrity)/5,0,100);
+        return system;
+      }
+
+      function procurementAction(mode) {
+        const system=state.governance.procurement||migrateProcurementSystem(state),e=state.economy;
+        const catalog={
+          open:{title:"Открытые данные закупок",cost:180,key:"openData",text:"Планы, заявки, протоколы и исполнение контрактов публикуются в машиночитаемом реестре."},
+          sme:{title:"Разделение закупок на лоты",cost:120,key:"smeLots",text:"Крупные заказы делятся на совместимые лоты, чтобы малые поставщики могли конкурировать."},
+          framework:{title:"Рамочные соглашения",cost:140,key:"framework",text:"Повторяющиеся товары закупаются по заранее проверенным рамочным условиям и предельным ценам."},
+          review:{title:"Независимая комиссия жалоб",cost:240,key:"independentReview",text:"Апелляции поставщиков рассматривает независимая комиссия с правом остановить конкурс."},
+          audit:{title:"Сквозной аудит контрактов",cost:260,key:"",text:"Счётная палата проверила конфликт интересов, цены и фактическое исполнение крупнейших контрактов."}
+        };
+        const item=catalog[mode];if(!item)return;
+        if(item.key&&system.policies[item.key])return showBlockedDecision("Правило уже действует",item.text,[["Статус","включено","good"]]);
+        if(e.budget<item.cost)return showBlockedDecision("Реформа не профинансирована","Нужен лимит на цифровой реестр, контроль и работу комиссии.",[["Нужно",money(item.cost),"bad"]]);
+        e.budget-=item.cost;if(item.key)system.policies[item.key]=true;
+        if(mode==="open"){system.transparency=clamp(system.transparency+7,0,100);system.integrity+=2;}
+        if(mode==="sme"){system.smeShare=clamp(system.smeShare+5,0,100);system.competition+=3;}
+        if(mode==="framework"){system.savings+=80;system.competition+=1;}
+        if(mode==="review"){system.integrity+=5;system.transparency+=3;}
+        if(mode==="audit"){system.integrity=clamp(system.integrity+4,0,100);system.contracts.forEach(contract=>{contract.integrity=clamp(contract.integrity+2,0,100);contract.delay=clamp(contract.delay-2,0,100);});system.audits.unshift({date:formatDate(state.date),title:"Сквозной аудит",result:"Проверены цена, бенефициары и исполнение действующих контрактов."});system.audits=system.audits.slice(0,18);}
+        system.lastBriefing=item.text;normalizeCore();showDecision(item.title,item.text,[["Целостность",pct(system.integrity,0),"good"],["Конкуренция",pct(system.competition,0),"good"],["Бюджет",`-${money(item.cost)}`,"bad"]],"institution");
+      }
+
+      function procurementTenderAction(id,mode) {
+        const system=state.governance.procurement,tender=system.tenders.find(item=>item.id===id);if(!tender)return notify("Конкурс не найден.","warn","Закупки");
+        let text="",details=[],tone="institution";
+        if(mode==="split"&&!["присуждён","отменён"].includes(tender.status)){tender.smeLots=true;tender.method="открытый конкурс по лотам";tender.bids=[];generateProcurementBids(state,tender);system.competition=clamp(system.competition+1.5,0,100);text="Заказ разделён на функциональные лоты; число допустимых поставщиков выросло.";details=[["Заявок",String(tender.bids.length),"good"],["Риск координации","+2 п.п.","warn"]];}
+        else if(mode==="review"&&!["присуждён","отменён"].includes(tender.status)){const cost=45;if(state.economy.budget<cost)return showBlockedDecision("Проверка не профинансирована","Нужны эксперты комиссии.",[["Нужно",money(cost),"bad"]]);state.economy.budget-=cost;tender.review=clamp(tender.review+25,0,100);tender.competitionRisk=clamp(tender.competitionRisk-9,0,100);tender.bids.forEach(bid=>bid.integrity=clamp(bid.integrity+2,0,100));text="Комиссия проверила техническое задание, аффилированность и обоснование начальной цены.";details=[["Риск конкуренции","-9 п.п.","good"],["Бюджет",`-${money(cost)}`,"bad"]];}
+        else if(mode==="emergency"&&!["присуждён","отменён"].includes(tender.status)){tender.emergency=true;tender.method="чрезвычайная закупка";tender.bidDeadline=Math.min(tender.bidDeadline,5);tender.competitionRisk=clamp(tender.competitionRisk+22,0,100);system.integrity=clamp(system.integrity-2.5,0,100);text="Срок сокращён до пяти дней. Поставка ускорится, но конкуренция и контроль ослаблены.";details=[["Срок","5 дней","good"],["Риск конкуренции","+22 п.п.","bad"],["Целостность","-2.5 п.п.","bad"]];tone="warn";}
+        else if(mode==="award"&&["открыт","оценка"].includes(tender.status)){
+          if(tender.status!=="оценка"&&tender.days<tender.bidDeadline)return showBlockedDecision("Приём заявок ещё открыт","Комиссия не может определить победителя до окончания опубликованного срока.",[["Осталось",`${tender.bidDeadline-tender.days} дн.`,"warn"],["Исключение","чрезвычайная процедура","bad"]]);
+          const contract=awardProcurementTender(state,tender,false);if(!contract)return notify("Нет допустимых заявок.","warn","Закупки");text=tender.lastBriefing;details=[["Контракт",money(contract.value),"warn"],["Качество",pct(contract.quality,0),"good"],["Добросовестность",pct(contract.integrity,0),contract.integrity>=60?"good":"warn"]];tone="good";
+        }
+        else return notify("Действие недоступно на текущем этапе.","warn","Закупки");
+        system.lastBriefing=text;normalizeCore();showDecision("Решение закупочной комиссии",text,details,tone);
+      }
+
+      function procurementContractAction(id,mode) {
+        const system=state.governance.procurement,contract=system.contracts.find(item=>item.id===id);if(!contract)return notify("Контракт не найден.","warn","Закупки");
+        const supplier=state.economy.privateSector.companies.find(company=>company.id===contract.supplierId);let text="",details=[],tone="institution";
+        if(mode==="enforce"){contract.performanceBond=clamp(contract.performanceBond+3,0,30);contract.delay=clamp(contract.delay-8,0,100);if(supplier)supplier.compliance=clamp(supplier.compliance+1,0,100);text="Заказчик потребовал план восстановления графика и усилил банковскую гарантию.";details=[["Задержка","-8 п.п.","good"],["Обеспечение","+3 п.п.","good"]];}
+        else if(mode==="audit"){const cost=55;if(state.economy.budget<cost)return showBlockedDecision("Аудит не профинансирован","Нужны технические и финансовые эксперты.",[["Нужно",money(cost),"bad"]]);state.economy.budget-=cost;contract.integrity=clamp(contract.integrity+5,0,100);contract.quality=clamp(contract.quality+2,0,100);text="Независимые эксперты сверили объём, цену, качество и бенефициаров поставщика.";details=[["Целостность","+5 п.п.","good"],["Качество","+2 п.п.","good"],["Бюджет",`-${money(cost)}`,"bad"]];}
+        else if(mode==="renegotiate"){
+          const increase=contract.value*.035;contract.value+=increase;system.committed+=increase;contract.delay=clamp(contract.delay-14,0,100);contract.overrun=clamp(contract.overrun+3.5,-20,80);
+          const program=state.governance.delivery.programs.find(item=>item.id===contract.programId);if(program)program.plannedCost=Math.max(program.spent,contract.value);
+          text="Стороны изменили календарь и цену из-за подтверждённого внешнего шока. Исполнение ускорится, контракт подорожает.";details=[["Задержка","-14 п.п.","good"],["Цена","+3.5%","bad"]];tone="warn";
+        }
+        else if(mode==="terminate"){
+          contract.status="расторгнут";contract.performanceBond=clamp(contract.performanceBond+5,0,30);system.committed=Math.max(0,system.committed-Math.max(0,contract.value-contract.spent));
+          const tender=system.tenders.find(item=>item.id===contract.tenderId);if(tender){tender.status="отменён";tender.contractId="";tender.lastBriefing="Контракт расторгнут; для оставшегося объёма требуется новый конкурс.";}
+          const program=state.governance.delivery.programs.find(item=>item.id===contract.programId);if(program){program.contractId="";program.stage="procurement";program.stageProgress=0;program.daysInStage=0;program.stalledDays+=15;}
+          text="Контракт расторгнут за существенное нарушение; программа возвращена на новый конкурс.";details=[["Исполнение","остановлено","bad"],["Новый конкурс","обязателен","warn"]];tone="bad";
+        }
+        else return;contract.lastReport=text;system.lastBriefing=text;normalizeCore();showDecision("Управление государственным контрактом",text,details,tone);
       }
 
       function actorGoalCatalog() {
@@ -10286,6 +10909,7 @@
         migrateStrategicDiplomacy(game);
         migrateInternationalLaw(game);
         migratePoliticalSystems(game);
+        migrateParliamentBargaining(game);
         migrateElectionSystem(game);
         migrateJusticeSystem(game);
         migrateCabinetSystem(game);
@@ -10308,10 +10932,12 @@
         migratePromiseSystem(game);
         migrateSoftPowerSystem(game);
         migrateStateDelivery(game);
+        migrateProcurementSystem(game);
         migrateActorAISystem(game);
         migrateNarrativeSystem(game);
         applyGameScenario(game, config.scenario || "balanced");
         migrateHousingSystem(game);
+        migrateLaborMarketSystem(game);
         migrateHouseholdSystem(game);
         migratePresidentialAttention(game);
         applyInitialDifficulty(game);
@@ -13130,6 +13756,28 @@
         `;
       }
 
+      function renderParliamentBargainingPanel() {
+        const system=state.politics.parliamentaryBargaining||migrateParliamentBargaining(state);
+        const activeBills=state.politics.legislation.filter(bill=>["lower","upper"].includes(bill.stage));
+        const dossiers=activeBills.map(bill=>({bill,dossier:ensureParliamentDossier(state,bill)}));
+        const tone=system.crossPartyTrust<35?"bad":system.crossPartyTrust<52?"warn":"good";
+        return `<section class="panel pad">
+          <div class="panel-section-head"><span><h3 class="section-title">Настоящий парламентский торг</h3><p class="subtle">Большинство складывается из конкретных фракционных голосов. Встреча уточняет позицию, поправка закрепляет голоса ценой обязательств, отказ сохраняет исходный текст, а досрочное голосование может закончиться провалом.</p></span><span class="pill">сделок ${system.successfulDeals} · провалов ${system.failedVotes}</span></div>
+          <div class="kpi-strip" style="margin-top:12px;"><div class="kpi"><span>Организация голосов</span><strong>${pct(system.whipCapacity,0)}</strong><small class="subtle">явка и дисциплина</small></div><div class="kpi"><span>Межфракционное доверие</span><strong class="delta ${tone}">${pct(system.crossPartyTrust,0)}</strong><small class="subtle">способность к компромиссу</small></div><div class="kpi"><span>Прозрачность</span><strong>${pct(system.transparency,0)}</strong><small class="subtle">публичность поправок</small></div><div class="kpi"><span>Цена уступок</span><strong>${money(system.concessionsCost)}</strong><small class="subtle">новые обязательства законов</small></div></div>
+          <div class="decision-banner ${tone}" style="margin-top:12px;"><strong>${esc(system.lastBriefing)}</strong><span class="subtle">Если игрок не вмешивается, фракции продолжают торг и проводят голосование по истечении парламентского срока.</span></div>
+          <div class="bill-grid" style="margin-top:12px;">${dossiers.length?dossiers.map(({bill,dossier})=>`
+            <article class="bill-card ${dossier.securedVotes>=dossier.requiredVotes?"good":"warn"}">
+              <header><span><strong>${esc(bill.name)}</strong><small>${esc(billStageLabel(dossier.stage))} · день переговоров ${dossier.days}/${dossier.deadline}</small></span><span class="pill">${dossier.securedVotes}/${dossier.requiredVotes} закреплено</span></header>
+              <div class="progress"><i style="--w:${clamp(dossier.securedVotes/dossier.requiredVotes*100,0,100)}%"></i></div>
+              <div class="bill-kpis"><div><span>Закреплено</span><strong>${dossier.securedVotes}</strong></div><div><span>Необходимо</span><strong>${dossier.requiredVotes}</strong></div><div><span>Не определились</span><strong>${dossier.undecidedVotes}</strong></div><div><span>Поправок</span><strong>${dossier.concessions.length}</strong></div></div>
+              <details class="action-fold"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Позиции фракций</strong><small>${esc(dossier.lastBriefing)}</small></span></summary><div class="action-fold-body">
+                <div class="list">${dossier.caucuses.map(caucus=>{const demand=parliamentDemandCatalog()[caucus.demandId];return `<div class="row"><span><strong>${esc(caucus.partyName)}</strong><br><small class="subtle">${caucus.pledgedVotes}/${caucus.seats} голосов · дисциплина ${pct(caucus.discipline,0)} · ${esc(caucus.status)}<br>Требование: ${esc(demand.label)} · ${esc(demand.effect)} · цена ${money(caucus.demandCost)}</small></span><span class="actions"><button data-action="parliament-bargain" data-bill="${bill.id}" data-party="${caucus.partyId}" data-mode="meet" ${caucus.accepted||caucus.rejected?"disabled":""}>Встреча</button><button data-action="parliament-bargain" data-bill="${bill.id}" data-party="${caucus.partyId}" data-mode="accept" ${caucus.accepted||caucus.rejected?"disabled":""}>Принять поправку</button><button class="danger" data-action="parliament-bargain" data-bill="${bill.id}" data-party="${caucus.partyId}" data-mode="reject" ${caucus.accepted||caucus.rejected?"disabled":""}>Отклонить</button></span></div>`}).join("")}</div>
+                <div class="actions" style="margin-top:10px;"><button data-action="parliament-bargain" data-bill="${bill.id}" data-mode="whip">Собрать голоса</button><button data-action="parliament-bargain" data-bill="${bill.id}" data-mode="public">Опубликовать расчёты</button><button class="primary" data-action="parliament-bargain" data-bill="${bill.id}" data-mode="vote" ${dossier.days<3?"disabled":""}>Провести голосование</button></div>
+              </div></details>
+            </article>`).join(""):`<div class="row"><span><strong>Проектов на голосовании пока нет</strong><br><small class="subtle">После комитета закон откроет отдельное переговорное досье с позициями всех фракций.</small></span><span class="pill">ожидание</span></div>`}</div>
+        </section>`;
+      }
+
       function eliteActorTone(actor) {
         return actor.pressure >= 70 || actor.loyalty < 32 ? "bad" : actor.loyalty >= 65 && actor.pressure < 42 ? "good" : "warn";
       }
@@ -13255,6 +13903,7 @@
             </section>
             ${renderEliteSystem()}
             ${renderShadowCabinetPanel()}
+            ${renderParliamentBargainingPanel()}
             <section class="panel pad">
               <h3 class="section-title">Что улучшать сейчас</h3>
               <div class="signal-grid" style="margin-top: 12px;">
@@ -13438,6 +14087,27 @@
         </section>`;
       }
 
+      function renderProcurementPanel() {
+        const system=state.governance.procurement||migrateProcurementSystem(state);
+        const tenders=system.tenders.filter(item=>!["отменён"].includes(item.status)).slice(0,8);
+        const contracts=system.contracts.filter(item=>item.status!=="расторгнут").slice(0,10);
+        const tone=system.integrity<42||system.delayRate>58?"bad":system.integrity<62||system.delayRate>32?"warn":"good";
+        return `<section class="panel pad">
+          <div class="panel-section-head"><span><h3 class="section-title">Государственные закупки и крупные контракты</h3><p class="subtle">Каждая программа публикует конкурс, получает заявки от реальных компаний, оценивает цену, качество, сроки и добросовестность, затем проходит исполнение и аудит. Оплата не создаёт вторую копию ВВП: это расход уже утверждённой программы.</p></span><span class="pill">контрактов ${contracts.length}</span></div>
+          <div class="kpi-strip" style="margin-top:12px;"><div class="kpi"><span>План ${system.planYear}</span><strong>${money(system.annualPlan)}</strong><small class="subtle">размещённые лимиты</small></div><div class="kpi"><span>Обязательства</span><strong>${money(system.committed)}</strong><small class="subtle">подписанные контракты</small></div><div class="kpi"><span>Экономия конкурсов</span><strong>${money(system.savings)}</strong><small class="subtle">от начальной цены</small></div><div class="kpi"><span>Среднее заявок</span><strong>${system.averageBidders.toFixed(1)}</strong><small class="subtle">конкуренция ${pct(system.competition,0)}</small></div><div class="kpi"><span>Целостность</span><strong class="delta ${tone}">${pct(system.integrity,0)}</strong><small class="subtle">прозрачность ${pct(system.transparency,0)}</small></div><div class="kpi"><span>Задержки</span><strong class="delta ${system.delayRate>55?"bad":system.delayRate>30?"warn":"good"}">${pct(system.delayRate,0)}</strong><small class="subtle">перерасход ${pct(system.overrunRate,1)}</small></div></div>
+          <div class="decision-banner ${tone}" style="margin-top:12px;"><strong>${esc(system.lastBriefing)}</strong><span class="subtle">Местные поставщики ${pct(system.localShare,0)} · малый бизнес ${pct(system.smeShare,0)}</span></div>
+          <div class="policy-action-grid compact" style="margin-top:12px;">
+            ${renderActionCard({title:"Открытые данные",category:"реестр",desc:"Планы, заявки, протоколы, бенефициары и платежи публикуются в едином формате.",signal:`прозрачность ${pct(system.transparency,0)}`,when:"Для постоянного контроля и снижения сговора.",effect:"Повышает целостность и качество внешнего аудита.",risk:"Требует цифровой инфраструктуры и защиты коммерческой тайны.",cta:"Расширить реестр",tone:"good"},{"data-action":"procurement-action","data-mode":"open"},{compact:true})}
+            ${renderActionCard({title:"Лоты для малого бизнеса",category:"конкуренция",desc:"Крупные заказы делятся на совместимые части без искусственного дробления контроля.",signal:`доля малого бизнеса ${pct(system.smeShare,0)}`,when:"Когда конкурсы выигрывают только крупнейшие группы.",effect:"Расширяет число участников и локальную занятость.",risk:"Усложняет координацию нескольких поставщиков.",cta:"Утвердить правило",tone:"institution"},{"data-action":"procurement-action","data-mode":"sme"},{compact:true})}
+            ${renderActionCard({title:"Рамочные соглашения",category:"типовые товары",desc:"Повторяющиеся закупки идут по заранее проверенным ценам и условиям.",signal:`экономия ${money(system.savings)}`,when:"Для лекарств, топлива, ИТ и стандартного оборудования.",effect:"Сокращает срок и транзакционные расходы.",risk:"Слабый пересмотр цен может закрепить старых поставщиков.",cta:"Создать рамки",tone:"institution"},{"data-action":"procurement-action","data-mode":"framework"},{compact:true})}
+            ${renderActionCard({title:"Независимые жалобы",category:"процедура",desc:"Комиссия может остановить конкурс при дискриминационном задании или конфликте интересов.",signal:`целостность ${pct(system.integrity,0)}`,when:"При высоком риске сговора и жалобах поставщиков.",effect:"Повышает доверие и снижает судебные срывы.",risk:"Добавляет время к спорным процедурам.",cta:"Учредить комиссию",tone:"good"},{"data-action":"procurement-action","data-mode":"review"},{compact:true})}
+            ${renderActionCard({title:"Сквозной аудит",category:"контроль",desc:"Проверка цены, бенефициаров, объёма и фактической поставки по действующим контрактам.",signal:`задержки ${pct(system.delayRate,0)}`,when:"При перерасходе, задержках или низком качестве.",effect:"Усиливает дисциплину поставщиков и заказчиков.",risk:"Может временно остановить спорные платежи.",cta:"Проверить",tone:"warn"},{"data-action":"procurement-action","data-mode":"audit"},{compact:true})}
+          </div>
+          <details class="action-fold" style="margin-top:12px;" open><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Конкурсные процедуры</strong><small>${tenders.length} открытых и недавно присуждённых закупок</small></span></summary><div class="action-fold-body"><div class="bill-grid">${tenders.length?tenders.map(tender=>`<article class="bill-card ${tender.competitionRisk>62?"bad":tender.competitionRisk>38?"warn":"good"}"><header><span><strong>${esc(tender.title)}</strong><small>${esc(tender.method)} · ${esc(tender.status)}</small></span><span class="pill">${money(tender.budget)}</span></header><div class="bill-kpis"><div><span>Заявок</span><strong>${tender.bids.length}</strong></div><div><span>Дней</span><strong>${tender.days}/${tender.bidDeadline}</strong></div><div><span>Риск конкуренции</span><strong>${pct(tender.competitionRisk,0)}</strong></div><div><span>Проверка</span><strong>${pct(tender.review,0)}</strong></div></div><details class="action-fold"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>${esc(tender.lastBriefing)}</strong><small>${tender.winnerId?"победитель определён":tender.status==="оценка"?"комиссия вправе определить победителя":`приём заявок: ещё ${Math.max(0,tender.bidDeadline-tender.days)} дн.`}</small></span></summary><div class="action-fold-body">${tender.bids.length?`<div class="scroll"><table class="table"><thead><tr><th>Поставщик</th><th>Цена</th><th>Качество</th><th>Срок</th><th>Честность</th><th>Оценка</th></tr></thead><tbody>${tender.bids.slice().sort((a,b)=>procurementBidScore(tender,b)-procurementBidScore(tender,a)).map(bid=>{const company=state.economy.privateSector.companies.find(item=>item.id===bid.companyId);return `<tr><td>${esc(company?.name||"Поставщик")}</td><td>${money(bid.price)}</td><td>${pct(bid.quality,0)}</td><td>${pct(bid.delivery,0)}</td><td>${pct(bid.integrity,0)}</td><td>${pct(bid.score,0)}</td></tr>`}).join("")}</tbody></table></div>`:"<p class=\"subtle\">Допущенных заявок пока нет.</p>"}${!["присуждён","отменён"].includes(tender.status)?`<div class="actions"><button data-action="tender-action" data-id="${tender.id}" data-mode="split">Разделить на лоты</button><button data-action="tender-action" data-id="${tender.id}" data-mode="review">Независимая проверка</button><button class="danger" data-action="tender-action" data-id="${tender.id}" data-mode="emergency">Срочная процедура</button><button class="primary" data-action="tender-action" data-id="${tender.id}" data-mode="award" ${tender.status!=="оценка"?"disabled":""}>Выбрать победителя</button></div>`:""}</div></details></article>`).join(""):`<p class="subtle">Новые конкурсы появятся, когда государственная программа достигнет стадии закупок.</p>`}</div></div></details>
+          <details class="action-fold" style="margin-top:12px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Реестр крупных контрактов</strong><small>${contracts.length} контрактов в реестре</small></span></summary><div class="action-fold-body"><div class="bill-grid">${contracts.length?contracts.map(contract=>{const supplier=state.economy.privateSector.companies.find(company=>company.id===contract.supplierId);return `<article class="bill-card ${contract.status==="расторгнут"||contract.delay>65?"bad":contract.delay>35||contract.overrun>15?"warn":"good"}"><header><span><strong>${esc(contract.title)}</strong><small>${esc(supplier?.name||"поставщик")} · ${esc(contract.status)}</small></span><span class="pill">${money(contract.value)}</span></header><div class="progress"><i style="--w:${contract.progress}%"></i></div><div class="bill-kpis"><div><span>Исполнено</span><strong>${pct(contract.progress,0)}</strong></div><div><span>Оплачено</span><strong>${money(contract.spent)}</strong></div><div><span>Качество</span><strong>${pct(contract.quality,0)}</strong></div><div><span>Задержка</span><strong>${pct(contract.delay,0)}</strong></div><div><span>Перерасход</span><strong>${contract.overrun>=0?"+":""}${pct(contract.overrun,1)}</strong></div><div><span>Гарантия</span><strong>${pct(contract.performanceBond,0)}</strong></div></div><details class="action-fold"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Последний отчёт</strong><small>${esc(contract.lastReport)}</small></span></summary><div class="action-fold-body"><div class="actions"><button data-action="contract-action" data-id="${contract.id}" data-mode="enforce">Потребовать график</button><button data-action="contract-action" data-id="${contract.id}" data-mode="audit">Технический аудит</button><button data-action="contract-action" data-id="${contract.id}" data-mode="renegotiate">Изменить условия</button><button class="danger" data-action="contract-action" data-id="${contract.id}" data-mode="terminate">Расторгнуть</button></div></div></details></article>`}).join(""):`<p class="subtle">Подписанных контрактов пока нет.</p>`}</div></div></details>
+        </section>`;
+      }
+
       function renderCabinet() {
         const p = state.politics;
         const c = p.cabinet;
@@ -13461,6 +14131,7 @@
               </div>
             </section>
             ${renderStateDeliveryPanel()}
+            ${renderProcurementPanel()}
             <section class="panel pad">
               <div class="panel-section-head"><span><h3 class="section-title">Кабинет министров</h3><p class="subtle">Результат учитывает компетентность, честность, состояние отрасли и рабочую нагрузку.</p></span><span class="pill">${p.ministers.length} руководителей</span></div>
               <div class="bill-grid" style="margin-top:12px;">${p.ministers.map((m,i) => `
@@ -15450,6 +16121,26 @@
         return `${Math.round(num(value)).toLocaleString("ru-RU")} ${esc(state.country.currency)}${suffix}`;
       }
 
+      function renderLaborMarketPanel() {
+        const labor=state.economy.laborMarket||migrateLaborMarketSystem(state);
+        const sectors=labor.sectors.slice().sort((a,b)=>b.shortage-a.shortage);
+        const tone=state.economy.unemployment>11||labor.mismatch>62?"bad":state.economy.unemployment>7.5||labor.mismatch>42?"warn":"good";
+        return `<section class="panel pad">
+          <div class="panel-section-head"><span><h3 class="section-title">Заработные платы и полноценный рынок труда</h3><p class="subtle">Предприятия создают вакансии и сокращают рабочие места по состоянию спроса. Зарплаты формируются отдельно по отраслям из инфляции, производительности, дефицита кадров и коллективных договоров; нехватка специалистов ограничивает выпуск.</p></span><span class="pill">${compact(labor.vacancies)} вакансий</span></div>
+          <div class="kpi-strip" style="margin-top:12px;"><div class="kpi"><span>Рабочая сила</span><strong>${compact(labor.laborForce)}</strong><small class="subtle">участие ${pct(labor.participationRate,1)}</small></div><div class="kpi"><span>Занято</span><strong>${compact(labor.employed)}</strong><small class="subtle">занятость ${pct(labor.employmentRate,1)}</small></div><div class="kpi"><span>Безработица</span><strong class="delta ${tone}">${pct(state.economy.unemployment,1)}</strong><small class="subtle">долгая ${pct(labor.longTermUnemployment,0)}</small></div><div class="kpi"><span>Средняя зарплата</span><strong>${personalAmount(state.economy.avgSalary,"/мес.")}</strong><small class="subtle">номинально ${labor.wageGrowth>=0?"+":""}${pct(labor.wageGrowth,1)} в год</small></div><div class="kpi"><span>Реальная зарплата</span><strong class="delta ${labor.realWageGrowth>=0?"good":"bad"}">${labor.realWageGrowth>=0?"+":""}${pct(labor.realWageGrowth,1)}</strong><small class="subtle">за вычетом инфляции</small></div><div class="kpi"><span>Несоответствие навыков</span><strong class="delta ${labor.mismatch>55?"bad":labor.mismatch>38?"warn":"good"}">${pct(labor.mismatch,0)}</strong><small class="subtle">вакансии против квалификаций</small></div></div>
+          <div class="decision-banner ${tone}" style="margin-top:12px;"><strong>${esc(labor.lastBriefing)}</strong><span class="subtle">Неполная занятость ${pct(labor.underemployment,1)} · неформальная работа ${pct(labor.informality,1)} · охват договорами ${pct(labor.bargainingCoverage,0)}</span></div>
+          <div class="policy-action-grid compact" style="margin-top:12px;">
+            ${renderActionCard({title:"Переобучение под вакансии",category:"навыки",desc:"Колледжи, службы занятости и компании обучают под подтверждённые дефициты отраслей.",signal:`несоответствие ${pct(labor.mismatch,0)}`,when:"Когда вакансии сохраняются одновременно с безработицей.",effect:"Постепенно снижает дефицит навыков и повышает производительность.",risk:"Результат требует времени и участия работодателей.",cta:"Запустить",tone:"good"},{"data-action":"labor-action","data-mode":"training"},{compact:true})}
+            ${renderActionCard({title:"Мобильность работников",category:"регионы",desc:"Переезд, признание квалификаций и доступная аренда рядом с работой.",signal:`мобильность ${pct(labor.mobility,0)}`,when:"Когда вакансии и безработица находятся в разных регионах.",effect:"Ускоряет совпадение людей и рабочих мест.",risk:"Без жилищного предложения усиливает аренду.",cta:"Финансировать",tone:"institution"},{"data-action":"labor-action","data-mode":"mobility"},{compact:true})}
+            ${renderActionCard({title:"Временная субсидия найма",category:"занятость",desc:"Компенсация части оплаты новых работников в слабых отраслях.",signal:`безработица ${pct(state.economy.unemployment,1)}`,when:"Во время спада, а не при общем дефиците кадров.",effect:"Быстро поддерживает найм и семейные доходы.",risk:"После завершения часть рабочих мест может исчезнуть.",cta:"Ввести",tone:"warn"},{"data-action":"labor-action","data-mode":"subsidy"},{compact:true})}
+            ${renderActionCard({title:"Коллективные переговоры",category:"оплата труда",desc:"Отраслевые соглашения связывают зарплату с инфляцией, производительностью и безопасностью.",signal:`охват ${pct(labor.bargainingCoverage,0)}`,when:"При отставании реальной зарплаты и трудовых конфликтах.",effect:"Делает рост оплаты устойчивее и снижает забастовочный риск.",risk:"Слишком быстрый рост оплаты при слабой производительности давит на цены.",cta:"Утвердить рамку",tone:"good"},{"data-action":"labor-action","data-mode":"bargaining"},{compact:true})}
+            ${renderActionCard({title:"Страхование безработицы",category:"защита дохода",desc:"Пособие связано с поиском работы, переобучением и ограниченным сроком.",signal:`долгая безработица ${pct(labor.longTermUnemployment,0)}`,when:"При массовых увольнениях и длительном поиске.",effect:"Сохраняет потребление семей и ускоряет возвращение к работе.",risk:"Требует точного реестра и постоянного бюджета.",cta:"Расширить",tone:"institution"},{"data-action":"labor-action","data-mode":"insurance"},{compact:true})}
+            ${renderActionCard({title:"Минимальная зарплата",category:"нижняя граница",desc:"Индексация на 7% с оценкой занятости, цен и производительности.",signal:`сейчас ${personalAmount(state.economy.minSalary,"/мес.")}`,when:"Когда нижние зарплаты заметно отстают от стоимости жизни.",effect:"Повышает доход низкооплачиваемых работников.",risk:"Резкий шаг в слабых компаниях может сократить найм.",cta:"Индексировать",tone:"warn"},{"data-action":"labor-action","data-mode":"minimum"},{compact:true})}
+          </div>
+          <details class="action-fold" style="margin-top:12px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Отрасли, вакансии и зарплаты</strong><small>сначала показаны наиболее дефицитные рынки</small></span></summary><div class="action-fold-body"><div class="scroll"><table class="table"><thead><tr><th>Отрасль</th><th>Занято</th><th>Вакансии</th><th>Зарплата</th><th>Рост</th><th>Дефицит</th></tr></thead><tbody>${sectors.map(sector=>`<tr><td>${esc(sector.name)}</td><td>${compact(sector.employment)}</td><td>${compact(sector.vacancies)}</td><td>${personalAmount(sector.avgWage)}</td><td class="${sector.wageGrowth>=state.economy.inflation?"delta good":"delta warn"}">${sector.wageGrowth>=0?"+":""}${pct(sector.wageGrowth,1)}</td><td class="${sector.shortage>55?"delta bad":sector.shortage>35?"delta warn":""}">${pct(sector.shortage,0)}</td></tr>`).join("")}</tbody></table></div></div></details>
+        </section>`;
+      }
+
       function renderHouseholdBudgetPanel() {
         const households=state.population.households||migrateHouseholdSystem(state),worker=households.segments.find(item=>item.id==="workers");
         const tone=households.essentialBurden>78?"bad":households.essentialBurden>62?"warn":"good";
@@ -15520,6 +16211,7 @@
               ${metric("Демографическая нагрузка", pct(d.dependencyRatio,0), `рабочая сила ${compact(d.laborForce)}`, d.dependencyRatio<58?"good":"warn")}
             </div>
             ${renderHouseholdBudgetPanel()}
+            ${renderLaborMarketPanel()}
             <section class="panel pad">
               <div class="panel-section-head"><span><h3 class="section-title">Возраст и трудовые ресурсы</h3><p class="subtle">Когорты меняются ежедневно: дети взрослеют, население стареет, смертность зависит от возраста, а миграция преимущественно пополняет молодую рабочую силу.</p></span><span class="pill">урбанизация ${pct(d.urbanization,0)}</span></div>
               <div class="bill-grid" style="margin-top:12px;">${d.cohorts.map(cohort=>`<article class="bill-card ${cohort.id==="elderly"&&d.dependencyRatio>60?"warn":""}"><header><span><strong>${esc(cohort.name)}</strong><small>смертность ${cohort.mortality.toFixed(1)}‰ · участие в труде ${pct(cohort.labor*100,0)}</small></span><span class="pill">${pct(cohort.share,1)}</span></header><div class="progress"><i style="--w:${cohort.share}%"></i></div><div class="bill-kpis"><div><span>Численность</span><strong>${compact(cohort.population)}</strong></div><div><span>Доля</span><strong>${pct(cohort.share,1)}</strong></div></div></article>`).join("")}</div>
@@ -15661,9 +16353,9 @@
             ${renderActionCard({title:"Регуляторная гильотина",category:"деловой климат",desc:"Удаление устаревших разрешений с сохранением безопасности и трудовых норм.",signal:`регулирование ${pct(ps.regulation,0)}`,when:"При низком деловом доверии.",effect:"Ускоряет инвестиции и открытие предприятий.",risk:"Слишком быстрое упрощение снижает соблюдение норм.",cta:"Пересмотреть нормы",tone:"warn"},{"data-action":"market-action","data-mode":"deregulation"},{compact:true})}
             ${renderActionCard({title:"Фонд роста",category:"капитал",desc:"Софинансирование стартапов и технологических компаний на рыночных условиях.",signal:`венчурный капитал ${pct(ps.ventureCapital,0)}`,when:"Для новых отраслей и повышения производительности.",effect:"Повышает инновации и доступный капитал.",risk:"Государство принимает часть инвестиционного риска.",cta:"Капитализировать",tone:"institution"},{"data-action":"market-action","data-mode":"venture"},{compact:true})}
             ${renderActionCard({title:"Защита инвестиций",category:"право",desc:"Арбитраж, стабильность правил и защита добросовестного собственника.",signal:`права ${pct(ps.propertyRights,0)}`,when:"При оттоке капитала и слабых прямых инвестициях.",effect:"Укрепляет собственность и приток внешнего капитала.",risk:"Ограничивает произвольные решения исполнительной власти.",cta:"Гарантировать",tone:"good"},{"data-action":"market-action","data-mode":"property"},{compact:true})}
-            ${renderActionCard({title:"Прозрачные госзакупки",category:"контракты",desc:"Открытые конкурсы, раскрытие бенефициаров и контроль исполнения.",signal:`прозрачность ${pct(ps.procurementTransparency,0)}`,when:"При коррупции и завышенных государственных контрактах.",effect:"Улучшает конкуренцию и соблюдение правил.",risk:"Первые закупки проходят медленнее из-за проверки.",cta:"Ввести стандарт",tone:"institution"},{"data-action":"market-action","data-mode":"procurement"},{compact:true})}
+            ${renderActionCard({title:"Готовность поставщиков",category:"контракты",desc:"Раскрытие бенефициаров, финансовой устойчивости и истории исполнения компаний.",signal:`прозрачность ${pct(ps.procurementTransparency,0)}`,when:"До размещения крупных государственных конкурсов.",effect:"Повышает число добросовестных заявок и качество проверки.",risk:"Первичная квалификация требует времени и данных.",cta:"Обновить стандарт",tone:"institution"},{"data-action":"market-action","data-mode":"procurement"},{compact:true})}
           </div></section>
-          <section class="panel pad"><div class="panel-section-head"><span><h3 class="section-title">Корпоративный реестр</h3><p class="subtle">Выручка указана в годовом выражении. Прибыль, проценты, найм и капитализация пересчитываются ежедневно. Финансы и решения раскрываются по стрелке.</p></span><span class="pill">капитализация ${money(active.reduce((sum,c)=>sum+c.capitalization,0))}</span></div><div class="bill-grid" style="margin-top:12px;">${companies.map(company=>{const region=companyRegion(state,company),industry=e.industries.find(item=>item.id===company.industryId);return `<article class="bill-card ${companyTone(company)}"><header><span><strong>${esc(company.name)}</strong><small>${esc(industry?.name||company.industryId)} · ${esc(region?.name||"")} · ${esc(company.ownership)}</small></span><span class="pill">${esc(company.status)}</span></header><details class="action-fold"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Маржа ${pct(company.profitMargin,1)} · ${compact(company.employees)} сотрудников</strong><small>капитализация ${money(company.capitalization)} · тренд ${company.trend>=0?"+":""}${pct(company.trend,1)}</small></span></summary><div class="action-fold-body"><div class="bill-kpis"><div><span>Выручка</span><strong>${money(company.revenue)}</strong></div><div><span>Маржа</span><strong>${pct(company.profitMargin,1)}</strong></div><div><span>Сотрудники</span><strong>${compact(company.employees)}</strong></div><div><span>Долг / выручка</span><strong>${pct(company.debt/Math.max(1,company.revenue)*100,0)}</strong></div><div><span>Производительность</span><strong>${pct(company.productivity,0)}</strong></div><div><span>Капитализация</span><strong>${money(company.capitalization)}</strong></div></div><p class="subtle" style="margin:8px 0 0;">Доля рынка ${pct(company.marketShare,1)} · инновации ${pct(company.innovation,0)} · соблюдение норм ${pct(company.compliance,0)} · ${esc(company.lastDecision)}</p>${company.status!=="банкротство"?`<div class="actions"><button data-action="company-action" data-company="${company.id}" data-mode="contract">Госконтракт</button><button data-action="company-action" data-company="${company.id}" data-mode="guarantee">Гарантия</button><button data-action="company-action" data-company="${company.id}" data-mode="audit">Аудит</button><button class="${company.status==="кризис"?"danger":""}" data-action="company-action" data-company="${company.id}" data-mode="rescue">Стабилизировать</button></div>`:""}</div></details></article>`;}).join("")}</div></section>
+          <section class="panel pad"><div class="panel-section-head"><span><h3 class="section-title">Корпоративный реестр</h3><p class="subtle">Выручка указана в годовом выражении. Прибыль, проценты, найм и капитализация пересчитываются ежедневно. Финансы и решения раскрываются по стрелке.</p></span><span class="pill">капитализация ${money(active.reduce((sum,c)=>sum+c.capitalization,0))}</span></div><div class="bill-grid" style="margin-top:12px;">${companies.map(company=>{const region=companyRegion(state,company),industry=e.industries.find(item=>item.id===company.industryId);return `<article class="bill-card ${companyTone(company)}"><header><span><strong>${esc(company.name)}</strong><small>${esc(industry?.name||company.industryId)} · ${esc(region?.name||"")} · ${esc(company.ownership)}</small></span><span class="pill">${esc(company.status)}</span></header><details class="action-fold"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Маржа ${pct(company.profitMargin,1)} · ${compact(company.employees)} сотрудников</strong><small>капитализация ${money(company.capitalization)} · тренд ${company.trend>=0?"+":""}${pct(company.trend,1)}</small></span></summary><div class="action-fold-body"><div class="bill-kpis"><div><span>Выручка</span><strong>${money(company.revenue)}</strong></div><div><span>Маржа</span><strong>${pct(company.profitMargin,1)}</strong></div><div><span>Сотрудники</span><strong>${compact(company.employees)}</strong></div><div><span>Долг / выручка</span><strong>${pct(company.debt/Math.max(1,company.revenue)*100,0)}</strong></div><div><span>Производительность</span><strong>${pct(company.productivity,0)}</strong></div><div><span>Капитализация</span><strong>${money(company.capitalization)}</strong></div></div><p class="subtle" style="margin:8px 0 0;">Доля рынка ${pct(company.marketShare,1)} · инновации ${pct(company.innovation,0)} · соблюдение норм ${pct(company.compliance,0)} · ${esc(company.lastDecision)}</p>${company.status!=="банкротство"?`<div class="actions"><button data-action="company-action" data-company="${company.id}" data-mode="qualify">Проверить допуск</button><button data-action="company-action" data-company="${company.id}" data-mode="guarantee">Гарантия</button><button data-action="company-action" data-company="${company.id}" data-mode="audit">Аудит</button><button class="${company.status==="кризис"?"danger":""}" data-action="company-action" data-company="${company.id}" data-mode="rescue">Стабилизировать</button></div>`:""}</div></details></article>`;}).join("")}</div></section>
           <section class="panel pad"><h3 class="section-title">Рыночная хроника</h3><div class="list" style="margin-top:12px;">${ps.history.length?ps.history.slice(0,18).map(item=>`<div class="row"><span><strong>${esc(item.title)}</strong><br><small class="subtle">${esc(item.date)} · ${esc(item.text)}</small></span><span class="pill">${esc(item.type)}</span></div>`).join(""):`<div class="row"><span>${esc(ps.lastMarketEvent)}</span></div>`}</div></section></section>`;
       }
 
@@ -15873,6 +16565,27 @@
                 "Главный фокус ускоряет одно поручение; делегирование освобождает часть внимания ценой более медленного исполнения; снятие контроля имеет политическую цену.",
                 "Перегрузка снижает исполнение кабинета и государственного конвейера. Поэтому одновременно объявить множество реформ без потери качества нельзя.",
                 "Политический капитал восстанавливается постепенно из общественного мандата, коалиции и управляемости. Разбор повестки снимает дублирование, но требует аппарата и бюджета."
+              ])}
+              ${manualCard("Парламентский торг", [
+                "После профильного комитета закон получает отдельное переговорное досье для нижней палаты, а затем для сената.",
+                "У каждой фракции есть число мест, дисциплина, доверие, позиция, требование и предварительно закреплённые голоса. Общий процент поддержки больше не заменяет фактическое большинство.",
+                "Встреча уточняет красные линии и может привлечь часть голосов без обязательств. Принятая поправка закрепляет больше голосов, но увеличивает стоимость закона и влияние интересов.",
+                "Отклонение требования сохраняет исходный текст и бюджет, но фракция освобождается от договорённости. Публичные расчёты и организация явки помогают без покупки голосов.",
+                "Можно назначить голосование после трёх дней. Если игрок не вмешивается, парламент самостоятельно голосует по истечении срока переговоров."
+              ])}
+              ${manualCard("Зарплаты и рынок труда", [
+                "Рабочая сила зависит от демографии, участия в труде, ухода за детьми, пенсионного возраста и миграции. Занятые, безработные и вакансии считаются отдельно.",
+                "В каждой отрасли есть занятость, вакансии, средняя зарплата, рост оплаты, производительность, профсоюзный охват и дефицит навыков.",
+                "Компании нанимают и сокращают людей из-за спроса, прибыли, кредита и делового цикла. Одновременные вакансии и безработица возможны при несовпадении квалификаций или регионов.",
+                "Номинальная зарплата реагирует на инфляцию, производительность, дефицит работников и коллективные договоры. Реальная зарплата показывает изменение покупательной способности.",
+                "Нехватка кадров ограничивает фактический выпуск отрасли. Переобучение, мобильность, страхование безработицы и временная субсидия действуют постепенно и имеют бюджетную цену."
+              ])}
+              ${manualCard("Закупки и государственные контракты", [
+                "На стадии закупок государственная программа автоматически публикует конкурс с лимитом, сроком, методом и требованиями.",
+                "Реальные компании подают заявки. Комиссия сравнивает цену, качество, срок поставки и добросовестность, а не выбирает только самое дешёвое предложение.",
+                "Победитель получает контракт, который связан с программой, поставщиком, платежами, прогрессом, качеством, задержкой, перерасходом и обеспечением исполнения.",
+                "Срочная закупка ускоряет процедуру ценой конкуренции и целостности. Лоты расширяют доступ малого бизнеса, независимая проверка снижает риск сговора.",
+                "Контракт можно усилить гарантией, проверить, обоснованно изменить или расторгнуть. Расторжение возвращает программу на конкурс и не создаёт бесплатного результата."
               ])}
               ${manualCard("Исполнение решений", [
                 "После принятия закона или указа создается отдельная государственная программа с ответственным министром, сметой, сроком, риском и целевыми регионами.",
@@ -16104,7 +16817,7 @@
                 "Спрос, производственная цепочка, ставка, кредит, инфраструктура и состояние региона ежедневно определяют прибыль, найм, увольнения и инвестиции.",
                 "Тяжелая убыточность и долговая нагрузка переводят компанию в кризис; неплатежеспособная компания может обанкротиться и оставить регион без рабочих мест.",
                 "Государство регулирует конкуренцию, собственность, закупки и венчурный капитал, но не назначает частным компаниям прибыль.",
-                "Госконтракт, гарантия или стабилизация помогают конкретной компании ценой бюджета, лоббизма, финансового риска и возможного искажения конкуренции."
+                "Проверка поставщика только допускает компанию к конкурсу. Государственный контракт присуждается отдельно по заявкам во вкладке правительства; гарантия и стабилизация остаются условными инструментами с бюджетным риском."
               ])}
               ${manualCard("Сохранения", [
                 "Автосохранение сжимает историю и новости, чтобы LocalStorage не переполнялся.",
@@ -16985,6 +17698,7 @@
         else if (action === "succession-action") successionAction(actionEl.dataset.mode);
         else if (action === "law-package") lawPackageAction(actionEl.dataset.law);
         else if (action === "bill-action") legislationAction(actionEl.dataset.id, actionEl.dataset.mode);
+        else if (action === "parliament-bargain") parliamentBargainAction(actionEl.dataset.bill, actionEl.dataset.mode, actionEl.dataset.party);
         else if (action === "force-action") politicalForceAction(actionEl.dataset.id, actionEl.dataset.mode);
         else if (action === "elite-action") eliteAction(actionEl.dataset.id, actionEl.dataset.mode);
         else if (action === "actor-ai-action") actorAIAction(actionEl.dataset.mode);
@@ -16993,6 +17707,9 @@
         else if (action === "replace-minister") replaceMinister(num(actionEl.dataset.index));
         else if (action === "cabinet-action") cabinetAction(actionEl.dataset.mode);
         else if (action === "delivery-action") stateDeliveryAction(actionEl.dataset.id, actionEl.dataset.mode);
+        else if (action === "procurement-action") procurementAction(actionEl.dataset.mode);
+        else if (action === "tender-action") procurementTenderAction(actionEl.dataset.id, actionEl.dataset.mode);
+        else if (action === "contract-action") procurementContractAction(actionEl.dataset.id, actionEl.dataset.mode);
         else if (action === "minister-action") ministerAction(num(actionEl.dataset.index), actionEl.dataset.mode);
         else if (action === "justice-action") justiceAction(actionEl.dataset.mode, actionEl.dataset.case);
         else if (action === "select-country") selectedCountryId = actionEl.dataset.id;
@@ -17019,6 +17736,7 @@
         else if (action === "social") socialAction(actionEl.dataset.social);
         else if (action === "demography-action") demographyAction(actionEl.dataset.mode);
         else if (action === "household-action") householdAction(actionEl.dataset.mode);
+        else if (action === "labor-action") laborMarketAction(actionEl.dataset.mode);
         else if (action === "housing-action") housingAction(actionEl.dataset.mode);
         else if (action === "attention-action") presidentialAttentionAction(actionEl.dataset.mode,actionEl.dataset.id);
         else if (action === "information-action") informationAction(actionEl.dataset.mode);
@@ -17551,8 +18269,10 @@
           simulateEconomy(game);
           simulatePrivateSector(game);
           simulateHousingMarket(game);
+          simulateLaborMarket(game);
           simulateHouseholds(game);
           simulatePresidentialAttention(game);
+          simulateParliamentBargaining(game);
           simulatePolitics(game);
           simulateShadowCabinetSystem(game);
           simulatePromiseSystem(game);
@@ -17560,6 +18280,7 @@
           simulateSuccessionSystem(game);
           simulateJusticeSystem(game);
           simulateCabinet(game);
+          simulateProcurementSystem(game);
           simulateStateDelivery(game);
           simulateActorAISystem(game);
           simulatePopulation(game);
@@ -17631,9 +18352,10 @@
           const domesticDemand = 1 + (e.growth - 2) * .012 + (game.population.happiness - 50) * .0015 + (sector.id === "defense" ? game.military.wars.length * .18 : 0);
           sector.demand = clamp(sector.demand * .996 + sector.capacity * domesticDemand * .004, 18, 220);
           const efficiencyFactor = .74 + sector.efficiency / 205;
+          const laborFactor = clamp(num(sector.laborAvailability, 100) / 100, .42, 1.05);
           const capacityBonus = sector.id === "energy" ? energyBonus : ["machinery", "components", "consumer", "defense"].includes(sector.id) ? factoryBonus : 0;
           const disruption = clamp(1 - warPenalty - e.supplyShock * .0012, .62, 1.05);
-          const targetOutput = sector.capacity * efficiencyFactor * clamp(inputFactor + capacityBonus + techBonus, .1, 1.14) * disruption * networkFactor;
+          const targetOutput = sector.capacity * efficiencyFactor * laborFactor * clamp(inputFactor + capacityBonus + techBonus, .1, 1.14) * disruption * networkFactor;
           sector.output = Math.max(0, sector.output * .94 + targetOutput * .06);
           sector.utilization = clamp(sector.output / Math.max(1, sector.capacity) * 100, 0, 110);
           sector.inputFactor = inputFactor;
@@ -17890,7 +18612,8 @@
           const profit=company.revenue*company.profitMargin/100/365,interest=company.debt*(e.keyRate+2.8)/100/365;company.cash=clamp(company.cash+profit-interest,-company.revenue*1.2,company.revenue*2);company.debt=Math.max(0,company.debt+Math.max(0,-profit)*.16-interest*.03-Math.max(0,profit)*.025);
           const invest=Math.max(0,profit)*clamp((ps.businessConfidence+company.innovation)/140,.25,1.35);investment+=invest;company.productivity=clamp(company.productivity+invest/Math.max(500,company.revenue)*.018,5,140);company.innovation=clamp(company.innovation+invest/Math.max(800,company.revenue)*.012,0,100);
           const jobsDelta=clamp((revenueGrowth*company.employees*.3)+(company.profitMargin>8?company.employees*.00003:-company.employees*.000025)-laborTightness*company.employees*.000015,-Math.max(1,company.employees*.003),Math.max(1,company.employees*.003));company.employees=Math.max(0,Math.round(company.employees+jobsDelta));if(jobsDelta>0)hires+=jobsDelta;else layoffs-=jobsDelta;
-          company.wage=Math.max(100,company.wage*(1+(e.inflation/100)/365*.62+(company.productivity-55)/800000+laborTightness*.00008));company.trend=clamp(company.trend*.78+revenueGrowth*36500*.12+company.profitMargin*.025+rnd(-.18,.18),-20,20);company.capitalization=clamp(company.capitalization*(1+company.trend/36500),1,Math.max(100,company.revenue*14));company.expansionDays=Math.max(0,company.expansionDays-1);
+          const laborSector=e.laborMarket?.sectors?.find(item=>item.id===company.industryId),companyWageGrowth=laborSector?laborSector.wageGrowth:clamp(e.inflation*.62+e.growth*.35,-8,18);
+          company.wage=Math.max(100,company.wage*(1+companyWageGrowth/100/DAYS_PER_YEAR));company.trend=clamp(company.trend*.78+revenueGrowth*36500*.12+company.profitMargin*.025+rnd(-.18,.18),-20,20);company.capitalization=clamp(company.capitalization*(1+company.trend/36500),1,Math.max(100,company.revenue*14));company.expansionDays=Math.max(0,company.expansionDays-1);
           company.status=company.cash<-company.revenue*.22||company.debt>company.revenue*1.65||company.profitMargin<-14?"кризис":company.profitMargin<0||company.debt>company.revenue?"под наблюдением":"работает";
           if(company.status==="кризис"&&company.cash<-company.revenue*.55&&simulationRandom()<.008)triggerCorporateFailure(game,company);
         }
@@ -18329,7 +19052,8 @@
           25
         );
         e.unemployment = clamp(e.unemployment + (unemploymentTarget - e.unemployment) * .0035 + rnd(-.001, .001), 1, 45);
-        e.avgSalary = Math.max(e.minSalary, e.avgSalary * (1 + growthDaily * .52 + (e.inflation / 100) / DAYS_PER_YEAR * .58));
+        const laborWageGrowth = e.laborMarket ? clamp(e.laborMarket.wageGrowth, -12, 24) : clamp(e.growth * .52 + e.inflation * .58, -12, 24);
+        e.avgSalary = Math.max(e.minSalary, e.avgSalary * (1 + laborWageGrowth / 100 / DAYS_PER_YEAR));
         const currentAccountRatio = (e.exports - e.imports) / Math.max(1, e.gdp);
         const exchangeAnnual = clamp((e.inflation - centralTarget) * .65 + e.financial.exchangePressure * .035 - currentAccountRatio * 8 - e.reserves / Math.max(1, e.gdp) * 1.1, -12, 20);
         e.exchangeRate = clamp(e.exchangeRate * (1 + exchangeAnnual / 100 / DAYS_PER_YEAR), .1, 5000);
@@ -18833,11 +19557,9 @@
             setBillStage(game, bill, "committee", "Правительство завершило подготовку текста и передало его в профильный комитет.");
           } else if (bill.stage === "committee" && bill.daysInStage >= 18) {
             resolveBillVote(game, bill, "lower", "Профильный комитет");
-          } else if (bill.stage === "lower" && bill.daysInStage >= 9) {
-            resolveBillVote(game, bill, "upper", game.country?.parliamentName || "Парламент", 2);
-          } else if (bill.stage === "upper" && bill.daysInStage >= 8) {
-            const governors = p.forces.find(force => force.type === "regional");
-            resolveBillVote(game, bill, "president", "Сенат", governors && governors.relation < 40 ? 7 : 1);
+          } else if (bill.stage === "lower" || bill.stage === "upper") {
+            const dossier = ensureParliamentDossier(game, bill);
+            bill.support = clamp(dossier.securedVotes / Math.max(1, dossier.chamberSeats) * 100, 0, 100);
           } else if (bill.stage === "court") {
             let courtCase=p.justice.cases.find(item=>item.linkedBill===bill.id);
             if(!courtCase) courtCase=openJusticeCase(game,"constitutional",`Конституционный контроль: ${bill.name}`,"Законодательный акт",clamp(bill.quality*.72+p.constitution.rights*.18-(bill.kind==="security"?8:0),15,95),72,bill.id);
@@ -21468,14 +22190,14 @@
         else if(mode==="deregulation"){cost=170;ps.regulation-=7;ps.businessConfidence+=5;ps.companies.forEach(c=>c.compliance-=1.2);state.politics.corruption+=.25;title="Устаревшие разрешения отменены";text="Правительство сократило дублирующие согласования, сохранив базовые требования к труду, экологии и безопасности.";details=[["Регулирование","-7 п.п.","good"],["Деловое доверие","+5 п.п.","good"],["Соблюдение норм","-1.2 п.п.","warn"]];tone="warn";}
         else if(mode==="venture"){cost=780;ps.ventureCapital+=9;ps.businessConfidence+=2;ps.companies.filter(c=>["digital","components","chemicals"].includes(c.industryId)).forEach(c=>{c.innovation+=3;c.cash+=80;});title="Фонд роста капитализирован";text="Государственный якорный капитал привлек частных инвесторов в технологии и новые производства.";details=[["Венчурный капитал","+9 п.п.","good"],["Инновации","+3 п.п.","good"],["Бюджет",`-${money(cost)}`,"bad"]];}
         else if(mode==="property"){cost=310;ps.propertyRights+=7;ps.foreignInvestment+=4;state.politics.justice.ruleOfLaw+=1.2;title="Гарантии собственности укреплены";text="Введены прозрачная компенсация, независимый арбитраж и запрет обратного действия регуляторных решений.";details=[["Защита собственности","+7 п.п.","good"],["Иностранные инвестиции","+4 п.п.","good"],["Верховенство права","+1.2 п.п.","good"]];}
-        else if(mode==="procurement"){cost=340;ps.procurementTransparency+=9;ps.competition+=3;state.politics.corruption-=.8;state.politics.cabinet.bureaucracy+=.6;ps.companies.forEach(c=>c.compliance+=.7);title="Стандарт открытых закупок введен";text="Конкурсы раскрывают бенефициаров, цену жизненного цикла и фактическое исполнение контракта.";details=[["Прозрачность","+9 п.п.","good"],["Коррупция","-0.8 п.п.","good"],["Срок процедур","выше","warn"]];}else return;
+        else if(mode==="procurement"){cost=340;ps.procurementTransparency+=9;ps.competition+=3;state.politics.corruption-=.8;state.politics.cabinet.bureaucracy+=.6;ps.companies.forEach(c=>c.compliance+=.7);const procurement=state.governance.procurement||migrateProcurementSystem(state);procurement.transparency=clamp(procurement.transparency+5,0,100);procurement.integrity=clamp(procurement.integrity+2,0,100);title="Стандарт квалификации поставщиков введен";text="Компании раскрывают бенефициаров, финансовую устойчивость и историю исполнения до подачи заявки; сами контракты по-прежнему присуждаются конкурсной комиссией.";details=[["Прозрачность поставщиков","+9 п.п.","good"],["Целостность закупок","+2 п.п.","good"],["Коррупция","-0.8 п.п.","good"],["Срок первичной проверки","выше","warn"]];}else return;
         if(e.budget<cost)return notify("Недостаточно бюджета на рыночную реформу.","warn","Минэкономики");e.budget-=cost;ps.history.unshift({date:formatDate(state.date),title,text,type:"policy"});ps.history=ps.history.slice(0,60);normalizeCore();pushNews(state,"Экономика",title,text);showDecision(title,text,details,tone);
       }
 
       function companyAction(companyId,mode) {
         const e=state.economy,ps=e.privateSector,company=ps.companies.find(c=>c.id===companyId);if(!company||company.status==="банкротство")return notify("Компания недоступна.");let cost=0,title="Корпоративное решение",text="",details=[],tone="good";
-        const plannedCost=mode==="rescue"?(company.systemic?1300:760):({contract:420,guarantee:160,audit:90}[mode]);if(plannedCost==null)return;if(e.budget<plannedCost)return notify("Недостаточно бюджета для решения по компании.","warn","Минэкономики");
-        if(mode==="contract"){cost=420;company.revenue*=1.035;company.cash+=180;company.employees=Math.round(company.employees*1.008);company.compliance-=ps.procurementTransparency<55?1.4:.2;state.politics.lobbyism+=.45;company.lastDecision="получен государственный контракт";title="Госконтракт присужден";text=`${company.name} выиграла контракт по опубликованным критериям цены, локализации и исполнения.`;details=[["Выручка","+3.5%","good"],["Занятость","+0.8%","good"],["Лоббизм","+0.45 п.п.","warn"]];tone="warn";}
+        const plannedCost=mode==="rescue"?(company.systemic?1300:760):({qualify:40,guarantee:160,audit:90}[mode]);if(plannedCost==null)return;if(e.budget<plannedCost)return notify("Недостаточно бюджета для решения по компании.","warn","Минэкономики");
+        if(mode==="qualify"){cost=40;const score=clamp(company.compliance*.45+company.productivity*.25+Math.max(0,100-company.debt/Math.max(1,company.revenue)*45)*.2+(company.cash>0?10:2),0,100);company.compliance=clamp(company.compliance+(score>=55?1.5:.4),0,100);company.lastDecision=score>=55?"допущена к открытым государственным конкурсам":"допуск к крупным конкурсам ограничен до устранения замечаний";title=score>=55?"Поставщик прошёл квалификацию":"Поставщик получил замечания";text=score>=55?`${company.name} может подавать заявки, но контракт получит только по итогам конкурса во вкладке правительства.`:`${company.name} должна улучшить финансовую устойчивость, раскрытие собственности и историю исполнения.`;details=[["Оценка",pct(score,0),score>=55?"good":"bad"],["Госконтракт","не присуждён","institution"],["Бюджет",`-${money(cost)}`,"bad"]];tone=score>=55?"good":"warn";}
         else if(mode==="guarantee"){cost=160;company.debt*=.94;company.cash+=220;e.financial.crisisLevel+=.4;company.lastDecision="получена государственная кредитная гарантия";title="Кредитная гарантия выдана";text=`${company.name} получила гарантию для инвестиционного кредита; государство приняло условный риск на баланс.`;details=[["Долговая нагрузка","-6%","good"],["Ликвидность","+220 млн","good"],["Финансовый риск","+0.4 п.п.","warn"]];tone="warn";}
         else if(mode==="audit"){cost=90;const finding=clamp(100-company.compliance+rnd(-15,15),0,100);company.compliance+=finding>45?6:2;company.cash-=finding>45?120:25;state.politics.corruption-=finding>45?.35:.08;company.lastDecision=finding>45?"аудит выявил нарушения":"аудит завершен без существенных нарушений";title=finding>45?"Аудит выявил нарушения":"Корпоративный аудит завершен";text=finding>45?`${company.name} обязана устранить нарушения отчетности и возместить ущерб.`:`${company.name} подтвердила раскрытие собственности, налогов и государственных контрактов.`;details=[["Риск проверки",pct(finding,0),finding>45?"bad":"good"],["Соблюдение норм",finding>45?"+6 п.п.":"+2 п.п.","good"],["Коррупция",finding>45?"-0.35 п.п.":"-0.08 п.п.","good"]];tone=finding>45?"warn":"good";}
         else if(mode==="rescue"){if(company.status==="работает")return showBlockedDecision("Стабилизация не обоснована","Компания прибыльна и не создает угрозы цепочке поставок. Государственная помощь исказит конкуренцию.",[["Статус",company.status,"good"],["Маржа",pct(company.profitMargin,1),"good"]]);cost=company.systemic?1300:760;company.cash+=cost*.65;company.debt*=.82;company.status="под наблюдением";company.profitMargin+=2;company.lastDecision="получена условная стабилизационная помощь";ps.competition-=company.systemic?1.5:.7;state.politics.popularity-=.5;title="Компания стабилизирована";text=`${company.name} получила временную помощь в обмен на запрет дивидендов, смену управления и план возврата средств.`;details=[["Ликвидность",`+${money(cost*.65)}`,"good"],["Долг","-18%","good"],["Конкуренция",company.systemic?"-1.5 п.п.":"-0.7 п.п.","warn"]];tone="warn";}else return;
@@ -21704,6 +22426,7 @@
         const e = state.economy, p = state.politics, pop = state.population, m = state.military;
         if (!state.simulation) migrateSimulationCore(state);
         if (!Array.isArray(pop.groups) || !Array.isArray(p.forces) || !Array.isArray(p.legislation)) migratePoliticalSystems(state);
+        if (!p.parliamentaryBargaining || p.parliamentaryBargaining.modelVersion!==PARLIAMENT_BARGAIN_MODEL_VERSION) migrateParliamentBargaining(state);
         if (!Array.isArray(e.industries) || !e.fiscal || !e.supply) migrateEconomicSystems(state);
         if (!e.nationalAccounts) migrateNationalAccounts(state);
         if (!e.financial?.centralBank || !Array.isArray(e.financial?.banks)) migrateFinancialSystem(state);
@@ -21713,6 +22436,7 @@
         if (!p.attention || p.attention.modelVersion!==ATTENTION_MODEL_VERSION) migratePresidentialAttention(state);
         if (!state.infrastructure?.edges || state.regions.some(region=>!state.infrastructure.nodes?.some(node=>node.regionId===region.id))) migrateInfrastructureSystem(state);
         if (!e.privateSector?.companies) migratePrivateSector(state);
+        if (!e.laborMarket || e.laborMarket.modelVersion!==LABOR_MARKET_MODEL_VERSION) migrateLaborMarketSystem(state);
         if (!state.information?.outlets || !state.information?.narratives) migrateInformationSystem(state);
         if (!state.intelligence?.dossiers || !state.intelligence?.operations) migrateIntelligenceSystem(state);
         if (!state.climate?.resources || state.regions.some(region => !region.climate)) migrateClimateSystem(state);
@@ -21725,6 +22449,7 @@
         if (!p.promises?.active) migratePromiseSystem(state);
         if (!state.softPower?.influence) migrateSoftPowerSystem(state);
         if (!state.governance?.delivery?.programs) migrateStateDelivery(state);
+        if (!state.governance?.procurement || state.governance.procurement.modelVersion!==PROCUREMENT_MODEL_VERSION) migrateProcurementSystem(state);
         if (!p.actorAI?.actors) migrateActorAISystem(state);
         if (!state.narrative || state.narrative.modelVersion !== NARRATIVE_MODEL_VERSION) migrateNarrativeSystem(state);
         if (!state.settings || !state.career || state.career.modelVersion !== CAREER_MODEL_VERSION) migrateCareerSystem(state);
@@ -21749,6 +22474,7 @@
         const industryDefaultMap = new Map(industryDefaults.map(item => [item.id, item]));
         e.industries = e.industries.map((sector, index) => normalizeIndustry(sector, industryDefaultMap.get(sector.id) || industryDefaults[index % industryDefaults.length]));
         const privateSector=e.privateSector;["competition","businessConfidence","consumerConfidence","ventureCapital","foreignInvestment","laborDemand","monopolyRisk","regulation","propertyRights","procurementTransparency"].forEach(key=>privateSector[key]=clamp(num(privateSector[key]),0,100));privateSector.insolvencyRate=clamp(num(privateSector.insolvencyRate),0,100);privateSector.companies=privateSector.companies.map((company,index)=>normalizePrivateCompany(company,null,index)).slice(0,40);privateSector.history=(privateSector.history||[]).slice(0,60);updatePrivateSectorTotals(state);syncLegacyCompanies(state);
+        const labor=e.laborMarket;["participationRate","employmentRate","vacancyRate","underemployment","longTermUnemployment","mismatch","mobility","bargainingCoverage","informality"].forEach(key=>labor[key]=clamp(num(labor[key]),0,100));["laborForce","employed","unemployed","vacancies"].forEach(key=>labor[key]=Math.max(0,num(labor[key])));labor.wageGrowth=clamp(num(labor.wageGrowth),-12,24);labor.realWageGrowth=clamp(num(labor.realWageGrowth),-20,20);labor.sectors=labor.sectors.map((item,index)=>{const fallback=laborSectorDefaults(state)[index]||laborSectorDefaults(state)[0];return Object.assign(fallback,item,{name:fallback.name,employment:Math.max(0,num(item.employment)),vacancies:Math.max(0,num(item.vacancies)),avgWage:Math.max(100,num(item.avgWage)),wageGrowth:clamp(num(item.wageGrowth),-12,24),shortage:clamp(num(item.shortage),0,100)});}).slice(0,16);labor.history=(labor.history||[]).slice(0,24);
         const information=state.information;["publicMood","governmentCredibility","pluralism","misinformation","mediaLiteracy","transparency","pressAccess","crisisCommunication","echoChambers","factChecking"].forEach(key=>information[key]=clamp(num(information[key]),0,100));information.briefingCooldown=Math.max(0,Math.round(num(information.briefingCooldown)));information.outlets=information.outlets.map((item,index)=>normalizeInformationOutlet(item,null,index)).slice(0,18);information.narratives=information.narratives.map((item,index)=>normalizeInformationNarrative(item,null,index)).slice(0,16);information.history=(information.history||[]).slice(0,70);syncLegacyInformation(state);
         const intelligence=state.intelligence;["humint","sigint","cyber","analysis","counterIntel","covertAction","oversight","secrecy","foreignNetworks","domesticRisk","cyberThreat","threatLevel"].forEach(key=>intelligence[key]=clamp(num(intelligence[key]),0,100));intelligence.budget=Math.max(0,num(intelligence.budget));intelligence.operations=(intelligence.operations||[]).map(normalizeIntelligenceOperation).slice(0,24);intelligence.dossiers=(intelligence.dossiers||[]).map(item=>{const country=state.diplomacy.countries.find(country=>country.id===item.countryId);return country?normalizeIntelligenceDossier(item,country,state):null;}).filter(Boolean).slice(0,36);intelligence.reports=(intelligence.reports||[]).slice(0,70);state.governance.intelligence.counterIntel=intelligence.counterIntel;state.governance.intelligence.foreignNetworks=intelligence.foreignNetworks;state.governance.intelligence.domesticRisk=intelligence.domesticRisk;state.governance.intelligence.cyberThreat=intelligence.cyberThreat;
         const climate=state.climate;["emissions","resilience","preparedness","adaptation","mitigation","waterStress","biodiversity","airQuality","responseCapacity"].forEach(key=>climate[key]=clamp(num(climate[key]),0,100));climate.temperatureAnomaly=clamp(num(climate.temperatureAnomaly,1.18),.2,4.8);climate.emissionsTrend=clamp(num(climate.emissionsTrend),-5,5);climate.emergencyReserve=Math.max(0,num(climate.emergencyReserve));["fossil","nuclear","renewable"].forEach(key=>climate.energyMix[key]=clamp(num(climate.energyMix[key]),0,100));const energyTotal=climate.energyMix.fossil+climate.energyMix.nuclear+climate.energyMix.renewable||100;["fossil","nuclear","renewable"].forEach(key=>climate.energyMix[key]=climate.energyMix[key]/energyTotal*100);climate.resources=(climate.resources||[]).map((item,index)=>normalizeClimateResource(item,null,index)).slice(0,18);climate.emergencies=(climate.emergencies||[]).map(normalizeClimateEmergency).slice(0,18);climate.history=(climate.history||[]).slice(0,70);
@@ -21803,6 +22529,8 @@
         p.cabinet.reformCooldown = Math.max(0, Math.round(num(p.cabinet.reformCooldown, 0)));
         p.cabinet.directives ||= [];
         const delivery=state.governance.delivery;["procurementIntegrity","interagencyCoordination","regionalCompliance","fiscalDiscipline","implementationGap"].forEach(key=>delivery[key]=clamp(num(delivery[key]),0,100));delivery.programs=delivery.programs.map(item=>normalizeDeliveryProgram(item,state)).slice(0,36);delivery.auditTrail=(delivery.auditTrail||[]).slice(0,60);
+        const procurement=state.governance.procurement;["competition","transparency","integrity","localShare","smeShare","averageBidders","overrunRate","delayRate"].forEach(key=>procurement[key]=clamp(num(procurement[key]),0,100));procurement.tenders=procurement.tenders.map(item=>normalizeProcurementTender(item,state)).slice(0,16);procurement.contracts=procurement.contracts.map(normalizeProcurementContract).slice(0,24);procurement.history=(procurement.history||[]).slice(0,24);
+        const parliament=p.parliamentaryBargaining;["whipCapacity","crossPartyTrust","transparency","amendmentQuality"].forEach(key=>parliament[key]=clamp(num(parliament[key]),0,100));parliament.dossiers=parliament.dossiers.map(item=>{const bill=p.legislation.find(b=>b.id===item.billId);return bill?normalizeParliamentDossier(item,state,bill):null;}).filter(Boolean).slice(0,20);parliament.log=(parliament.log||[]).slice(0,24);
         const actorAI=p.actorAI;["polarization","negotiationClimate"].forEach(key=>actorAI[key]=clamp(num(actorAI[key]),0,100));actorAI.cycleDays=Math.max(0,Math.round(num(actorAI.cycleDays)));actorAI.actors=actorAI.actors.map(actor=>normalizeStrategicActor(actor,actor)).slice(0,320);actorAI.log=(actorAI.log||[]).slice(0,50);
         m.operations=(Array.isArray(m.operations)?m.operations:[]).filter(item=>item&&typeof item==="object").slice(0,40);
         m.warTreaties=(Array.isArray(m.warTreaties)?m.warTreaties:[]).filter(item=>item&&typeof item==="object").slice(0,24);
