@@ -3786,7 +3786,7 @@
 
       const STORAGE_KEY = "aaa_president_sim_state_v4";
       const SLOTS_KEY = "aaa_president_sim_slots_v4";
-      const SAVE_VERSION = 28;
+      const SAVE_VERSION = 29;
       const ECONOMY_MODEL_VERSION = 5;
       const FOREIGN_STATE_MODEL_VERSION = 1;
       const BILATERAL_MODEL_VERSION = 2;
@@ -3799,6 +3799,9 @@
       const PARLIAMENT_BARGAIN_MODEL_VERSION = 1;
       const LABOR_MARKET_MODEL_VERSION = 1;
       const PROCUREMENT_MODEL_VERSION = 1;
+      const SCANDAL_MODEL_VERSION = 1;
+      const MUNICIPAL_MODEL_VERSION = 1;
+      const MULTILATERAL_MODEL_VERSION = 1;
       const SAVE_DB_NAME = "aaa_president_sim_storage";
       const SAVE_DB_STORE = "saves";
       const DAY_MS = 1800;
@@ -4423,6 +4426,14 @@
         if (copy.diplomacy?.worldSystem?.history) copy.diplomacy.worldSystem.history = copy.diplomacy.worldSystem.history.slice(0, level === "normal" ? 24 : 8);
         if (copy.diplomacy?.worldSystem?.agreements) copy.diplomacy.worldSystem.agreements = copy.diplomacy.worldSystem.agreements.slice(0, level === "normal" ? 28 : 12);
         if (copy.diplomacy?.worldSystem?.conflicts) copy.diplomacy.worldSystem.conflicts = copy.diplomacy.worldSystem.conflicts.filter(item=>item.status==="active").concat(copy.diplomacy.worldSystem.conflicts.filter(item=>item.status!=="active").slice(0,level==="normal"?6:2)).slice(0,level==="normal"?14:9);
+        if (copy.diplomacy?.multilateral) {
+          copy.diplomacy.multilateral.resolutions = (copy.diplomacy.multilateral.resolutions || []).filter(item=>["draft","voting"].includes(item.stage)).concat((copy.diplomacy.multilateral.resolutions || []).filter(item=>!["draft","voting"].includes(item.stage)).slice(0,level==="normal"?5:2)).slice(0,level==="normal"?11:7);
+          copy.diplomacy.multilateral.resolutions.forEach(item=>{delete item.text;});
+          (copy.diplomacy.multilateral.memberships || []).forEach(item=>{delete item.purpose;delete item.lastBriefing;});
+          copy.diplomacy.multilateral.summits = (copy.diplomacy.multilateral.summits || []).slice(0,level==="normal"?4:2);
+          copy.diplomacy.multilateral.coalitions = (copy.diplomacy.multilateral.coalitions || []).filter(item=>item.daysLeft>0).slice(0,level==="normal"?4:2);
+          copy.diplomacy.multilateral.history = (copy.diplomacy.multilateral.history || []).slice(0,level==="normal"?8:4);
+        }
         if (copy.history) {
           for (const key of Object.keys(copy.history)) copy.history[key] = (copy.history[key] || []).slice(-historyLimit);
         }
@@ -4458,8 +4469,17 @@
           country.bilateral.strategicInstruments=activeInstruments.concat((country.bilateral.strategicInstruments||[]).filter(item=>item.status!=="active").slice(0,level==="normal"?4:1)).slice(0,level==="normal"?14:8);
         });
         if (copy.infrastructure?.history) copy.infrastructure.history = copy.infrastructure.history.slice(0, level === "normal" ? 36 : 14);
+        if (copy.municipalities) {
+          copy.municipalities.history = (copy.municipalities.history || []).slice(0,level==="normal"?8:4);
+          (copy.municipalities.cities || []).forEach(city=>{city.history=[];delete city.lastReport;if(city.project?.status==="completed")city.project=null;});
+        }
         if (copy.population?.demography?.history) copy.population.demography.history = copy.population.demography.history.slice(0, level === "normal" ? 36 : 14);
         if (copy.information?.history) copy.information.history = copy.information.history.slice(0, level === "normal" ? 40 : 16);
+        if (copy.information?.scandals) {
+          copy.information.scandals.cases = (copy.information.scandals.cases || []).filter(item=>!["закрыто","опровергнуто"].includes(item.status)).concat((copy.information.scandals.cases || []).filter(item=>["закрыто","опровергнуто"].includes(item.status)).slice(0,level==="normal"?4:2)).slice(0,level==="normal"?10:6);
+          copy.information.scandals.cases.forEach(item=>{item.history=(item.history||[]).slice(0,level==="normal"?2:1);});
+          copy.information.scandals.history = (copy.information.scandals.history || []).slice(0,level==="normal"?8:4);
+        }
         if (copy.intelligence?.reports) copy.intelligence.reports = copy.intelligence.reports.slice(0, level === "normal" ? 42 : 18);
         if (copy.intelligence?.operations) copy.intelligence.operations = copy.intelligence.operations.slice(0, level === "normal" ? 18 : 8);
         if (copy.military?.operations) copy.military.operations = copy.military.operations.slice(0, level === "normal" ? 30 : 12);
@@ -4481,8 +4501,8 @@
         if (copy.politics?.promises?.log) copy.politics.promises.log = copy.politics.promises.log.slice(0, level === "normal" ? 24 : 10);
         if (copy.politics?.actorAI?.log) copy.politics.actorAI.log = copy.politics.actorAI.log.slice(0, level === "normal" ? 28 : 10);
         if (copy.politics?.actorAI?.actors) copy.politics.actorAI.actors.forEach(actor => {
-          actor.memory = (actor.memory || []).slice(0, level === "normal" ? 5 : 2);
-          actor.planHistory = (actor.planHistory || []).slice(0, level === "normal" ? 2 : 1);
+          actor.memory = (actor.memory || []).slice(0, level === "normal" ? 4 : 2);
+          actor.planHistory = (actor.planHistory || []).slice(0, 1);
         });
         if (copy.narrative) {
           copy.narrative.memory = (copy.narrative.memory || []).slice(0, level === "normal" ? 54 : 18);
@@ -4714,6 +4734,7 @@
         migrateFinancialSystem(loaded);
         migrateStrategicDiplomacy(loaded);
         migrateInternationalLaw(loaded);
+        migrateMultilateralSystem(loaded);
         migratePoliticalSystems(loaded);
         migrateParliamentBargaining(loaded);
         migrateElectionSystem(loaded);
@@ -4730,6 +4751,7 @@
         migrateInfrastructureSystem(loaded);
         migratePrivateSector(loaded);
         migrateInformationSystem(loaded);
+        migrateScandalSystem(loaded);
         migrateIntelligenceSystem(loaded);
         migrateClimateSystem(loaded);
         migrateChronicle(loaded);
@@ -4738,6 +4760,7 @@
         migrateWorldGeography(loaded);
         migrateWorldMarketSystem(loaded);
         migrateHousingSystem(loaded);
+        migrateMunicipalSystem(loaded);
         migrateLaborMarketSystem(loaded);
         migrateHouseholdSystem(loaded);
         migratePresidentialAttention(loaded);
@@ -6599,7 +6622,8 @@
           "budget-action":["бюджетная политика",6,120],"politics-action":["политическая повестка",5,90],"law-package":["законодательство",6,150],
           "cabinet-action":["правительство",4,75],"demography-action":["демография",5,150],"housing-action":["жилищная политика",6,180],
           "household-action":["семейная политика",5,150],"labor-action":["рынок труда",5,180],"procurement-action":["государственные закупки",4,120],"climate-action":["климатическая политика",5,150],"federal-action":["федеративная политика",5,120],
-          "statistics-action":["государственная статистика",4,90],"world-market-action":["международная логистика",5,120],"succession-action":["преемственность власти",6,180]
+          "statistics-action":["государственная статистика",4,90],"world-market-action":["международная логистика",5,120],"succession-action":["преемственность власти",6,180],
+          "municipal-project":["городская политика",5,180],"scandal-action":["подотчётность",4,90],"multilateral-action":["многосторонняя дипломатия",5,150]
         };
         const spec=specs[action];if(!spec)return null;
         const mode=actionEl.dataset.mode||actionEl.dataset.policy||actionEl.dataset.gov||actionEl.dataset.project||actionEl.dataset.law||"решение";
@@ -8427,6 +8451,404 @@
         syncLegacyInformation(game);
       }
 
+      function defaultScandalSystem(game) {
+        return {
+          modelVersion: SCANDAL_MODEL_VERSION,
+          cases: [],
+          history: [],
+          leakRisk: clamp(26 + num(game.politics?.corruption, 35) * .34 + num(game.politics?.lobbyism, 42) * .16 - num(game.information?.transparency, 56) * .18, 8, 82),
+          investigativeCapacity: clamp(num(game.information?.outlets?.find(item => item.id === "investigations")?.quality, 65), 10, 95),
+          sourceProtection: 52,
+          ethics: 61,
+          unresolved: 0,
+          nextLeakDays: 75,
+          lastBriefing: "Подтвержденных крупных утечек сейчас нет."
+        };
+      }
+
+      function scandalStageLabel(stage) {
+        return ({
+          leak: "утечка",
+          verification: "проверка редакции",
+          public: "общественный резонанс",
+          inquiry: "официальное расследование",
+          judicial: "судебное производство",
+          closed: "закрыто"
+        })[stage] || stage;
+      }
+
+      function normalizeScandalCase(value, index = 0) {
+        const item = value && typeof value === "object" ? value : {};
+        item.id ||= uid("scandal");
+        item.title ||= "Утечка служебных материалов";
+        item.category ||= "administration";
+        item.targetType ||= "institution";
+        item.targetId ||= "";
+        item.targetName ||= "государственное ведомство";
+        item.source ||= "анонимный источник";
+        item.claim ||= "Редакция проверяет возможное нарушение служебных процедур.";
+        item.evidence = clamp(num(item.evidence, 35), 0, 100);
+        item.severity = clamp(num(item.severity, 45), 0, 100);
+        item.publicInterest = clamp(num(item.publicInterest, 50), 0, 100);
+        item.credibility = clamp(num(item.credibility, 48), 0, 100);
+        item.stage ||= "leak";
+        item.status ||= item.stage === "closed" ? "закрыто" : "активно";
+        item.days = Math.max(0, Math.round(num(item.days, 0)));
+        item.duration = Math.max(12, Math.round(num(item.duration, 24 + index * 3)));
+        item.response ||= "ответ государства не определен";
+        item.coverupRisk = clamp(num(item.coverupRisk, 18), 0, 100);
+        item.legalCaseId ||= "";
+        item.outcome ||= "";
+        item.origin ||= "press";
+        item.lastUpdate ||= "Материалы проходят первичную проверку.";
+        item.history = Array.isArray(item.history) ? item.history.slice(0, 18) : [];
+        return item;
+      }
+
+      function migrateScandalSystem(game) {
+        game.information ||= defaultInformationSystem(game);
+        const base = defaultScandalSystem(game);
+        const incoming = game.information.scandals && typeof game.information.scandals === "object" ? game.information.scandals : {};
+        const system = Object.assign(base, incoming);
+        system.modelVersion = SCANDAL_MODEL_VERSION;
+        system.cases = (Array.isArray(incoming.cases) ? incoming.cases : []).map(normalizeScandalCase).slice(0, 24);
+        system.history = Array.isArray(incoming.history) ? incoming.history.slice(0, 70) : [];
+        ["leakRisk", "investigativeCapacity", "sourceProtection", "ethics"].forEach(key => system[key] = clamp(num(system[key], base[key]), 0, 100));
+        system.nextLeakDays = Math.max(1, Math.round(num(system.nextLeakDays, base.nextLeakDays)));
+        system.unresolved = system.cases.filter(item => item.status !== "закрыто").length;
+        system.lastBriefing ||= base.lastBriefing;
+        game.information.scandals = system;
+        return system;
+      }
+
+      function scandalCandidateSources(game) {
+        const candidates = [];
+        for (const minister of game.politics?.ministers || []) {
+          const risk = clamp(minister.scandal * .7 + (100 - minister.integrity) * .55 + minister.workload * .08, 4, 100);
+          candidates.push({
+            category: "cabinet",
+            targetType: "minister",
+            targetId: minister.id,
+            targetName: `${minister.post} ${minister.name}`,
+            title: `Декларации и решения: ${minister.post}`,
+            claim: `Журналисты проверяют конфликт интересов, декларации и решения ведомства, которым руководит ${minister.name}.`,
+            source: "сотрудник ведомства",
+            risk
+          });
+        }
+        const contracts = game.governance?.procurement?.contracts || [];
+        for (const contract of contracts.filter(item => !["расторгнут"].includes(item.status)).slice(0, 8)) {
+          const risk = clamp((100 - contract.integrity) * .7 + Math.max(0, contract.overrun) * .55 + contract.delay * .22, 5, 100);
+          candidates.push({
+            category: "procurement",
+            targetType: "contract",
+            targetId: contract.id,
+            targetName: contract.title,
+            title: `Условия контракта «${contract.title}»`,
+            claim: "Опубликованные документы указывают на возможную аффилированность, завышение цены или расхождение между оплатой и фактическим исполнением.",
+            source: "участник закупки",
+            risk
+          });
+        }
+        for (const region of game.regions || []) {
+          const risk = clamp(region.administration.corruption * .78 + Math.max(0, 45 - region.administration.fiscalDiscipline) * .42, 5, 100);
+          candidates.push({
+            category: "regional",
+            targetType: "region",
+            targetId: region.id,
+            targetName: `${region.governor}, ${region.name}`,
+            title: `Региональные расходы: ${region.name}`,
+            claim: "Местные активисты и аудиторы сопоставляют бюджетные платежи, имущество должностных лиц и качество выполненных работ.",
+            source: "региональная редакция",
+            risk
+          });
+        }
+        const exposedOperation = (game.intelligence?.operations || []).find(item => num(item.exposure, 0) >= 58 && !["завершена", "провалена"].includes(item.status));
+        if (exposedOperation) {
+          candidates.push({
+            category: "security",
+            targetType: "operation",
+            targetId: exposedOperation.id,
+            targetName: game.country.intelligenceName,
+            title: "Секретная операция попала в прессу",
+            claim: "Несколько редакций получили документы о скрытой внешней операции и проверяют её законность, санкционирование и возможный ущерб.",
+            source: "источник в службах",
+            risk: clamp(num(exposedOperation.exposure, 60) + num(exposedOperation.legalRisk, 20) * .35, 20, 100)
+          });
+        }
+        return candidates;
+      }
+
+      function spawnPoliticalLeak(game, forced = null) {
+        const system = game.information?.scandals || migrateScandalSystem(game);
+        if (system.cases.filter(item => item.status !== "закрыто").length >= 5) return null;
+        const candidates = scandalCandidateSources(game);
+        let source = forced && typeof forced === "object" ? forced : null;
+        if (!source && candidates.length) {
+          const ranked = candidates.slice().sort((a, b) => b.risk - a.risk);
+          const pool = ranked.slice(0, Math.min(6, ranked.length));
+          source = pool[Math.floor(simulationRandom() * pool.length)];
+        }
+        source ||= {
+          category: "administration",
+          targetType: "institution",
+          targetId: "",
+          targetName: "правительственный аппарат",
+          title: "Служебная переписка правительства",
+          claim: "Редакция проверяет документы о несогласованности публичных заявлений и внутренних расчетов.",
+          source: "анонимный государственный служащий",
+          risk: 42
+        };
+        const outlet = game.information.outlets.find(item => item.id === "investigations") || game.information.outlets[0];
+        const evidence = clamp(num(forced?.evidence, source.risk * .48 + outlet.quality * .18 + rnd(-12, 12)), 8, 92);
+        const severity = clamp(num(forced?.severity, source.risk * .58 + evidence * .22 + rnd(-8, 10)), 12, 94);
+        const item = normalizeScandalCase(Object.assign({}, source, forced || {}, {
+          evidence,
+          severity,
+          credibility: clamp(outlet.trust * .44 + outlet.quality * .38 + evidence * .18, 12, 96),
+          publicInterest: clamp(severity * .62 + outlet.reach * .24 + rnd(0, 12), 18, 98),
+          duration: Math.round(rnd(18, 38)),
+          stage: "leak",
+          status: "активно",
+          days: 0,
+          origin: forced?.origin || outlet.id,
+          lastUpdate: "Редакция получила материалы и начала проверку подлинности."
+        }));
+        item.history.unshift({ date: formatDate(game.date), stage: item.stage, text: item.lastUpdate });
+        system.cases.unshift(item);
+        system.cases = system.cases.slice(0, 24);
+        system.unresolved = system.cases.filter(entry => entry.status !== "закрыто").length;
+        system.lastBriefing = `${item.title}: получены материалы, достоверность ещё не установлена.`;
+        system.history.unshift({ date: formatDate(game.date), title: item.title, text: system.lastBriefing, tone: "warn" });
+        system.history = system.history.slice(0, 70);
+        pushNews(game, "Политика", "Редакция проверяет утечку", `${item.title}. Публикация пока не доказывает нарушение: журналисты проверяют источник и документы.`);
+        return item;
+      }
+
+      function ensureScandalJusticeCase(game, item) {
+        if (item.legalCaseId) return game.politics.justice.cases.find(entry => entry.id === item.legalCaseId) || null;
+        const legal = openJusticeCase(game, "corruption", `Расследование: ${item.title}`, item.targetName, item.evidence, item.publicInterest, `scandal:${item.id}`);
+        item.legalCaseId = legal.id;
+        item.stage = "judicial";
+        item.lastUpdate = "Материалы переданы независимому следствию; юридический исход теперь зависит от доказательств и качества правосудия.";
+        item.history.unshift({ date: formatDate(game.date), stage: item.stage, text: item.lastUpdate });
+        return legal;
+      }
+
+      function applyScandalAccountability(game, item, convicted) {
+        if (item.targetType === "minister") {
+          const minister = game.politics.ministers.find(entry => entry.id === item.targetId);
+          if (minister) {
+            minister.scandal = clamp(minister.scandal + (convicted ? 20 : -12), 0, 100);
+            minister.publicTrust = clamp(minister.publicTrust + (convicted ? -18 : 6), 0, 100);
+            if (convicted) {
+              minister.status = "отстранён";
+              minister.performance = clamp(minister.performance - 14, 0, 100);
+              game.politics.cabinet.integrity = clamp(game.politics.cabinet.integrity + 2, 0, 100);
+            }
+          }
+        } else if (item.targetType === "region") {
+          const region = game.regions.find(entry => entry.id === item.targetId);
+          if (region) {
+            region.administration.corruption = clamp(region.administration.corruption + (convicted ? -10 : 1), 0, 100);
+            region.administration.governorTrust = clamp(region.administration.governorTrust + (convicted ? -12 : 4), 0, 100);
+            if (convicted) region.administration.auditDays = Math.max(region.administration.auditDays, 120);
+          }
+        } else if (item.targetType === "contract") {
+          const contract = game.governance?.procurement?.contracts?.find(entry => entry.id === item.targetId);
+          if (contract && convicted) {
+            contract.integrity = clamp(contract.integrity - 22, 0, 100);
+            contract.status = "проверка";
+            game.governance.procurement.integrity = clamp(game.governance.procurement.integrity + 2, 0, 100);
+          }
+        }
+      }
+
+      function resolveScandalCase(game, item, outcome, text, tone = "warn") {
+        if (item.status === "закрыто") return;
+        item.stage = "closed";
+        item.status = "закрыто";
+        item.outcome = outcome;
+        item.lastUpdate = text;
+        item.response = item.response || "материалы рассмотрены";
+        item.resolvedDate = formatDate(game.date);
+        item.history.unshift({ date: item.resolvedDate, stage: item.stage, text });
+        const system = game.information.scandals;
+        system.unresolved = system.cases.filter(entry => entry.status !== "закрыто").length;
+        system.lastBriefing = `${item.title}: ${text}`;
+        system.history.unshift({ date: item.resolvedDate, title: item.title, text, tone });
+        system.history = system.history.slice(0, 70);
+        pushNews(game, "Политика", outcome, `${item.title}. ${text}`);
+      }
+
+      function simulateScandalSystem(game) {
+        const system = game.information?.scandals || migrateScandalSystem(game);
+        const info = game.information;
+        const outlet = info.outlets.find(item => item.id === "investigations") || info.outlets[0];
+        const procurementRisk = Math.max(0, 58 - num(game.governance?.procurement?.integrity, 58));
+        const ministerRisk = Math.max(0, ...(game.politics?.ministers || []).map(item => item.scandal));
+        const regionRisk = Math.max(0, ...(game.regions || []).map(item => item.administration.corruption));
+        const targetRisk = clamp(game.politics.corruption * .34 + game.politics.lobbyism * .16 + procurementRisk * .2 + ministerRisk * .12 + regionRisk * .1 + (100 - info.transparency) * .13 - system.sourceProtection * .04, 5, 92);
+        system.leakRisk = clamp(system.leakRisk + (targetRisk - system.leakRisk) * .004, 0, 100);
+        system.investigativeCapacity = clamp(system.investigativeCapacity + (outlet.quality * .52 + outlet.independence * .28 + outlet.financialHealth * .2 - system.investigativeCapacity) * .002, 0, 100);
+        system.nextLeakDays--;
+        if (system.nextLeakDays <= 0) {
+          if (simulationRandom() < system.leakRisk / 125) spawnPoliticalLeak(game);
+          system.nextLeakDays = Math.round(rnd(75, 210) * clamp(1.25 - system.leakRisk / 160, .6, 1.2));
+        }
+        for (const item of system.cases) {
+          if (item.status === "закрыто") continue;
+          item.days++;
+          if (item.stage === "leak" && item.days >= 3) {
+            item.stage = "verification";
+            item.lastUpdate = "Редакция сопоставляет метаданные, первичные документы и показания независимых источников.";
+            item.history.unshift({ date: formatDate(game.date), stage: item.stage, text: item.lastUpdate });
+          }
+          if (item.stage === "verification") {
+            const verification = (system.investigativeCapacity + system.ethics + item.credibility) / 3;
+            item.evidence = clamp(item.evidence + (verification - 48) * .004 + rnd(-.025, .035), 0, 100);
+            if (item.days >= item.duration) {
+              if (item.evidence < 24 && item.credibility < 48) {
+                info.governmentCredibility = clamp(info.governmentCredibility + 1.2, 0, 100);
+                resolveScandalCase(game, item, "Материалы не подтвердились", "Независимая проверка не обнаружила достаточных подтверждений; редакция опубликовала опровержение.", "good");
+              } else {
+                item.stage = "public";
+                item.lastUpdate = "Редакция опубликовала проверенные материалы и запросила официальный ответ.";
+                item.history.unshift({ date: formatDate(game.date), stage: item.stage, text: item.lastUpdate });
+                info.governmentCredibility = clamp(info.governmentCredibility - item.severity * .025, 0, 100);
+                applyGroupApprovalImpact(game, { all: -item.severity * .018 }, `публикация: ${item.title}`);
+                pushNews(game, "Политика", "Опубликовано расследование", `${item.title}. Достоверность оценивается в ${Math.round(item.credibility)}%, объём подтверждённых материалов в ${Math.round(item.evidence)}%.`);
+              }
+            }
+          }
+          if (item.stage === "public") {
+            if (item.days % 14 === 0) {
+              const pressure = item.severity * item.publicInterest / 10000;
+              applyGroupApprovalImpact(game, { all: -pressure * .08 }, `общественный резонанс: ${item.title}`);
+              game.politics.opposition = clamp(game.politics.opposition + pressure * .05, 0, 100);
+            }
+            if (item.evidence >= 62 || item.days >= item.duration + 28) ensureScandalJusticeCase(game, item);
+          }
+          if (item.stage === "inquiry" && item.days >= item.duration + 8) ensureScandalJusticeCase(game, item);
+          if (item.stage === "judicial") {
+            const legal = game.politics.justice.cases.find(entry => entry.id === item.legalCaseId);
+            if (legal?.status === "закрыто") {
+              const convicted = ["convicted", "liable", "violation"].includes(legal.outcome);
+              applyScandalAccountability(game, item, convicted);
+              if (convicted) {
+                info.transparency = clamp(info.transparency + 2.2, 0, 100);
+                game.politics.corruption = clamp(game.politics.corruption - 1.2, 0, 100);
+                resolveScandalCase(game, item, "Нарушение подтверждено", "Суд признал ключевые материалы доказанными. Ответственные лица понесли политические и юридические последствия.", "bad");
+              } else {
+                info.governmentCredibility = clamp(info.governmentCredibility + 1.4, 0, 100);
+                resolveScandalCase(game, item, "Обвинение не доказано", "Суд не нашёл достаточной доказательной базы. Политический ущерб частично сохраняется, но юридическое производство завершено.", "good");
+              }
+            }
+          }
+          item.history = item.history.slice(0, 18);
+        }
+        system.unresolved = system.cases.filter(item => item.status !== "закрыто").length;
+        syncLegacyInformation(game);
+        return system;
+      }
+
+      function scandalAction(id, mode) {
+        const system = state.information?.scandals || migrateScandalSystem(state);
+        const item = system.cases.find(entry => entry.id === id);
+        if (!item || item.status === "закрыто") return notify("Активное расследование не найдено.", "warn", "Расследования");
+        let title = "", text = "", tone = "institution", cost = 0;
+        if (mode === "independent") {
+          cost = 240;
+          if (state.economy.budget < cost) return showBlockedDecision("Расследование не профинансировано", "Нужны независимые эксперты, цифровая экспертиза и защита свидетелей.", [["Нужно", money(cost), "bad"]]);
+          state.economy.budget -= cost;
+          const gain = clamp(8 + system.investigativeCapacity * .08 + rnd(0, 8), 8, 24);
+          item.evidence = clamp(item.evidence + gain, 0, 100);
+          item.credibility = clamp(item.credibility + gain * .4, 0, 100);
+          item.coverupRisk = clamp(item.coverupRisk - 12, 0, 100);
+          item.stage = item.evidence >= 58 ? "inquiry" : "verification";
+          item.response = "создана независимая следственная группа";
+          title = "Независимое расследование поручено";
+          text = "Комиссия получила доступ к документам, цифровым следам и свидетелям без подчинения фигурантам.";
+          tone = "good";
+        } else if (mode === "parliament") {
+          cost = 110;
+          if (state.economy.budget < cost) return showBlockedDecision("Слушания не профинансированы", "Парламенту нужны эксперты и защищённый архив материалов.", [["Нужно", money(cost), "bad"]]);
+          state.economy.budget -= cost;
+          item.publicInterest = clamp(item.publicInterest + 10, 0, 100);
+          item.evidence = clamp(item.evidence + rnd(4, 11), 0, 100);
+          item.stage = "inquiry";
+          item.response = "назначены парламентские слушания";
+          state.politics.coalition = clamp(state.politics.coalition - .8, 0, 100);
+          title = "Парламент начал публичные слушания";
+          text = "Комитет вызвал должностных лиц и потребовал передать первичные документы под парламентскую ответственность.";
+          tone = "warn";
+        } else if (mode === "disclose") {
+          item.evidence = clamp(item.evidence + 7, 0, 100);
+          item.coverupRisk = clamp(item.coverupRisk - 18, 0, 100);
+          state.information.transparency = clamp(state.information.transparency + 4.2, 0, 100);
+          state.information.governmentCredibility = clamp(state.information.governmentCredibility + (item.evidence < 55 ? 1.8 : -.8), 0, 100);
+          applyGroupApprovalImpact(state, { all: item.evidence < 55 ? .6 : -1.1 }, "добровольное раскрытие материалов");
+          item.response = "правительство раскрыло документы";
+          item.stage = "public";
+          title = "Документы раскрыты добровольно";
+          text = "Правительство опубликовало реестр решений, переписку и сведения о бенефициарах с защитой персональных данных.";
+          tone = item.evidence >= 55 ? "warn" : "good";
+        } else if (mode === "protect") {
+          cost = 90;
+          if (state.economy.budget < cost) return showBlockedDecision("Защита источников не профинансирована", "Нужны защищённые каналы, адвокаты и программа свидетелей.", [["Нужно", money(cost), "bad"]]);
+          state.economy.budget -= cost;
+          system.sourceProtection = clamp(system.sourceProtection + 7, 0, 100);
+          item.credibility = clamp(item.credibility + 4, 0, 100);
+          item.coverupRisk = clamp(item.coverupRisk - 8, 0, 100);
+          item.response = "источники и свидетели защищены";
+          title = "Источники взяты под защиту";
+          text = "Свидетели могут передавать материалы следствию без административного давления и риска немедленного раскрытия.";
+          tone = "good";
+        } else if (mode === "deny") {
+          const safe = item.evidence < 38 && item.credibility < 55;
+          item.response = "правительство публично отвергло обвинения";
+          item.coverupRisk = clamp(item.coverupRisk + (safe ? 5 : 24), 0, 100);
+          state.information.governmentCredibility = clamp(state.information.governmentCredibility + (safe ? 1.2 : -3.6), 0, 100);
+          if (safe) {
+            item.evidence = clamp(item.evidence - 5, 0, 100);
+            title = "Правительство оспорило публикацию";
+            text = "Ответ подкреплён документами и запросом на независимую проверку; убедительность обвинений снизилась.";
+            tone = "good";
+          } else {
+            item.severity = clamp(item.severity + 9, 0, 100);
+            item.publicInterest = clamp(item.publicInterest + 8, 0, 100);
+            title = "Отрицание усилило политический кризис";
+            text = "Опубликованные документы противоречат официальному ответу. Теперь расследуется и возможная попытка сокрытия.";
+            tone = "bad";
+          }
+        } else if (mode === "suspend") {
+          if (item.targetType !== "minister") return notify("Временное отстранение доступно для фигуранта кабинета министров.", "warn", "Расследования");
+          const minister = state.politics.ministers.find(entry => entry.id === item.targetId);
+          if (!minister) return notify("Фигурант больше не входит в состав кабинета.", "warn", "Расследования");
+          minister.status = "временно отстранён";
+          minister.performance = clamp(minister.performance - 7, 0, 100);
+          item.coverupRisk = clamp(item.coverupRisk - 16, 0, 100);
+          item.response = "фигурант временно отстранён";
+          state.politics.cabinet.execution = clamp(state.politics.cabinet.execution - 1.4, 0, 100);
+          title = "Министр временно отстранён";
+          text = "Фигурант лишён доступа к документам и управленческим решениям до завершения независимого производства.";
+          tone = "warn";
+        } else return;
+        item.lastUpdate = text;
+        item.history.unshift({ date: formatDate(state.date), stage: item.stage, text });
+        system.lastBriefing = `${title}: ${text}`;
+        system.history.unshift({ date: formatDate(state.date), title, text, tone });
+        system.history = system.history.slice(0, 70);
+        normalizeCore();
+        queueSave();
+        showDecision(title, text, [
+          ["Стадия", scandalStageLabel(item.stage), item.stage === "judicial" ? "good" : "warn"],
+          ["Доказательства", pct(item.evidence, 0), item.evidence >= 60 ? "good" : "warn"],
+          ["Риск сокрытия", pct(item.coverupRisk, 0), item.coverupRisk >= 55 ? "bad" : "good"],
+          ["Бюджет", cost ? `-${money(cost)}` : "без расходов", cost ? "bad" : "good"]
+        ], tone);
+      }
+
       function intelligenceOperationCatalog() {
         return {
           assessment: { name: "Комплексная оценка", duration: 12, cost: 180, difficulty: 18, exposure: 8, capability: "analysis", legalRisk: 0, desc: "Спутниковые, открытые и дипломатические данные сводятся в обновленное досье." },
@@ -8746,6 +9168,397 @@
 
       function migrateRegionalAdministration(game) {
         game.regions = (game.regions || []).map((region, index) => ensureRegionDefaults(region, index));
+      }
+
+      function municipalMayorNames() {
+        return [
+          "Анна Миронова", "Даниил Карпов", "Лейла Сафина", "Михаил Орлов",
+          "София Белова", "Тимур Власов", "Елена Корнеева", "Артур Громов",
+          "Мария Ветрова", "Илья Светлов", "Зара Алимова", "Никита Лавров"
+        ];
+      }
+
+      function municipalSecondaryNames() {
+        return [
+          "Северная гавань", "Речной", "Новый порт", "Академический",
+          "Промышленный", "Солнечный", "Приозёрск", "Горный",
+          "Заречье", "Восточные ворота", "Долинск", "Маяк"
+        ];
+      }
+
+      function municipalProjectCatalog() {
+        return {
+          transit: { name: "Городской транспорт", cost: 760, duration: 420, effect: "Снижает заторы, расширяет рынок труда и повышает доступность районов." },
+          utilities: { name: "Модернизация коммунальных сетей", cost: 620, duration: 360, effect: "Снижает аварийность воды, тепла и электрических сетей." },
+          housing: { name: "Жильё и реновация кварталов", cost: 880, duration: 540, effect: "Увеличивает предложение жилья и улучшает городскую среду." },
+          resilience: { name: "Климатическая устойчивость", cost: 540, duration: 330, effect: "Укрепляет ливневые сети, укрытия, зелёные зоны и аварийную готовность." },
+          digital: { name: "Цифровое муниципальное управление", cost: 410, duration: 280, effect: "Повышает прозрачность бюджета, скорость услуг и собираемость доходов." }
+        };
+      }
+
+      function createMunicipalCities(game) {
+        const mayorNames = municipalMayorNames();
+        const secondaryNames = municipalSecondaryNames();
+        const cities = [];
+        (game.regions || []).forEach((region, regionIndex) => {
+          const count = region.population >= 3200000 || num(region.buildings?.cities, 0) >= 2 ? 2 : 1;
+          for (let cityIndex = 0; cityIndex < count; cityIndex++) {
+            const capital = regionIndex === 0 && cityIndex === 0;
+            const populationShare = cityIndex === 0 ? clamp(.24 + num(region.buildings?.cities, 0) * .025, .22, .46) : .11;
+            const population = Math.max(70000, Math.round(region.population * populationShare));
+            const name = capital ? game.country.capital : cityIndex === 0 ? `${region.name}: административный центр` : secondaryNames[(regionIndex * 2 + cityIndex) % secondaryNames.length];
+            const baseService = clamp(region.administration.serviceQuality + (regionIndex % 4) * 2 - cityIndex * 4, 28, 88);
+            const annualRevenue = Math.max(120, region.administration.taxBase * populationShare * .72 + population * .00012);
+            cities.push({
+              id: `city_${region.id}_${cityIndex}`,
+              regionId: region.id,
+              name,
+              capital,
+              mayor: mayorNames[(regionIndex * 2 + cityIndex) % mayorNames.length],
+              mayorSkill: clamp(52 + (regionIndex * 9 + cityIndex * 13) % 33, 25, 92),
+              mayorTrust: clamp(region.administration.governorTrust + (cityIndex ? -5 : 2), 20, 88),
+              integrity: clamp(72 - region.administration.corruption * .35 + (regionIndex % 3) * 3, 25, 90),
+              population,
+              budget: annualRevenue * .22,
+              annualRevenue,
+              annualSpending: annualRevenue * 1.02,
+              debt: annualRevenue * .28,
+              autonomy: clamp(region.administration.autonomy * .7, 18, 72),
+              serviceQuality: baseService,
+              transit: clamp(region.administration.infrastructure - 3 + (capital ? 8 : 0), 20, 90),
+              utilities: clamp(region.administration.infrastructure + 2, 20, 92),
+              housing: clamp(num(region.housing?.affordability, 52), 15, 90),
+              congestion: clamp(38 + population / 120000 + (capital ? 9 : 0) - region.administration.infrastructure * .2, 12, 88),
+              pollution: clamp(num(region.pollution, 25) + population / 300000, 8, 86),
+              safety: clamp(num(region.security, 58) + 4, 20, 94),
+              investment: clamp(num(region.wealth, 55) + region.administration.infrastructure * .18, 20, 94),
+              unemployment: clamp(region.administration.unemployment + (cityIndex ? 1 : -.8), 1, 38),
+              electionDays: 720 + regionIndex * 71 + cityIndex * 180,
+              project: null,
+              history: [],
+              lastReport: "Муниципальные службы работают в плановом режиме."
+            });
+          }
+        });
+        return cities;
+      }
+
+      function normalizeMunicipalProject(value) {
+        if (!value || typeof value !== "object") return null;
+        const catalog = municipalProjectCatalog();
+        const spec = catalog[value.type] || catalog.transit;
+        return {
+          id: value.id || uid("city_project"),
+          type: value.type || "transit",
+          name: value.name || spec.name,
+          cost: Math.max(80, num(value.cost, spec.cost)),
+          spent: clamp(num(value.spent, 0), 0, Math.max(80, num(value.cost, spec.cost)) * 1.35),
+          progress: clamp(num(value.progress, 0), 0, 100),
+          duration: Math.max(60, Math.round(num(value.duration, spec.duration))),
+          risk: clamp(num(value.risk, 24), 0, 100),
+          status: value.status || "active",
+          lastReport: value.lastReport || "Подготовлена проектная документация и календарный план."
+        };
+      }
+
+      function normalizeMunicipalCity(value, fallback, index = 0) {
+        const city = Object.assign({}, fallback || {}, value || {});
+        city.id ||= `city_unknown_${index}`;
+        city.regionId ||= fallback?.regionId || "";
+        city.name ||= fallback?.name || `Крупный город ${index + 1}`;
+        city.capital = !!city.capital;
+        city.mayor ||= municipalMayorNames()[index % municipalMayorNames().length];
+        ["mayorSkill", "mayorTrust", "integrity", "autonomy", "serviceQuality", "transit", "utilities", "housing", "congestion", "pollution", "safety", "investment"].forEach(key => city[key] = clamp(num(city[key], fallback?.[key] ?? 50), 0, 100));
+        city.population = Math.max(30000, Math.round(num(city.population, fallback?.population || 120000)));
+        city.budget = num(city.budget, fallback?.budget || 160);
+        city.annualRevenue = Math.max(20, num(city.annualRevenue, fallback?.annualRevenue || 600));
+        city.annualSpending = Math.max(20, num(city.annualSpending, fallback?.annualSpending || city.annualRevenue));
+        city.debt = Math.max(0, num(city.debt, fallback?.debt || 0));
+        city.unemployment = clamp(num(city.unemployment, fallback?.unemployment || 7), 1, 45);
+        city.electionDays = Math.max(0, Math.round(num(city.electionDays, fallback?.electionDays || 900)));
+        city.project = normalizeMunicipalProject(city.project);
+        city.history = Array.isArray(city.history) ? city.history.slice(0, 28) : [];
+        city.lastReport ||= fallback?.lastReport || "Муниципальные службы работают в плановом режиме.";
+        return city;
+      }
+
+      function defaultMunicipalSystem(game) {
+        return {
+          modelVersion: MUNICIPAL_MODEL_VERSION,
+          cities: createMunicipalCities(game),
+          fiscalHealth: 58,
+          serviceIndex: 56,
+          urbanPressure: 37,
+          infrastructureGap: 35,
+          metropolitanPopulation: 0,
+          history: [],
+          lastBriefing: "Крупные города формируют бюджеты, поддерживают коммунальные сети и отвечают перед жителями на выборах."
+        };
+      }
+
+      function updateMunicipalTotals(game) {
+        const system = game.municipalities;
+        const cities = system?.cities || [];
+        system.metropolitanPopulation = cities.reduce((sum, city) => sum + city.population, 0);
+        system.serviceIndex = cities.length ? cities.reduce((sum, city) => sum + city.serviceQuality * city.population, 0) / Math.max(1, system.metropolitanPopulation) : 0;
+        system.fiscalHealth = cities.length ? cities.reduce((sum, city) => {
+          const balance = (city.annualRevenue - city.annualSpending) / Math.max(1, city.annualRevenue) * 100;
+          const debtRatio = city.debt / Math.max(1, city.annualRevenue) * 100;
+          return sum + clamp(62 + balance * .7 - debtRatio * .32 + city.integrity * .12, 0, 100);
+        }, 0) / cities.length : 0;
+        system.urbanPressure = cities.length ? avg(cities.map(city => ({ value: city.congestion * .32 + city.pollution * .24 + (100 - city.housing) * .28 + city.unemployment * .75 })), "value") : 0;
+        system.infrastructureGap = cities.length ? avg(cities.map(city => ({ value: 100 - (city.transit * .34 + city.utilities * .42 + city.serviceQuality * .24) })), "value") : 0;
+        return system;
+      }
+
+      function migrateMunicipalSystem(game) {
+        const base = defaultMunicipalSystem(game);
+        const incoming = game.municipalities && typeof game.municipalities === "object" ? game.municipalities : {};
+        const system = Object.assign(base, incoming);
+        system.modelVersion = MUNICIPAL_MODEL_VERSION;
+        const incomingMap = new Map((Array.isArray(incoming.cities) ? incoming.cities : []).map(item => [item.id, item]));
+        system.cities = base.cities.map((fallback, index) => normalizeMunicipalCity(incomingMap.get(fallback.id), fallback, index));
+        for (const city of Array.isArray(incoming.cities) ? incoming.cities : []) {
+          if (!system.cities.some(item => item.id === city.id) && game.regions.some(region => region.id === city.regionId)) {
+            system.cities.push(normalizeMunicipalCity(city, null, system.cities.length));
+          }
+        }
+        system.history = Array.isArray(incoming.history) ? incoming.history.slice(0, 70) : [];
+        system.lastBriefing ||= base.lastBriefing;
+        game.municipalities = system;
+        updateMunicipalTotals(game);
+        return system;
+      }
+
+      function applyMunicipalProjectResult(game, city, project) {
+        if (project.type === "transit") {
+          city.transit += 13;
+          city.congestion -= 11;
+          city.investment += 4;
+        } else if (project.type === "utilities") {
+          city.utilities += 15;
+          city.serviceQuality += 6;
+        } else if (project.type === "housing") {
+          city.housing += 13;
+          city.congestion += 2;
+          city.population = Math.round(city.population * 1.006);
+          const region = game.regions.find(item => item.id === city.regionId);
+          if (region?.housing) {
+            region.housing.supply = clamp(region.housing.supply + 2.5, 0, 100);
+            region.housing.affordability = clamp(region.housing.affordability + 1.8, 0, 100);
+          }
+        } else if (project.type === "resilience") {
+          city.pollution -= 7;
+          city.safety += 7;
+          const region = game.regions.find(item => item.id === city.regionId);
+          if (region?.climate) region.climate.preparedness = clamp(region.climate.preparedness + 4, 0, 100);
+        } else if (project.type === "digital") {
+          city.integrity += 7;
+          city.mayorSkill += 4;
+          city.serviceQuality += 5;
+          city.annualRevenue *= 1.012;
+        }
+        ["transit", "congestion", "investment", "utilities", "serviceQuality", "housing", "pollution", "safety", "integrity", "mayorSkill"].forEach(key => city[key] = clamp(num(city[key]), 0, 100));
+        city.lastReport = `Завершён проект «${project.name}». Объект принят городской комиссией и перешёл в эксплуатацию.`;
+        city.history.unshift({ date: formatDate(game.date), title: "Муниципальный проект завершён", text: city.lastReport, tone: "good" });
+        game.municipalities.history.unshift({ date: formatDate(game.date), city: city.name, title: project.name, text: city.lastReport, tone: "good" });
+        pushNews(game, "Регионы", `Город завершил проект: ${project.name}`, `${city.name}: ${municipalProjectCatalog()[project.type].effect}`);
+      }
+
+      function simulateMunicipalSystem(game) {
+        const system = game.municipalities || migrateMunicipalSystem(game);
+        for (const city of system.cities) {
+          const region = game.regions.find(item => item.id === city.regionId);
+          if (!region) continue;
+          city.electionDays = Math.max(0, city.electionDays - 1);
+          const regionalDemand = clamp(region.population / Math.max(1, city.population) * .9, 1, 14);
+          const economyFactor = clamp(1 + game.economy.growth / 100 - game.economy.unemployment * .002 - region.damage * .003, .72, 1.18);
+          const revenueTarget = Math.max(30, region.administration.taxBase * city.population / Math.max(1, region.population) * .76 * economyFactor + city.investment * .7);
+          const spendingTarget = Math.max(30, revenueTarget * (1.01 + Math.max(0, 58 - city.serviceQuality) * .004 + city.debt / Math.max(1, city.annualRevenue) * .025) + regionalDemand);
+          city.annualRevenue += (revenueTarget - city.annualRevenue) * .0014;
+          city.annualSpending += (spendingTarget - city.annualSpending) * .0012;
+          city.budget += (city.annualRevenue - city.annualSpending) / 365;
+          if (city.budget < 0) {
+            city.debt += Math.abs(city.budget);
+            city.budget = 0;
+          } else if (city.debt > 0 && city.budget > city.annualSpending * .08) {
+            const repayment = Math.min(city.debt, city.budget * .0008);
+            city.debt -= repayment;
+            city.budget -= repayment;
+          }
+          const fiscalStress = clamp(city.debt / Math.max(1, city.annualRevenue) * 100, 0, 140);
+          const serviceTarget = clamp(city.utilities * .3 + city.transit * .2 + city.mayorSkill * .16 + city.integrity * .12 + region.administration.serviceQuality * .14 + city.safety * .08 - fiscalStress * .08, 10, 94);
+          city.serviceQuality += (serviceTarget - city.serviceQuality) * .0018;
+          city.unemployment = clamp(city.unemployment + (game.economy.unemployment + (100 - city.investment) * .025 - city.unemployment) * .0014, 1, 45);
+          city.congestion = clamp(city.congestion + (30 + city.population / 130000 + (100 - city.transit) * .24 - city.congestion) * .0012, 5, 96);
+          city.pollution = clamp(city.pollution + (region.pollution * .52 + city.congestion * .2 + (100 - city.utilities) * .08 - city.pollution) * .001, 3, 96);
+          const housingTarget = clamp(num(region.housing?.affordability, 50) * .6 + num(region.housing?.supply, 50) * .25 + (100 - city.congestion) * .15, 5, 96);
+          city.housing = clamp(city.housing + (housingTarget - city.housing) * .0008, 5, 96);
+          const trustTarget = clamp(city.serviceQuality * .3 + city.housing * .16 + city.safety * .14 + city.integrity * .16 + (100 - city.unemployment * 2) * .12 + (100 - fiscalStress) * .12, 8, 94);
+          city.mayorTrust += (trustTarget - city.mayorTrust) * .0018;
+          if (city.project?.status === "active") {
+            const project = city.project;
+            const dailyCost = project.cost / project.duration;
+            if (city.budget >= dailyCost) {
+              city.budget -= dailyCost;
+              project.spent += dailyCost;
+              const execution = clamp(city.mayorSkill * .35 + city.integrity * .25 + region.administration.infrastructure * .2 + (100 - project.risk) * .2, 18, 96);
+              project.progress = clamp(project.progress + 100 / project.duration * execution / 62, 0, 100);
+              project.risk = clamp(project.risk + (100 - city.integrity) * .0009 - city.mayorSkill * .00045 + rnd(-.015, .02), 0, 100);
+              project.lastReport = `Исполнено ${Math.round(project.progress)}%, оплачено ${money(project.spent)}.`;
+            } else {
+              project.risk = clamp(project.risk + .035, 0, 100);
+              project.lastReport = "Работы замедлены из-за кассового разрыва муниципального бюджета.";
+            }
+            if (project.progress >= 100) {
+              project.progress = 100;
+              project.status = "completed";
+              applyMunicipalProjectResult(game, city, project);
+            }
+          }
+          if (city.electionDays <= 0) {
+            const incumbentScore = clamp(city.mayorTrust * .48 + city.serviceQuality * .24 + city.integrity * .18 + (100 - city.unemployment * 2) * .1 + rnd(-14, 14), 0, 100);
+            const retained = incumbentScore >= 51;
+            const previousMayor = city.mayor;
+            if (!retained) {
+              const names = municipalMayorNames().filter(name => name !== city.mayor);
+              city.mayor = names[Math.floor(simulationRandom() * names.length)];
+              city.mayorSkill = clamp(48 + rnd(0, 32), 35, 88);
+              city.integrity = clamp(48 + rnd(0, 38), 28, 92);
+              city.mayorTrust = 54;
+            } else city.mayorTrust = clamp(city.mayorTrust + 3, 0, 100);
+            city.electionDays = Math.round(rnd(1260, 1540));
+            city.lastReport = retained ? `${previousMayor} сохранил должность после конкурентных муниципальных выборов.` : `${previousMayor} проиграл выборы; администрацию возглавляет ${city.mayor}.`;
+            city.history.unshift({ date: formatDate(game.date), title: "Муниципальные выборы", text: city.lastReport, tone: retained ? "good" : "warn" });
+            pushNews(game, "Регионы", `Муниципальные выборы: ${city.name}`, city.lastReport);
+          }
+          city.history = city.history.slice(0, 28);
+        }
+        for (const region of game.regions) {
+          const cities = system.cities.filter(city => city.regionId === region.id);
+          if (!cities.length) continue;
+          const urbanService = avg(cities, "serviceQuality");
+          const urbanInfrastructure = avg(cities.map(city => ({ value: city.transit * .42 + city.utilities * .58 })), "value");
+          const urbanTrust = avg(cities, "mayorTrust");
+          region.administration.serviceQuality = clamp(region.administration.serviceQuality + (urbanService - region.administration.serviceQuality) * .00035, 0, 100);
+          region.administration.infrastructure = clamp(region.administration.infrastructure + (urbanInfrastructure - region.administration.infrastructure) * .00028, 0, 100);
+          region.loyalty = clamp(region.loyalty + (urbanTrust - region.loyalty) * .00018, 0, 100);
+        }
+        system.history = system.history.slice(0, 70);
+        updateMunicipalTotals(game);
+        return system;
+      }
+
+      function municipalAction(cityId, mode) {
+        const system = state.municipalities || migrateMunicipalSystem(state);
+        const city = system.cities.find(item => item.id === cityId);
+        if (!city) return notify("Город не найден.", "warn", "Муниципалитеты");
+        const region = state.regions.find(item => item.id === city.regionId);
+        let title = "", text = "", tone = "institution", cost = 0;
+        if (mode === "grant") {
+          cost = 280;
+          if (state.economy.budget < cost) return showBlockedDecision("Трансферт не профинансирован", "В федеральном бюджете недостаточно свободного остатка.", [["Нужно", money(cost), "bad"]]);
+          state.economy.budget -= cost;
+          city.budget += cost;
+          city.serviceQuality = clamp(city.serviceQuality + 1.6, 0, 100);
+          city.annualSpending *= 1.004;
+          title = "Целевой городской трансферт";
+          text = `${city.name} получил средства на коммунальные ремонты и социальные услуги с обязательной публикацией расходов.`;
+          tone = "good";
+        } else if (mode === "audit") {
+          cost = 120;
+          if (state.economy.budget < cost) return showBlockedDecision("Аудит не профинансирован", "Нужны финансовые и технические аудиторы.", [["Нужно", money(cost), "bad"]]);
+          state.economy.budget -= cost;
+          const findings = clamp((100 - city.integrity) * .55 + city.debt / Math.max(1, city.annualRevenue) * 18 + rnd(-8, 12), 0, 100);
+          city.integrity = clamp(city.integrity + 6, 0, 100);
+          city.annualSpending *= findings >= 55 ? .985 : .996;
+          city.mayorTrust = clamp(city.mayorTrust + (findings >= 55 ? -4 : 2), 0, 100);
+          title = findings >= 55 ? "Аудит выявил серьёзные нарушения" : "Муниципальный аудит завершён";
+          text = findings >= 55 ? "Проверка обнаружила неэффективные расходы и конфликт интересов; материалы переданы региональной прокуратуре." : "Счётная палата подтвердила основные расходы и выдала рекомендации по эффективности.";
+          tone = findings >= 55 ? "bad" : "good";
+          if (findings >= 55) {
+            const scandal = spawnPoliticalLeak(state, {
+              category: "municipal",
+              targetType: "city",
+              targetId: city.id,
+              targetName: `${city.mayor}, ${city.name}`,
+              title: `Муниципальные расходы: ${city.name}`,
+              claim: text,
+              source: "материалы счётной палаты",
+              evidence: findings,
+              severity: findings,
+              origin: "audit"
+            });
+            if (scandal) scandal.stage = "public";
+          }
+        } else if (mode === "autonomy") {
+          if (city.integrity < 55 || city.mayorSkill < 55) return showBlockedDecision("Полномочия не переданы", "Город должен сначала подтвердить управленческую компетентность и финансовую добросовестность.", [["Компетентность", pct(city.mayorSkill, 0), city.mayorSkill >= 55 ? "good" : "bad"], ["Добросовестность", pct(city.integrity, 0), city.integrity >= 55 ? "good" : "bad"]]);
+          city.autonomy = clamp(city.autonomy + 8, 0, 100);
+          city.annualRevenue *= 1.018;
+          if (region) region.administration.autonomy = clamp(region.administration.autonomy + 1.2, 0, 100);
+          title = "Муниципальные полномочия расширены";
+          text = "Город получил больше налоговой самостоятельности и ответственности за транспорт, жильё и коммунальную инфраструктуру.";
+          tone = "good";
+        } else if (mode === "emergency") {
+          cost = 190;
+          if (state.economy.budget < cost) return showBlockedDecision("Аварийный резерв недоступен", "Нужны средства на технику, материалы и временное размещение жителей.", [["Нужно", money(cost), "bad"]]);
+          state.economy.budget -= cost;
+          city.utilities = clamp(city.utilities + 5, 0, 100);
+          city.safety = clamp(city.safety + 4, 0, 100);
+          city.pollution = clamp(city.pollution - 2, 0, 100);
+          title = "Аварийные службы усилены";
+          text = "В город направлены ремонтные бригады, резервные генераторы и средства гражданской защиты.";
+          tone = "good";
+        } else return;
+        city.lastReport = text;
+        city.history.unshift({ date: formatDate(state.date), title, text, tone });
+        system.history.unshift({ date: formatDate(state.date), city: city.name, title, text, tone });
+        system.lastBriefing = `${city.name}: ${text}`;
+        normalizeCore();
+        queueSave();
+        showDecision(title, text, [
+          ["Город", city.name, "good"],
+          ["Качество услуг", pct(city.serviceQuality, 0), city.serviceQuality >= 58 ? "good" : "warn"],
+          ["Финансовый резерв", money(city.budget), city.budget >= 0 ? "good" : "bad"],
+          ["Бюджет государства", cost ? `-${money(cost)}` : "без расходов", cost ? "bad" : "good"]
+        ], tone);
+      }
+
+      function municipalProjectAction(cityId, type) {
+        const system = state.municipalities || migrateMunicipalSystem(state);
+        const city = system.cities.find(item => item.id === cityId);
+        const spec = municipalProjectCatalog()[type];
+        if (!city || !spec) return;
+        if (city.project && city.project.status === "active") return showBlockedDecision("Проектный офис занят", `${city.name} уже ведёт проект «${city.project.name}».`, [["Прогресс", pct(city.project.progress, 0), "warn"]]);
+        const federalShare = spec.cost * .28;
+        const municipalShare = spec.cost * .08;
+        if (state.economy.budget < federalShare || city.budget < municipalShare) return showBlockedDecision("Проект не обеспечен финансированием", "Для старта нужны федеральное софинансирование и собственный взнос муниципалитета.", [["Федеральный взнос", money(federalShare), state.economy.budget >= federalShare ? "good" : "bad"], ["Муниципальный взнос", money(municipalShare), city.budget >= municipalShare ? "good" : "bad"]]);
+        state.economy.budget -= federalShare;
+        city.budget -= municipalShare;
+        city.project = normalizeMunicipalProject({
+          type,
+          name: spec.name,
+          cost: spec.cost,
+          spent: municipalShare,
+          progress: 2,
+          duration: spec.duration,
+          risk: clamp(34 - city.integrity * .16 + (100 - city.mayorSkill) * .12, 8, 58),
+          status: "active",
+          lastReport: "Софинансирование подтверждено; проектный офис начинает конкурсные процедуры."
+        });
+        city.lastReport = `Начат проект «${spec.name}»: ${spec.effect}`;
+        city.history.unshift({ date: formatDate(state.date), title: "Муниципальный проект начат", text: city.lastReport, tone: "good" });
+        system.history.unshift({ date: formatDate(state.date), city: city.name, title: spec.name, text: city.lastReport, tone: "good" });
+        system.lastBriefing = `${city.name}: ${city.lastReport}`;
+        normalizeCore();
+        queueSave();
+        showDecision(`Муниципальный проект: ${spec.name}`, spec.effect, [
+          ["Город", city.name, "good"],
+          ["Полная стоимость", money(spec.cost), "warn"],
+          ["Федеральный взнос", `-${money(federalShare)}`, "bad"],
+          ["Срок", `${spec.duration} дн.`, "warn"],
+          ["Стартовый риск", pct(city.project.risk, 0), city.project.risk >= 40 ? "warn" : "good"]
+        ], "institution");
       }
 
       function calcRegionAdministration(region) {
@@ -9681,6 +10494,462 @@
         game.diplomacy.lastStrategicDay ||= "";
         migrateForeignStateSystem(game);
         migrateBilateralDiplomacy(game);
+      }
+
+      function multilateralIssueCatalog() {
+        return {
+          security: {
+            name: "Коллективная безопасность",
+            title: "Механизм предотвращения вооружённых инцидентов",
+            text: "Наблюдатели, горячие линии и уведомления об учениях снижают риск эскалации.",
+            tone: "institution"
+          },
+          trade: {
+            name: "Торговля и логистика",
+            title: "Открытые транзитные коридоры",
+            text: "Участники согласуют таможенные процедуры, страхование и защиту критических маршрутов.",
+            tone: "good"
+          },
+          climate: {
+            name: "Климат и ресурсы",
+            title: "Совместная климатическая адаптация",
+            text: "Фонд устойчивости финансирует раннее предупреждение, водные системы и защиту инфраструктуры.",
+            tone: "good"
+          },
+          humanitarian: {
+            name: "Гуманитарная помощь",
+            title: "Гуманитарный доступ и защита гражданских",
+            text: "Международные агентства получают безопасный доступ, наблюдение и общий фонд помощи.",
+            tone: "civic"
+          },
+          sanctions: {
+            name: "Коллективные ограничительные меры",
+            title: "Многосторонний режим ограничительных мер",
+            text: "Участники обсуждают адресные финансовые и технологические ограничения за подтверждённые нарушения.",
+            tone: "warn"
+          },
+          health: {
+            name: "Здравоохранение",
+            title: "Сеть эпидемиологического предупреждения",
+            text: "Страны обмениваются лабораторными данными, резервами и протоколами реагирования.",
+            tone: "good"
+          },
+          migration: {
+            name: "Миграция и беженцы",
+            title: "Распределение миграционной ответственности",
+            text: "Участники согласуют законные маршруты, возвращение, интеграцию и финансирование приёма.",
+            tone: "civic"
+          },
+          digital: {
+            name: "Цифровые стандарты",
+            title: "Международные правила цифрового доверия",
+            text: "Совместимые стандарты кибербезопасности, данных и цифровой торговли уменьшают трансграничные риски.",
+            tone: "institution"
+          }
+        };
+      }
+
+      function multilateralMembershipDefaults(game) {
+        return (game.diplomacy.organizations || []).map((organization, index) => {
+          const un = organization.name === "ООН";
+          return {
+            organization: organization.name,
+            purpose: organization.purpose,
+            status: un ? "member" : "outside",
+            influence: un ? 38 : clamp(15 + index * 3, 10, 45),
+            trust: un ? 61 : 48,
+            arrears: 0,
+            annualDues: Math.max(24, organization.influence * (un ? 1.35 : .9)),
+            votingWeight: un ? 1 : 0,
+            applicationDays: 0,
+            lastBriefing: un ? "Делегация участвует в работе организации и имеет право голоса." : "Государство не входит в организацию."
+          };
+        });
+      }
+
+      function normalizeMultilateralMembership(value, fallback, index = 0) {
+        const item = Object.assign({}, fallback || {}, value || {});
+        item.organization ||= fallback?.organization || `Организация ${index + 1}`;
+        item.purpose ||= fallback?.purpose || "международная координация";
+        if (!["outside", "observer", "member", "suspended"].includes(item.status)) item.status = "outside";
+        item.influence = clamp(num(item.influence, fallback?.influence || 20), 0, 100);
+        item.trust = clamp(num(item.trust, fallback?.trust || 50), 0, 100);
+        item.arrears = Math.max(0, num(item.arrears, 0));
+        item.annualDues = Math.max(0, num(item.annualDues, fallback?.annualDues || 60));
+        item.votingWeight = Math.max(0, num(item.votingWeight, item.status === "member" ? 1 : 0));
+        item.applicationDays = Math.max(0, Math.round(num(item.applicationDays, 0)));
+        item.lastBriefing ||= fallback?.lastBriefing || "Постоянное представительство ведёт рабочие консультации.";
+        return item;
+      }
+
+      function normalizeMultilateralResolution(value, index = 0) {
+        const item = value && typeof value === "object" ? value : {};
+        const catalog = multilateralIssueCatalog();
+        const issue = catalog[item.type] || catalog.security;
+        item.id ||= uid("resolution");
+        item.organization ||= "ООН";
+        item.type ||= "security";
+        item.title ||= issue.title;
+        item.text ||= issue.text;
+        item.sponsorId ||= "";
+        item.sponsorName ||= "группа государств";
+        item.stage ||= "voting";
+        item.status ||= item.stage;
+        item.days = Math.max(0, Math.round(num(item.days, 0)));
+        item.daysLeft = Math.max(0, Math.round(num(item.daysLeft, 28 + index)));
+        item.yes = Math.max(0, Math.round(num(item.yes, 0)));
+        item.no = Math.max(0, Math.round(num(item.no, 0)));
+        item.abstain = Math.max(0, Math.round(num(item.abstain, 0)));
+        item.required = Math.max(1, Math.round(num(item.required, 10)));
+        item.supportForecast = clamp(num(item.supportForecast, 50), 0, 100);
+        item.lobbying = clamp(num(item.lobbying, 0), 0, 100);
+        item.playerVote = ["yes", "no", "abstain"].includes(item.playerVote) ? item.playerVote : "";
+        item.legality = clamp(num(item.legality, 60), 0, 100);
+        item.cost = Math.max(0, num(item.cost, 0));
+        item.outcome ||= "";
+        item.lastUpdate ||= "Делегации проводят консультации по тексту и поправкам.";
+        return item;
+      }
+
+      function defaultMultilateralSystem(game) {
+        return {
+          modelVersion: MULTILATERAL_MODEL_VERSION,
+          memberships: multilateralMembershipDefaults(game),
+          resolutions: [],
+          summits: [],
+          coalitions: [],
+          history: [],
+          influence: 38,
+          diplomaticCapital: 46,
+          rulemakingPower: 34,
+          annualDues: 0,
+          arrears: 0,
+          nextInitiativeDays: 95,
+          lastBriefing: "Постоянное представительство участвует в заседаниях и формирует коалиции по отдельным вопросам."
+        };
+      }
+
+      function updateMultilateralTotals(game) {
+        const system = game.diplomacy.multilateral;
+        const active = system.memberships.filter(item => item.status === "member");
+        system.annualDues = active.reduce((sum, item) => sum + item.annualDues, 0);
+        system.arrears = active.reduce((sum, item) => sum + item.arrears, 0);
+        system.influence = active.length ? clamp(active.reduce((sum, item) => sum + item.influence * item.votingWeight, 0) / Math.max(1, active.reduce((sum, item) => sum + item.votingWeight, 0)), 0, 100) : 0;
+        system.rulemakingPower = clamp(system.influence * .48 + system.diplomaticCapital * .28 + game.diplomacy.law.reputation * .16 + num(game.softPower?.prestige, 50) * .08 - Math.min(20, system.arrears / 25), 0, 100);
+        return system;
+      }
+
+      function migrateMultilateralSystem(game) {
+        game.diplomacy ||= { countries: createWorldCountries([]), organizations: defaultOrganizations() };
+        const base = defaultMultilateralSystem(game);
+        const incoming = game.diplomacy.multilateral && typeof game.diplomacy.multilateral === "object" ? game.diplomacy.multilateral : {};
+        const system = Object.assign(base, incoming);
+        system.modelVersion = MULTILATERAL_MODEL_VERSION;
+        const incomingMemberships = new Map((Array.isArray(incoming.memberships) ? incoming.memberships : []).map(item => [item.organization, item]));
+        system.memberships = base.memberships.map((fallback, index) => normalizeMultilateralMembership(incomingMemberships.get(fallback.organization), fallback, index));
+        for (const membership of Array.isArray(incoming.memberships) ? incoming.memberships : []) {
+          if (!system.memberships.some(item => item.organization === membership.organization)) system.memberships.push(normalizeMultilateralMembership(membership, null, system.memberships.length));
+        }
+        system.resolutions = (Array.isArray(incoming.resolutions) ? incoming.resolutions : []).map(normalizeMultilateralResolution).slice(0, 28);
+        system.summits = Array.isArray(incoming.summits) ? incoming.summits.slice(0, 30) : [];
+        system.coalitions = Array.isArray(incoming.coalitions) ? incoming.coalitions.slice(0, 30) : [];
+        system.history = Array.isArray(incoming.history) ? incoming.history.slice(0, 70) : [];
+        system.nextInitiativeDays = Math.max(1, Math.round(num(system.nextInitiativeDays, base.nextInitiativeDays)));
+        system.diplomaticCapital = clamp(num(system.diplomaticCapital, base.diplomaticCapital), 0, 100);
+        system.lastBriefing ||= base.lastBriefing;
+        game.diplomacy.multilateral = system;
+        updateMultilateralTotals(game);
+        return system;
+      }
+
+      function multilateralOrganization(game, name) {
+        return game.diplomacy.organizations.find(item => item.name === name) || null;
+      }
+
+      function multilateralIssueSupport(game, type, sponsor = null) {
+        const law = game.diplomacy.law;
+        const tension = game.diplomacy.globalTension;
+        const world = game.diplomacy.worldSystem || {};
+        if (type === "security") return clamp(48 + tension * .22 + law.reputation * .08 - (sponsor?.aggression || 0) * .16, 12, 88);
+        if (type === "trade") return clamp(55 + num(world.tradeMomentum) * 1.4 - num(world.worldRisk) * .15, 14, 90);
+        if (type === "climate") return clamp(42 + num(game.climate?.globalRisk, 40) * .32 + law.reputation * .08, 16, 92);
+        if (type === "humanitarian") return clamp(52 + law.humanitarianStanding * .17 + num(world.worldRisk) * .13, 18, 92);
+        if (type === "sanctions") return clamp(30 + tension * .25 + law.legalStanding * .16 - law.sanctionsExposure * .12, 8, 84);
+        if (type === "health") return clamp(56 + num(world.globalRisk) * .08 + law.reputation * .08, 20, 92);
+        if (type === "migration") return clamp(44 + num(game.population?.demography?.netMigration, 0) * .00002 + num(world.worldRisk) * .08, 12, 86);
+        if (type === "digital") return clamp(48 + num(game.tech?.research, 50) * .12 + law.treatyReliability * .08, 16, 90);
+        return 50;
+      }
+
+      function createMultilateralResolution(game, organizationName, type, sponsor = null, forced = {}) {
+        const system = game.diplomacy.multilateral || migrateMultilateralSystem(game);
+        const organization = multilateralOrganization(game, organizationName) || game.diplomacy.organizations[0];
+        if (!organization) return null;
+        const issue = multilateralIssueCatalog()[type] || multilateralIssueCatalog().security;
+        const electorate = Math.max(5, Math.min(organization.members || game.diplomacy.countries.length, game.diplomacy.countries.length || 20));
+        const resolution = normalizeMultilateralResolution(Object.assign({
+          organization: organization.name,
+          type,
+          title: issue.title,
+          text: issue.text,
+          sponsorId: sponsor?.id || "",
+          sponsorName: sponsor?.name || "группа государств",
+          daysLeft: Math.round(rnd(18, 36)),
+          required: Math.ceil(electorate * .5),
+          supportForecast: multilateralIssueSupport(game, type, sponsor),
+          legality: clamp(game.diplomacy.law.legalStanding * .46 + game.diplomacy.law.reputation * .34 + (type === "sanctions" ? 8 : 18), 12, 96),
+          stage: "voting",
+          status: "voting",
+          lastUpdate: "Проект распространён среди делегаций; идут консультации по поправкам и обязательствам."
+        }, forced));
+        system.resolutions.unshift(resolution);
+        system.resolutions = system.resolutions.slice(0, 28);
+        system.lastBriefing = `${organization.name}: внесён проект «${resolution.title}».`;
+        system.history.unshift({ date: formatDate(game.date), title: resolution.title, text: `${resolution.sponsorName} внесла проект в ${organization.name}.`, tone: issue.tone });
+        system.history = system.history.slice(0, 70);
+        pushNews(game, "Дипломатия", "Внесён проект международной резолюции", `${organization.name}: ${resolution.title}. Голосование ожидается через ${resolution.daysLeft} дней.`);
+        return resolution;
+      }
+
+      function applyMultilateralResolution(game, resolution) {
+        const scale = clamp((resolution.yes - resolution.no) / Math.max(1, resolution.yes + resolution.no + resolution.abstain) + .5, .35, 1.15);
+        const supported = resolution.playerVote === "yes";
+        if (resolution.type === "security") {
+          game.diplomacy.globalTension = clamp(game.diplomacy.globalTension - 3.4 * scale, 0, 100);
+          game.diplomacy.law.legalStanding = clamp(game.diplomacy.law.legalStanding + (supported ? 1.2 : .4), 0, 100);
+        } else if (resolution.type === "trade") {
+          game.economy.exports *= 1 + .0045 * scale;
+          game.worldMarket.marketAccess = clamp(num(game.worldMarket.marketAccess, 50) + 2.4 * scale, 0, 100);
+          game.infrastructure.logistics = clamp(num(game.infrastructure.logistics, 50) + 1.2 * scale, 0, 100);
+        } else if (resolution.type === "climate") {
+          game.climate.preparedness = clamp(game.climate.preparedness + 2.8 * scale, 0, 100);
+          game.climate.cooperation = clamp(num(game.climate.cooperation, 50) + 3.2 * scale, 0, 100);
+          if (supported) game.economy.budget = Math.max(0, game.economy.budget - 90);
+        } else if (resolution.type === "humanitarian") {
+          game.diplomacy.law.humanitarianStanding = clamp(game.diplomacy.law.humanitarianStanding + 2.6 * scale, 0, 100);
+          game.softPower.prestige = clamp(game.softPower.prestige + 1.8 * scale, 0, 100);
+          if (supported) game.economy.budget = Math.max(0, game.economy.budget - 70);
+        } else if (resolution.type === "sanctions") {
+          game.diplomacy.law.reputation = clamp(game.diplomacy.law.reputation + (resolution.legality >= 60 ? 1.1 : -.9), 0, 100);
+          game.diplomacy.globalTension = clamp(game.diplomacy.globalTension + 1.5 * scale, 0, 100);
+          game.economy.exports *= 1 - .0025 * scale;
+        } else if (resolution.type === "health") {
+          const health = game.governance.services.find(item => item.id === "health");
+          if (health) {
+            health.capacity = clamp(health.capacity + 2.2 * scale, 0, 100);
+            health.stress = clamp(health.stress - 1.8 * scale, 0, 100);
+          }
+        } else if (resolution.type === "migration") {
+          game.population.demography.integrationCapacity = clamp(game.population.demography.integrationCapacity + 2.4 * scale, 0, 100);
+          game.diplomacy.globalTension = clamp(game.diplomacy.globalTension - .7 * scale, 0, 100);
+        } else if (resolution.type === "digital") {
+          game.intelligence.cyber = clamp(game.intelligence.cyber + 1.8 * scale, 0, 100);
+          game.tech.points += 18 * scale;
+          game.diplomacy.law.treatyReliability = clamp(game.diplomacy.law.treatyReliability + .7 * scale, 0, 100);
+        }
+        if (supported) {
+          const membership = game.diplomacy.multilateral.memberships.find(item => item.organization === resolution.organization);
+          if (membership) {
+            membership.influence = clamp(membership.influence + 1.6, 0, 100);
+            membership.trust = clamp(membership.trust + 1.1, 0, 100);
+          }
+        }
+      }
+
+      function resolveMultilateralResolution(game, resolution) {
+        if (!resolution || resolution.stage !== "voting") return resolution;
+        const organization = multilateralOrganization(game, resolution.organization);
+        const electorate = Math.max(5, Math.min(organization?.members || game.diplomacy.countries.length, game.diplomacy.countries.length || 20));
+        let support = resolution.supportForecast + resolution.lobbying * .24 + (resolution.playerVote === "yes" ? 2.5 : resolution.playerVote === "no" ? -2.5 : 0) + rnd(-9, 9);
+        support = clamp(support, 3, 96);
+        resolution.yes = Math.round(electorate * support / 100);
+        const remaining = Math.max(0, electorate - resolution.yes);
+        resolution.abstain = Math.round(remaining * clamp(.22 + (100 - resolution.legality) * .002, .15, .48));
+        resolution.no = Math.max(0, electorate - resolution.yes - resolution.abstain);
+        const adopted = resolution.yes >= resolution.required && resolution.yes > resolution.no;
+        resolution.stage = adopted ? "adopted" : "rejected";
+        resolution.status = resolution.stage;
+        resolution.daysLeft = 0;
+        resolution.outcome = adopted ? "Резолюция принята и переходит к исполнению." : "Проект не набрал необходимого большинства.";
+        resolution.lastUpdate = `${resolution.outcome} Голоса: ${resolution.yes} за, ${resolution.no} против, ${resolution.abstain} воздержались.`;
+        const system = game.diplomacy.multilateral;
+        if (adopted) applyMultilateralResolution(game, resolution);
+        if (resolution.sponsorName === game.country.name) {
+          system.diplomaticCapital = clamp(system.diplomaticCapital + (adopted ? 3.8 : -2.4), 0, 100);
+          game.diplomacy.law.reputation = clamp(game.diplomacy.law.reputation + (adopted ? 1.2 : -.5), 0, 100);
+        }
+        system.history.unshift({ date: formatDate(game.date), title: resolution.title, text: resolution.lastUpdate, tone: adopted ? "good" : "bad" });
+        system.history = system.history.slice(0, 70);
+        system.lastBriefing = `${resolution.organization}: ${resolution.lastUpdate}`;
+        pushNews(game, "Дипломатия", adopted ? "Международная резолюция принята" : "Международная резолюция отклонена", `${resolution.title}. ${resolution.lastUpdate}`);
+        return resolution;
+      }
+
+      function simulateMultilateralDiplomacy(game) {
+        const system = game.diplomacy.multilateral || migrateMultilateralSystem(game);
+        for (const membership of system.memberships) {
+          membership.applicationDays = Math.max(0, membership.applicationDays - 1);
+          if (membership.status !== "member") continue;
+          const due = membership.annualDues / DAYS_PER_YEAR;
+          if (game.economy.budget >= due) {
+            game.economy.budget -= due;
+            membership.arrears = Math.max(0, membership.arrears - due * .35);
+          } else {
+            membership.arrears += due;
+            membership.trust = clamp(membership.trust - .012, 0, 100);
+          }
+          if (membership.arrears > membership.annualDues * 1.2) {
+            membership.status = "suspended";
+            membership.votingWeight = 0;
+            membership.lastBriefing = "Право голоса приостановлено из-за длительной задолженности по взносам.";
+            system.history.unshift({ date: formatDate(game.date), title: `${membership.organization}: приостановлено право голоса`, text: membership.lastBriefing, tone: "bad" });
+          }
+        }
+        for (const resolution of system.resolutions) {
+          if (resolution.stage !== "voting") continue;
+          resolution.days++;
+          resolution.daysLeft = Math.max(0, resolution.daysLeft - 1);
+          const consultation = (system.diplomaticCapital - 50) * .002 + (resolution.legality - 50) * .001;
+          resolution.supportForecast = clamp(resolution.supportForecast + consultation + rnd(-.035, .04), 0, 100);
+          resolution.lastUpdate = resolution.daysLeft <= 5 ? "Финальные консультации: делегации фиксируют позиции и последние поправки." : "Идёт постатейное согласование текста и формирование групп поддержки.";
+          if (resolution.daysLeft <= 0) resolveMultilateralResolution(game, resolution);
+        }
+        system.nextInitiativeDays--;
+        if (system.nextInitiativeDays <= 0) {
+          const countries = game.diplomacy.countries.filter(country => !country.war);
+          const sponsor = countries[Math.floor(simulationRandom() * Math.max(1, countries.length))] || null;
+          const organizations = game.diplomacy.organizations.filter(item => item.members >= 9);
+          const organization = organizations[Math.floor(simulationRandom() * Math.max(1, organizations.length))] || game.diplomacy.organizations[0];
+          const types = Object.keys(multilateralIssueCatalog());
+          if (organization && system.resolutions.filter(item => item.stage === "voting").length < 4) {
+            createMultilateralResolution(game, organization.name, types[Math.floor(simulationRandom() * types.length)], sponsor);
+          }
+          system.nextInitiativeDays = Math.round(rnd(90, 220));
+        }
+        system.summits = system.summits.map(item => Object.assign({}, item, { daysLeft: Math.max(0, num(item.daysLeft) - 1) })).filter(item => item.daysLeft > 0).slice(0, 30);
+        system.coalitions = system.coalitions.map(item => Object.assign({}, item, { daysLeft: Math.max(0, num(item.daysLeft) - 1) })).filter(item => item.daysLeft > 0).slice(0, 30);
+        system.history = system.history.slice(0, 70);
+        updateMultilateralTotals(game);
+        return system;
+      }
+
+      function multilateralAction(mode, organizationName = "", issueType = "") {
+        const system = state.diplomacy.multilateral || migrateMultilateralSystem(state);
+        const selectedOrg = organizationName || document.getElementById("multilateralOrgSelect")?.value || system.memberships[0]?.organization;
+        const selectedIssue = issueType || document.getElementById("multilateralIssueSelect")?.value || "security";
+        const membership = system.memberships.find(item => item.organization === selectedOrg);
+        const organization = multilateralOrganization(state, selectedOrg);
+        if (!membership || !organization) return notify("Международная организация не найдена.", "warn", "МИД");
+        let title = "", text = "", tone = "institution", cost = 0;
+        if (mode === "membership") {
+          if (membership.applicationDays > 0) return showBlockedDecision("Заявка ещё рассматривается", "Секретариат и государства-участники проводят консультации.", [["Осталось", `${membership.applicationDays} дн.`, "warn"]]);
+          cost = 140;
+          if (state.economy.budget < cost) return showBlockedDecision("Заявка не профинансирована", "Нужны дипломатическая миссия, юридическая адаптация и вступительный взнос.", [["Нужно", money(cost), "bad"]]);
+          state.economy.budget -= cost;
+          const chance = clamp(state.diplomacy.law.reputation * .34 + system.diplomaticCapital * .28 + membership.trust * .24 + organization.influence * .14 - (membership.status === "suspended" ? 28 : 0), 8, 94);
+          const success = simulationRandom() * 100 < chance;
+          if (success) {
+            membership.status = membership.status === "outside" ? "observer" : "member";
+            membership.votingWeight = membership.status === "member" ? 1 : 0;
+            membership.trust = clamp(membership.trust + 7, 0, 100);
+            membership.applicationDays = membership.status === "observer" ? 180 : 365;
+            title = membership.status === "member" ? `${selectedOrg}: членство одобрено` : `${selectedOrg}: получен статус наблюдателя`;
+            text = membership.status === "member" ? "Государство получило право голоса и приняло обязательства по взносам и исполнению решений." : "Делегация допущена к заседаниям без решающего голоса; следующая заявка сможет повысить статус.";
+            tone = "good";
+          } else {
+            membership.applicationDays = 240;
+            membership.trust = clamp(membership.trust - 3, 0, 100);
+            title = `${selectedOrg}: заявка отложена`;
+            text = "Участники запросили дополнительные гарантии исполнения обязательств и более устойчивую дипломатическую коалицию.";
+            tone = "bad";
+          }
+        } else if (mode === "contribute") {
+          cost = 220;
+          if (state.economy.budget < cost) return showBlockedDecision("Добровольный взнос невозможен", "В бюджете нет свободного лимита для фонда организации.", [["Нужно", money(cost), "bad"]]);
+          state.economy.budget -= cost;
+          membership.arrears = Math.max(0, membership.arrears - cost * .4);
+          membership.influence = clamp(membership.influence + 4.2, 0, 100);
+          membership.trust = clamp(membership.trust + 2.5, 0, 100);
+          system.diplomaticCapital = clamp(system.diplomaticCapital + 1.8, 0, 100);
+          title = `${selectedOrg}: добровольный взнос`;
+          text = "Средства направлены в целевой международный фонд с публичной отчётностью и независимым аудитом.";
+          tone = "good";
+        } else if (mode === "summit") {
+          cost = 320;
+          if (state.economy.budget < cost) return showBlockedDecision("Саммит не профинансирован", "Нужны организационный бюджет, делегации и пакет согласованных документов.", [["Нужно", money(cost), "bad"]]);
+          state.economy.budget -= cost;
+          const success = clamp(system.diplomaticCapital * .46 + membership.influence * .3 + membership.trust * .24 + rnd(-12, 12), 0, 100);
+          membership.influence = clamp(membership.influence + (success >= 55 ? 5 : 1), 0, 100);
+          system.diplomaticCapital = clamp(system.diplomaticCapital + (success >= 55 ? 4 : -1), 0, 100);
+          system.summits.unshift({ id: uid("summit"), organization: selectedOrg, date: formatDate(state.date), daysLeft: 365, score: success, outcome: success >= 55 ? "совместное коммюнике согласовано" : "участники ограничились консультациями" });
+          title = success >= 55 ? `${selectedOrg}: саммит завершился соглашением` : `${selectedOrg}: саммит без общего документа`;
+          text = success >= 55 ? "Делегации согласовали совместное коммюнике, рабочие группы и календарь исполнения." : "Разногласия не позволили принять общий документ, но каналы переговоров сохранены.";
+          tone = success >= 55 ? "good" : "warn";
+        } else if (mode === "propose") {
+          if (membership.status !== "member") return showBlockedDecision("Нет права вносить резолюцию", "Для самостоятельного внесения проекта требуется полноправное членство.", [["Статус", membership.status === "observer" ? "наблюдатель" : "не входит", "bad"]]);
+          cost = 260;
+          if (state.economy.budget < cost) return showBlockedDecision("Проект не подготовлен", "Нужны юридическая экспертиза, расчёты и работа делегаций.", [["Нужно", money(cost), "bad"]]);
+          if (system.resolutions.some(item => item.stage === "voting" && item.organization === selectedOrg && item.sponsorName === state.country.name)) return showBlockedDecision("Делегация уже ведёт проект", "Сначала необходимо завершить текущее голосование в этой организации.", [["Организация", selectedOrg, "warn"]]);
+          state.economy.budget -= cost;
+          const resolution = createMultilateralResolution(state, selectedOrg, selectedIssue, null, {
+            sponsorName: state.country.name,
+            supportForecast: clamp(multilateralIssueSupport(state, selectedIssue) + membership.influence * .12 + system.diplomaticCapital * .08 - 8, 5, 94)
+          });
+          title = `${selectedOrg}: национальный проект резолюции внесён`;
+          text = `${resolution.title}. Делегация начала консультации с региональными группами и потенциальными соавторами.`;
+          tone = "institution";
+        } else return;
+        membership.lastBriefing = text;
+        system.lastBriefing = text;
+        system.history.unshift({ date: formatDate(state.date), title, text, tone });
+        system.history = system.history.slice(0, 70);
+        updateMultilateralTotals(state);
+        normalizeCore();
+        queueSave();
+        showDecision(title, text, [
+          ["Организация", selectedOrg, "good"],
+          ["Статус", membership.status === "member" ? "член" : membership.status === "observer" ? "наблюдатель" : "вне организации", membership.status === "member" ? "good" : "warn"],
+          ["Влияние", pct(membership.influence, 0), membership.influence >= 55 ? "good" : "warn"],
+          ["Бюджет", cost ? `-${money(cost)}` : "без расходов", cost ? "bad" : "good"]
+        ], tone);
+      }
+
+      function multilateralResolutionAction(id, mode) {
+        const system = state.diplomacy.multilateral || migrateMultilateralSystem(state);
+        const resolution = system.resolutions.find(item => item.id === id);
+        if (!resolution || resolution.stage !== "voting") return notify("Голосование уже завершено или проект не найден.", "warn", "МИД");
+        const membership = system.memberships.find(item => item.organization === resolution.organization);
+        let title = "", text = "", tone = "institution", cost = 0;
+        if (["yes", "no", "abstain"].includes(mode)) {
+          if (membership?.status !== "member" || membership.votingWeight <= 0) return showBlockedDecision("Нет права голоса", "Государство должно быть полноправным членом без приостановки полномочий.", [["Статус", membership?.status || "не входит", "bad"]]);
+          resolution.playerVote = mode;
+          title = "Позиция делегации зафиксирована";
+          text = mode === "yes" ? "Делегация голосует за проект и готова участвовать в его исполнении." : mode === "no" ? "Делегация голосует против и направляет правовое объяснение позиции." : "Делегация воздерживается, сохраняя возможность присоединиться к отдельным мерам.";
+          tone = mode === "yes" ? "good" : mode === "no" ? "warn" : "institution";
+        } else if (mode === "lobby") {
+          cost = 180;
+          if (state.economy.budget < cost) return showBlockedDecision("Коалиционная работа не профинансирована", "Нужны специальные посланники, экспертиза поправок и переговорные группы.", [["Нужно", money(cost), "bad"]]);
+          state.economy.budget -= cost;
+          const gain = clamp(6 + system.diplomaticCapital * .06 + (membership?.influence || 0) * .05 + rnd(0, 5), 6, 18);
+          resolution.lobbying = clamp(resolution.lobbying + gain, 0, 100);
+          resolution.supportForecast = clamp(resolution.supportForecast + gain * .32, 0, 100);
+          system.coalitions.unshift({ id: uid("coalition"), resolutionId: resolution.id, organization: resolution.organization, date: formatDate(state.date), daysLeft: resolution.daysLeft, strength: gain, issue: resolution.type });
+          title = "Коалиция поддержки расширена";
+          text = "Посланники согласовали поправки и распределили обязательства между соавторами проекта.";
+          tone = "good";
+        } else return;
+        resolution.lastUpdate = text;
+        system.lastBriefing = `${resolution.organization}: ${text}`;
+        system.history.unshift({ date: formatDate(state.date), title, text, tone });
+        system.history = system.history.slice(0, 70);
+        normalizeCore();
+        queueSave();
+        showDecision(title, text, [
+          ["Проект", resolution.title, "good"],
+          ["Прогноз поддержки", pct(resolution.supportForecast, 0), resolution.supportForecast >= 52 ? "good" : "warn"],
+          ["До голосования", `${resolution.daysLeft} дн.`, "warn"],
+          ["Бюджет", cost ? `-${money(cost)}` : "без расходов", cost ? "bad" : "good"]
+        ], tone);
       }
 
       function diplomaticIntent(country) {
@@ -10908,6 +12177,7 @@
         migrateFinancialSystem(game);
         migrateStrategicDiplomacy(game);
         migrateInternationalLaw(game);
+        migrateMultilateralSystem(game);
         migratePoliticalSystems(game);
         migrateParliamentBargaining(game);
         migrateElectionSystem(game);
@@ -10918,6 +12188,7 @@
         migrateInfrastructureSystem(game);
         migratePrivateSector(game);
         migrateInformationSystem(game);
+        migrateScandalSystem(game);
         migrateIntelligenceSystem(game);
         migrateClimateSystem(game);
         migrateChronicle(game);
@@ -10937,6 +12208,7 @@
         migrateNarrativeSystem(game);
         applyGameScenario(game, config.scenario || "balanced");
         migrateHousingSystem(game);
+        migrateMunicipalSystem(game);
         migrateLaborMarketSystem(game);
         migrateHouseholdSystem(game);
         migratePresidentialAttention(game);
@@ -12722,6 +13994,7 @@
                   ${actionCardGrid(["repair","demine","restoreControl"].map(mode => renderActionCard(regionRecoveryDecisionMeta(mode, region), { "data-action": "region-recovery", "data-region": region.id, "data-mode": mode }, { compact: true })), true, "margin-top: 12px;")}
                 </section>
                 ${renderRegionAdministrationPanel(region)}
+                ${renderMunicipalPanel(region)}
                 <section class="panel pad">
                   <h3 class="section-title">Строительство</h3>
                   <p class="subtle" style="margin: 8px 0 0;">Каждый объект меняет конкретные показатели региона и страны: ВВП, экспорт, население, безопасность, экологию или социальную сферу.</p>
@@ -13995,6 +15268,88 @@
         `;
       }
 
+      function renderMunicipalPanel(region) {
+        const system = state.municipalities || migrateMunicipalSystem(state);
+        const cities = system.cities.filter(city => city.regionId === region.id);
+        const projectCatalog = municipalProjectCatalog();
+        if (!cities.length) return "";
+        return `
+          <section class="panel pad">
+            <div class="panel-section-head">
+              <span><h3 class="section-title">Муниципалитеты и крупные города</h3><p class="subtle">Городской бюджет отделён от регионального: мэр отвечает за транспорт, коммунальные сети, жильё, безопасность и качество повседневных услуг.</p></span>
+              <span class="pill ${system.fiscalHealth < 42 ? "bad" : system.fiscalHealth < 60 ? "warn" : "good"}">финансы ${pct(system.fiscalHealth, 0)}</span>
+            </div>
+            <div class="kpi-strip" style="margin-top:12px;">
+              <div class="kpi"><span>Городское население</span><strong>${compact(system.metropolitanPopulation)}</strong></div>
+              <div class="kpi"><span>Качество услуг</span><strong>${pct(system.serviceIndex, 0)}</strong></div>
+              <div class="kpi"><span>Городское давление</span><strong>${pct(system.urbanPressure, 0)}</strong></div>
+              <div class="kpi"><span>Разрыв инфраструктуры</span><strong>${pct(system.infrastructureGap, 0)}</strong></div>
+            </div>
+            <p class="subtle" style="margin:10px 0 0;">${esc(system.lastBriefing)}</p>
+            <div class="list" style="margin-top:12px;">
+              ${cities.map(city => {
+                const project = city.project;
+                const debtRatio = city.debt / Math.max(1, city.annualRevenue) * 100;
+                const balance = city.annualRevenue - city.annualSpending;
+                return `
+                  <details class="action-fold">
+                    <summary>
+                      <span class="action-fold-arrow" aria-hidden="true">›</span>
+                      <span class="action-summary-main"><strong>${esc(city.name)}${city.capital ? " · столица" : ""}</strong><small>${esc(city.mayor)} · услуги ${pct(city.serviceQuality, 0)} · резерв ${money(city.budget)}</small></span>
+                      <span class="pill ${city.mayorTrust < 42 || debtRatio > 85 ? "bad" : city.serviceQuality < 55 ? "warn" : "good"}">доверие ${pct(city.mayorTrust, 0)}</span>
+                    </summary>
+                    <div class="action-fold-body">
+                      <div class="kpi-strip">
+                        <div class="kpi"><span>Население</span><strong>${compact(city.population)}</strong></div>
+                        <div class="kpi"><span>Доходы / год</span><strong>${money(city.annualRevenue)}</strong></div>
+                        <div class="kpi"><span>Баланс / год</span><strong class="delta ${balance >= 0 ? "good" : "bad"}">${balance >= 0 ? "+" : ""}${money(balance)}</strong></div>
+                        <div class="kpi"><span>Долг / доходы</span><strong class="delta ${debtRatio > 80 ? "bad" : debtRatio > 50 ? "warn" : "good"}">${pct(debtRatio, 0)}</strong></div>
+                        <div class="kpi"><span>Транспорт</span><strong>${pct(city.transit, 0)}</strong></div>
+                        <div class="kpi"><span>Коммунальные сети</span><strong>${pct(city.utilities, 0)}</strong></div>
+                        <div class="kpi"><span>Доступность жилья</span><strong>${pct(city.housing, 0)}</strong></div>
+                        <div class="kpi"><span>Заторы</span><strong>${pct(city.congestion, 0)}</strong></div>
+                        <div class="kpi"><span>Безопасность</span><strong>${pct(city.safety, 0)}</strong></div>
+                        <div class="kpi"><span>Безработица</span><strong>${pct(city.unemployment, 1)}</strong></div>
+                        <div class="kpi"><span>Добросовестность</span><strong>${pct(city.integrity, 0)}</strong></div>
+                        <div class="kpi"><span>Выборы</span><strong>${city.electionDays} дн.</strong></div>
+                      </div>
+                      <div class="decision-banner ${project?.status === "active" ? "warn" : city.serviceQuality >= 60 ? "good" : "warn"}" style="margin-top:10px;">
+                        <strong>${project?.status === "active" ? `${esc(project.name)} · ${pct(project.progress, 0)}` : esc(city.lastReport)}</strong>
+                        ${project?.status === "active" ? `<span class="subtle">${esc(project.lastReport)} · риск ${pct(project.risk, 0)}</span><div class="progress"><i style="--w:${project.progress}%"></i></div>` : ""}
+                      </div>
+                      <div class="actions" style="margin-top:10px;">
+                        <button data-action="municipal-action" data-city="${city.id}" data-mode="grant">Целевой трансферт</button>
+                        <button data-action="municipal-action" data-city="${city.id}" data-mode="audit">Независимый аудит</button>
+                        <button data-action="municipal-action" data-city="${city.id}" data-mode="autonomy">Расширить полномочия</button>
+                        <button data-action="municipal-action" data-city="${city.id}" data-mode="emergency">Аварийный резерв</button>
+                      </div>
+                      <details class="action-fold" style="margin-top:10px;">
+                        <summary><span class="action-fold-arrow" aria-hidden="true">›</span><span class="action-summary-main"><strong>Новый городской проект</strong><small>одновременно город ведёт один крупный капитальный проект</small></span><span class="pill">${project?.status === "active" ? "проект идёт" : "офис свободен"}</span></summary>
+                        <div class="action-fold-body">
+                          <div class="policy-action-grid compact">
+                            ${Object.entries(projectCatalog).map(([type, spec]) => renderActionCard({
+                              title: spec.name,
+                              category: "городская инфраструктура",
+                              desc: spec.effect,
+                              signal: `стоимость ${money(spec.cost)} · срок ${spec.duration} дн.`,
+                              when: "Когда соответствующая городская система ограничивает качество жизни и инвестиции.",
+                              effect: spec.effect,
+                              risk: "Результат зависит от городского бюджета, компетентности мэра и добросовестности закупок.",
+                              cta: "Начать проект",
+                              tone: type === "resilience" ? "good" : "civic"
+                            }, { "data-action": "municipal-project", "data-city": city.id, "data-project": type }, { compact: true })).join("")}
+                          </div>
+                        </div>
+                      </details>
+                    </div>
+                  </details>
+                `;
+              }).join("")}
+            </div>
+          </section>
+        `;
+      }
+
       function renderSuccessionPanel() {
         const s=state.succession,p=state.politics,era=s.currentEra,limit=Math.max(1,p.constitution.maxTerms),limited=s.termsServed>=limit;
         return `
@@ -14443,6 +15798,100 @@
         </section>`;
       }
 
+      function renderMultilateralDiplomacyPanel() {
+        const system = state.diplomacy.multilateral || migrateMultilateralSystem(state);
+        const issues = multilateralIssueCatalog();
+        const active = system.resolutions.filter(item => item.stage === "voting");
+        const completed = system.resolutions.filter(item => item.stage !== "voting").slice(0, 8);
+        const memberCount = system.memberships.filter(item => item.status === "member").length;
+        return `
+          <section class="panel pad">
+            <div class="panel-section-head">
+              <span><h3 class="section-title">Многосторонняя дипломатия</h3><p class="subtle">Членство, взносы, коалиции и голоса других государств определяют, станет ли национальная инициатива международным правилом.</p></span>
+              <span class="pill ${system.rulemakingPower < 38 ? "warn" : "good"}">влияние на правила ${pct(system.rulemakingPower, 0)}</span>
+            </div>
+            <div class="kpi-strip" style="margin-top:12px;">
+              <div class="kpi"><span>Членство</span><strong>${memberCount}/${system.memberships.length}</strong></div>
+              <div class="kpi"><span>Дипломатический капитал</span><strong>${pct(system.diplomaticCapital, 0)}</strong></div>
+              <div class="kpi"><span>Среднее влияние</span><strong>${pct(system.influence, 0)}</strong></div>
+              <div class="kpi"><span>Взносы / год</span><strong>${money(system.annualDues)}</strong></div>
+              <div class="kpi"><span>Задолженность</span><strong class="delta ${system.arrears > 0 ? "bad" : "good"}">${money(system.arrears)}</strong></div>
+              <div class="kpi"><span>Активные голосования</span><strong>${active.length}</strong></div>
+            </div>
+            <p class="subtle" style="margin:10px 0 0;">${esc(system.lastBriefing)}</p>
+            <details class="action-fold" style="margin-top:12px;" open>
+              <summary><span class="action-fold-arrow" aria-hidden="true">›</span><span class="action-summary-main"><strong>Постоянные представительства</strong><small>статус, право голоса, задолженность и влияние делегации</small></span><span class="pill">${system.memberships.length}</span></summary>
+              <div class="action-fold-body">
+                <div class="list">
+                  ${system.memberships.map(item => `
+                    <div class="row">
+                      <span><strong>${esc(item.organization)}</strong><br><small class="subtle">${esc(item.purpose)} · ${item.status === "member" ? "полноправный член" : item.status === "observer" ? "наблюдатель" : item.status === "suspended" ? "право голоса приостановлено" : "вне организации"} · влияние ${pct(item.influence, 0)}${item.arrears ? ` · долг ${money(item.arrears)}` : ""}<br>${esc(item.lastBriefing)}</small></span>
+                      <span class="pill ${item.status === "member" ? "good" : item.status === "suspended" ? "bad" : "warn"}">${item.status === "member" ? "голос" : item.status === "observer" ? "наблюдение" : item.status === "suspended" ? "приостановлено" : "вне"}</span>
+                    </div>
+                  `).join("")}
+                </div>
+              </div>
+            </details>
+            <div class="grid split" style="margin-top:12px;">
+              <div>
+                <label>Международная площадка
+                  <select id="multilateralOrgSelect">${system.memberships.map(item => `<option value="${esc(item.organization)}">${esc(item.organization)} · ${item.status === "member" ? "член" : item.status === "observer" ? "наблюдатель" : "вне"}</option>`).join("")}</select>
+                </label>
+                <label style="margin-top:8px;">Тема инициативы
+                  <select id="multilateralIssueSelect">${Object.entries(issues).map(([id, issue]) => `<option value="${id}">${esc(issue.name)}</option>`).join("")}</select>
+                </label>
+              </div>
+              <div class="actions" style="align-content:start;">
+                <button data-action="multilateral-action" data-mode="membership">Подать заявку</button>
+                <button data-action="multilateral-action" data-mode="contribute">Целевой взнос</button>
+                <button data-action="multilateral-action" data-mode="summit">Созвать саммит</button>
+                <button class="primary" data-action="multilateral-action" data-mode="propose">Внести резолюцию</button>
+              </div>
+            </div>
+            <details class="action-fold" style="margin-top:12px;" ${active.length ? "open" : ""}>
+              <summary><span class="action-fold-arrow" aria-hidden="true">›</span><span class="action-summary-main"><strong>Проекты резолюций</strong><small>прогноз поддержки не гарантирует итог: позиции меняются до дня голосования</small></span><span class="pill">${active.length}</span></summary>
+              <div class="action-fold-body">
+                <div class="bill-grid">
+                  ${active.length ? active.map(item => {
+                    const issue = issues[item.type] || issues.security;
+                    return `
+                      <article class="bill-card ${item.supportForecast >= 55 ? "good" : item.supportForecast < 38 ? "bad" : "warn"}">
+                        <header><span><strong>${esc(item.title)}</strong><small>${esc(item.organization)} · инициатор ${esc(item.sponsorName)}</small></span><span class="pill">${item.daysLeft} дн.</span></header>
+                        <p class="subtle" style="margin:8px 0 0;">${esc(item.text)}</p>
+                        <div class="bill-kpis">
+                          <div><span>Прогноз «за»</span><strong>${pct(item.supportForecast, 0)}</strong></div>
+                          <div><span>Правовая база</span><strong>${pct(item.legality, 0)}</strong></div>
+                          <div><span>Коалиционная работа</span><strong>${pct(item.lobbying, 0)}</strong></div>
+                          <div><span>Наша позиция</span><strong>${item.playerVote === "yes" ? "за" : item.playerVote === "no" ? "против" : item.playerVote === "abstain" ? "воздержаться" : "не определена"}</strong></div>
+                        </div>
+                        <p class="subtle" style="margin:8px 0 0;">${esc(item.lastUpdate)} · тема: ${esc(issue.name)}</p>
+                        <div class="actions">
+                          <button data-action="multilateral-resolution" data-resolution="${item.id}" data-mode="yes">За</button>
+                          <button data-action="multilateral-resolution" data-resolution="${item.id}" data-mode="abstain">Воздержаться</button>
+                          <button class="danger" data-action="multilateral-resolution" data-resolution="${item.id}" data-mode="no">Против</button>
+                          <button data-action="multilateral-resolution" data-resolution="${item.id}" data-mode="lobby">Собрать коалицию</button>
+                        </div>
+                      </article>
+                    `;
+                  }).join("") : `<p class="subtle">Активных голосований сейчас нет. Другие государства продолжат самостоятельно вносить инициативы.</p>`}
+                </div>
+              </div>
+            </details>
+            ${completed.length ? `<details class="action-fold" style="margin-top:10px;"><summary><span class="action-fold-arrow" aria-hidden="true">›</span><span class="action-summary-main"><strong>Архив голосований</strong><small>принятые и отклонённые международные решения</small></span><span class="pill">${completed.length}</span></summary><div class="action-fold-body"><div class="list">${completed.map(item => `<div class="row"><span><strong>${esc(item.title)}</strong><br><small class="subtle">${esc(item.organization)} · ${esc(item.outcome || item.lastUpdate)}</small></span><span class="pill ${item.stage === "adopted" ? "good" : "bad"}">${item.yes}/${item.no}/${item.abstain}</span></div>`).join("")}</div></div></details>` : ""}
+            <details class="action-fold" style="margin-top:10px;">
+              <summary><span class="action-fold-arrow" aria-hidden="true">›</span><span class="action-summary-main"><strong>Учредить новую организацию</strong><small>собственный формат требует участников, постоянного бюджета и политической цели</small></span></summary>
+              <div class="action-fold-body">
+                <div class="form-grid narrow">
+                  <label>Название<input id="newOrgName" placeholder="Название"></label>
+                  <label>Цель<input id="newOrgPurpose" placeholder="Цель"></label>
+                </div>
+                <button style="margin-top:8px;" data-action="create-org">Создать организацию</button>
+              </div>
+            </details>
+          </section>
+        `;
+      }
+
       function renderDiplomacy() {
         const list = state.diplomacy.countries;
         const selected = list.find(c => c.id === selectedCountryId) || list[0];
@@ -14560,17 +16009,7 @@
                   ${(state.diplomacy.worldLog || []).length ? state.diplomacy.worldLog.slice(0, 10).map(item => `<div class="row"><span><strong>${esc(item.actor)} → ${esc(item.target)}</strong><br><small class="subtle">${esc(item.date)} · ${esc(item.action)}</small></span><span class="pill">${esc(item.tone)}</span></div>`).join("") : `<div class="row"><span>МИД пока не зафиксировал крупных самостоятельных шагов</span><span class="pill">наблюдение</span></div>`}
                 </div>
               </section>
-              <section class="panel pad">
-                <h3 class="section-title">Международные организации</h3>
-                <div class="list" style="margin-top: 12px;">
-                  ${state.diplomacy.organizations.map(o => `<div class="row"><span><strong>${esc(o.name)}</strong><br><small class="subtle">${esc(o.purpose)} · ${o.members} участников</small></span><span class="pill">${pct(o.influence,0)}</span></div>`).join("")}
-                </div>
-                <div class="form-grid narrow" style="margin-top: 12px;">
-                  <label>Новая организация<input id="newOrgName" placeholder="Название"></label>
-                  <label>Цель<input id="newOrgPurpose" placeholder="Цель"></label>
-                </div>
-                ${actionCardGrid([renderActionCard({ title: "Создать организацию", category: "институт", desc: "Новый международный формат под вашу повестку.", signal: `организаций ${state.diplomacy.organizations.length}`, when: "Когда стране нужен собственный клуб партнеров, торговый блок или форум безопасности.", effect: "Добавляет организацию с начальным влиянием.", risk: "Без участников влияние останется ограниченным.", cta: "Создать организацию", tone: "institution" }, { "data-action": "create-org" }, { compact: true })], true, "margin-top: 8px;")}
-              </section>
+              ${renderMultilateralDiplomacyPanel()}
               <section class="panel pad">
                 <h3 class="section-title">Международное давление</h3>
                 <div class="list" style="margin-top: 12px;">
@@ -16397,6 +17836,61 @@
         return { title:item[0], category:item[1], desc:item[2], signal:item[3], when:item[4], effect:item[5], risk:item[6], cta:item[7], tone:item[8] };
       }
 
+      function renderScandalPanel() {
+        const system = state.information.scandals || migrateScandalSystem(state);
+        const active = system.cases.filter(item => item.status !== "закрыто");
+        const closed = system.cases.filter(item => item.status === "закрыто").slice(0, 8);
+        return `
+          <section class="panel pad">
+            <div class="panel-section-head">
+              <span><h3 class="section-title">Утечки, расследования и политические скандалы</h3><p class="subtle">Утечка не равна доказанной вине. Источник, проверка редакции, официальный ответ, независимое следствие и суд формируют отдельные этапы.</p></span>
+              <span class="pill ${system.unresolved >= 3 ? "bad" : system.unresolved ? "warn" : "good"}">открыто ${system.unresolved}</span>
+            </div>
+            <div class="kpi-strip" style="margin-top:12px;">
+              <div class="kpi"><span>Риск новых утечек</span><strong>${pct(system.leakRisk, 0)}</strong></div>
+              <div class="kpi"><span>Возможности расследований</span><strong>${pct(system.investigativeCapacity, 0)}</strong></div>
+              <div class="kpi"><span>Защита источников</span><strong>${pct(system.sourceProtection, 0)}</strong></div>
+              <div class="kpi"><span>Редакционная этика</span><strong>${pct(system.ethics, 0)}</strong></div>
+            </div>
+            <p class="subtle" style="margin:10px 0 0;">${esc(system.lastBriefing)}</p>
+            <div class="bill-grid" style="margin-top:12px;">
+              ${active.length ? active.map(item => {
+                const tone = item.evidence >= 62 || item.coverupRisk >= 60 ? "bad" : item.evidence < 30 ? "warn" : "institution";
+                const legal = item.legalCaseId ? state.politics.justice.cases.find(entry => entry.id === item.legalCaseId) : null;
+                return `
+                  <article class="bill-card ${tone}">
+                    <header><span><strong>${esc(item.title)}</strong><small>${esc(item.targetName)} · источник: ${esc(item.source)}</small></span><span class="pill">${esc(scandalStageLabel(item.stage))}</span></header>
+                    <p class="subtle" style="margin:8px 0 0;">${esc(item.claim)}</p>
+                    <div class="progress"><i style="--w:${item.evidence}%"></i></div>
+                    <div class="bill-kpis">
+                      <div><span>Доказательства</span><strong>${pct(item.evidence, 0)}</strong></div>
+                      <div><span>Достоверность</span><strong>${pct(item.credibility, 0)}</strong></div>
+                      <div><span>Резонанс</span><strong>${pct(item.publicInterest, 0)}</strong></div>
+                      <div><span>Риск сокрытия</span><strong>${pct(item.coverupRisk, 0)}</strong></div>
+                    </div>
+                    <details class="action-fold" style="margin-top:8px;">
+                      <summary><span class="action-fold-arrow" aria-hidden="true">›</span><span class="action-summary-main"><strong>Ход дела</strong><small>${esc(item.lastUpdate)}</small></span><span class="pill">${item.days} дн.</span></summary>
+                      <div class="action-fold-body">
+                        <p class="subtle" style="margin:0;">Ответ государства: ${esc(item.response)}.${legal ? ` Судебное дело: ${esc(legal.status)}, материалы ${pct(legal.evidence, 0)}.` : ""}</p>
+                        <div class="actions" style="margin-top:10px;">
+                          <button data-action="scandal-action" data-scandal="${item.id}" data-mode="independent">Независимое расследование</button>
+                          <button data-action="scandal-action" data-scandal="${item.id}" data-mode="parliament">Парламентские слушания</button>
+                          <button data-action="scandal-action" data-scandal="${item.id}" data-mode="disclose">Раскрыть документы</button>
+                          <button data-action="scandal-action" data-scandal="${item.id}" data-mode="protect">Защитить источники</button>
+                          <button class="danger" data-action="scandal-action" data-scandal="${item.id}" data-mode="deny">Оспорить обвинения</button>
+                          ${item.targetType === "minister" ? `<button data-action="scandal-action" data-scandal="${item.id}" data-mode="suspend">Временно отстранить</button>` : ""}
+                        </div>
+                      </div>
+                    </details>
+                  </article>
+                `;
+              }).join("") : `<p class="subtle">Крупных подтверждаемых утечек сейчас нет. Риск сохраняется и зависит от коррупции, закрытости данных, закупок и поведения должностных лиц.</p>`}
+            </div>
+            ${closed.length ? `<details class="action-fold" style="margin-top:12px;"><summary><span class="action-fold-arrow" aria-hidden="true">›</span><span class="action-summary-main"><strong>Архив расследований</strong><small>опровержения, судебные исходы и политические последствия</small></span><span class="pill">${closed.length}</span></summary><div class="action-fold-body"><div class="list">${closed.map(item => `<div class="row"><span><strong>${esc(item.title)}</strong><br><small class="subtle">${esc(item.resolvedDate || "")} · ${esc(item.lastUpdate)}</small></span><span class="pill ${item.outcome === "Нарушение подтверждено" ? "bad" : "good"}">${esc(item.outcome || "закрыто")}</span></div>`).join("")}</div></div></details>` : ""}
+          </section>
+        `;
+      }
+
       function renderNews() {
         const info = state.information;
         const narratives = info.narratives.slice().sort((a,b) => b.salience - a.salience);
@@ -16417,6 +17911,7 @@
           metric("Плюрализм СМИ",pct(info.pluralism,0),"доступ прессы " + pct(info.pressAccess,0),info.pluralism>=58?"good":"warn") +
           '</div><section class="panel pad"><div class="panel-section-head"><span><h3 class="section-title">Информационная повестка</h3><p class="subtle">Темы получают вес и тон из реальных показателей страны. Инфляция, кризисы, коррупция, война и региональный ущерб меняют общественное мнение без ручного создания новости.</p></span><span class="pill">главная тема: ' + esc(narratives[0]?.topic || "нет") + '</span></div><div class="signal-grid" style="margin-top:12px;">' + narrativeHtml + '</div></section>' +
           '<section class="panel pad"><h3 class="section-title">Информационная политика</h3><p class="subtle" style="margin:8px 0 0;">Решения не создают мгновенную популярность: они меняют достоверность, доступ к данным и устойчивость общества к манипуляциям.</p>' + actionCardGrid(["briefing","transparency","public_media","literacy","factcheck","access"].map(mode => renderActionCard(informationPolicyMeta(mode),{"data-action":"information-action","data-mode":mode},{compact:true})),true) + '</section>' +
+          renderScandalPanel() +
           '<section class="panel pad"><div class="panel-section-head"><span><h3 class="section-title">Медиасистема</h3><p class="subtle">Редакции имеют собственный охват, доверие, независимость, качество и финансовую устойчивость.</p></span><span class="pill">' + info.outlets.length + ' редакций</span></div><div class="bill-grid" style="margin-top:12px;">' + outletHtml + '</div></section>' +
           '<div class="grid split"><section class="panel pad"><h3 class="section-title">Национальная лента</h3><div class="news-feed" style="margin-top:12px;">' + feedHtml + '</div></section><aside class="panel pad"><h3 class="section-title">Измерения и решения</h3><div class="list" style="margin-top:12px;">' + historyHtml + '</div></aside></div></section>';
       }
@@ -16586,6 +18081,27 @@
                 "Победитель получает контракт, который связан с программой, поставщиком, платежами, прогрессом, качеством, задержкой, перерасходом и обеспечением исполнения.",
                 "Срочная закупка ускоряет процедуру ценой конкуренции и целостности. Лоты расширяют доступ малого бизнеса, независимая проверка снижает риск сговора.",
                 "Контракт можно усилить гарантией, проверить, обоснованно изменить или расторгнуть. Расторжение возвращает программу на конкурс и не создаёт бесплатного результата."
+              ])}
+              ${manualCard("Утечки, расследования и скандалы", [
+                "Утечка сначала считается неподтверждённым сигналом. Редакция проверяет источник, метаданные и независимые подтверждения, поэтому публикация может завершиться опровержением.",
+                "Риск утечки растёт из-за коррупции, конфликта интересов, непрозрачных закупок, проблем регионов и раскрытия тайных операций.",
+                "Президент может раскрыть документы, защитить источник, назначить независимое расследование, провести парламентские слушания или оспорить обвинение.",
+                "Отрицание слабого материала может защитить репутацию. Отрицание сильных доказательств создаёт риск сокрытия и усиливает вторичный скандал.",
+                "Юридический исход определяет независимый суд. Осуждение влияет на министра, губернатора или контракт; оправдание закрывает дело, но не всегда полностью восстанавливает политическое доверие."
+              ])}
+              ${manualCard("Муниципалитеты и крупные города", [
+                "Крупные города являются частью регионов, но имеют собственные мэрии, доходы, расходы, долг, резервы и муниципальные выборы.",
+                "Качество повседневной жизни складывается из транспорта, коммунальных сетей, жилья, безопасности, занятости, заторов и загрязнения.",
+                "Дефицит не исчезает автоматически: кассовый разрыв превращается в городской долг, а высокая долговая нагрузка постепенно ухудшает услуги и доверие.",
+                "Транспорт, сети, жильё, климатическая устойчивость и цифровое управление строятся как многомесячные проекты с софинансированием, риском и фактическим прогрессом.",
+                "Состояние городов постепенно меняет услуги, инфраструктуру и лояльность всего региона. Слабый мэр может проиграть конкурентные муниципальные выборы."
+              ])}
+              ${manualCard("Многосторонняя дипломатия", [
+                "У каждой международной организации есть отдельный статус: вне организации, наблюдатель, полноправный член или приостановленное право голоса.",
+                "Членство требует ежегодных взносов. Задолженность снижает доверие и в итоге лишает голоса, поэтому формальная подпись без исполнения не даёт постоянного влияния.",
+                "Другие государства самостоятельно вносят проекты по безопасности, торговле, климату, помощи, санкциям, здравоохранению, миграции и цифровым правилам.",
+                "До голосования можно определить позицию и собирать коалицию. Прогноз поддержки меняется, но не гарантирует результат итогового голосования.",
+                "Принятые резолюции меняют реальные показатели страны и мира. Собственная успешная инициатива увеличивает дипломатический капитал, а провал ослабляет способность задавать правила."
               ])}
               ${manualCard("Исполнение решений", [
                 "После принятия закона или указа создается отдельная государственная программа с ответственным министром, сметой, сроком, риском и целевыми регионами.",
@@ -17675,6 +19191,8 @@
         else if (action === "emergency-action") emergencyAction(actionEl.dataset.emergency, actionEl.dataset.mode);
         else if (action === "region-recovery") regionRecoveryAction(actionEl.dataset.region, actionEl.dataset.mode);
         else if (action === "region-admin") regionAdministrationAction(actionEl.dataset.region, actionEl.dataset.mode);
+        else if (action === "municipal-action") municipalAction(actionEl.dataset.city, actionEl.dataset.mode);
+        else if (action === "municipal-project") municipalProjectAction(actionEl.dataset.city, actionEl.dataset.project);
         else if (action === "federal-action") federalAction(actionEl.dataset.mode, actionEl.dataset.region);
         else if (action === "region-program") startRegionalProgram(actionEl.dataset.region);
         else if (action === "policy") policyAction(actionEl.dataset.policy);
@@ -17720,6 +19238,8 @@
         else if (action === "foreign-offer-confirm") foreignOfferAction(actionEl.dataset.offer, actionEl.dataset.choice);
         else if (action === "foreign-pulse") spawnForeignInitiative(state, true);
         else if (action === "law-action") internationalLawAction(actionEl.dataset.mode, actionEl.dataset.country);
+        else if (action === "multilateral-action") multilateralAction(actionEl.dataset.mode);
+        else if (action === "multilateral-resolution") multilateralResolutionAction(actionEl.dataset.resolution, actionEl.dataset.mode);
         else if (action === "soft-power-action") softPowerAction(actionEl.dataset.mode, actionEl.dataset.country);
         else if (action === "intel-action") intelligenceAction(actionEl.dataset.mode, actionEl.dataset.country);
         else if (action === "create-org") createOrganization();
@@ -17740,6 +19260,7 @@
         else if (action === "housing-action") housingAction(actionEl.dataset.mode);
         else if (action === "attention-action") presidentialAttentionAction(actionEl.dataset.mode,actionEl.dataset.id);
         else if (action === "information-action") informationAction(actionEl.dataset.mode);
+        else if (action === "scandal-action") scandalAction(actionEl.dataset.scandal, actionEl.dataset.mode);
         else if (action === "generate-news") generateNews(actionEl.dataset.category);
         else if (action === "add-law") addLaw();
         else if (action === "add-party") addParty();
@@ -18278,6 +19799,7 @@
           simulatePromiseSystem(game);
           simulateEliteSystem(game);
           simulateSuccessionSystem(game);
+          simulateScandalSystem(game);
           simulateJusticeSystem(game);
           simulateCabinet(game);
           simulateProcurementSystem(game);
@@ -18286,6 +19808,7 @@
           simulatePopulation(game);
           simulateTech(game);
           simulateRegions(game);
+          simulateMunicipalSystem(game);
           simulateFederationSystem(game);
           simulateDiplomacy(game);
           simulateSoftPowerSystem(game);
@@ -20013,6 +21536,7 @@
         const worldUpdated=simulateForeignStateSystem(game);
         simulateBilateralDiplomacy(game);
         simulateStrategicDiplomacy(game);
+        simulateMultilateralDiplomacy(game);
         if(worldUpdated&&game.military.wars.length<4){
           const candidates=game.diplomacy.countries.filter(country=>!country.war&&country.relations<9&&country.military>68&&country.strategy.threat>58).sort((a,b)=>(num(b.aggression)+b.strategy.threat)-(num(a.aggression)+a.strategy.threat));
           const aggressor=candidates[0],warChance=aggressor?clamp((num(aggressor.aggression,35)+aggressor.strategy.threat-105)*.0015,.002,.045):0;
@@ -21683,8 +23207,27 @@
         const name = document.getElementById("newOrgName")?.value.trim();
         const purpose = document.getElementById("newOrgPurpose")?.value.trim();
         if (!name) return notify("Введите название организации.");
+        if (state.diplomacy.organizations.some(item => item.name.toLowerCase() === name.toLowerCase())) return notify("Организация с таким названием уже существует.", "warn", "МИД");
+        const cost = 360;
+        if (state.economy.budget < cost) return showBlockedDecision("Учредительная конференция не профинансирована", "Нужны секретариат, правовой устав и переговоры с государствами-учредителями.", [["Нужно", money(cost), "bad"]]);
+        state.economy.budget -= cost;
         state.diplomacy.organizations.push({ id: uid("org"), name, purpose: purpose || "координация политики", members: 1, influence: 24, custom: true });
-        pushNews(state, "Мир", "Создана международная организация", `${state.country.name} объявляет о запуске организации "${name}".`);
+        const system = state.diplomacy.multilateral || migrateMultilateralSystem(state);
+        system.memberships.push(normalizeMultilateralMembership({
+          organization: name,
+          purpose: purpose || "координация политики",
+          status: "member",
+          influence: 72,
+          trust: 74,
+          annualDues: 110,
+          votingWeight: 1,
+          lastBriefing: "Государство является учредителем и формирует первый состав секретариата."
+        }, null, system.memberships.length));
+        system.diplomaticCapital = clamp(system.diplomaticCapital + 2, 0, 100);
+        system.lastBriefing = `${name}: учреждена новая международная площадка; теперь требуется привлекать участников и формировать практическую повестку.`;
+        updateMultilateralTotals(state);
+        pushNews(state, "Мир", "Создана международная организация", `${state.country.name} объявляет о запуске организации «${name}».`);
+        showDecision("Учредительный договор подписан", system.lastBriefing, [["Учредители", "1 государство", "warn"], ["Наш статус", "учредитель", "good"], ["Начальное влияние", pct(72, 0), "good"], ["Бюджет", `-${money(cost)}`, "bad"]], "institution");
       }
 
       function militaryAction(type) {
@@ -22432,12 +23975,14 @@
         if (!e.financial?.centralBank || !Array.isArray(e.financial?.banks)) migrateFinancialSystem(state);
         if (!pop.demography?.cohorts || state.regions.some(region=>!region.demography)) migrateDemographySystem(state);
         if (!state.housing || state.housing.modelVersion!==HOUSING_MODEL_VERSION || state.regions.some(region=>!region.housing)) migrateHousingSystem(state);
+        if (!state.municipalities || state.municipalities.modelVersion!==MUNICIPAL_MODEL_VERSION) migrateMunicipalSystem(state);
         if (!pop.households || pop.households.modelVersion!==HOUSEHOLD_MODEL_VERSION) migrateHouseholdSystem(state);
         if (!p.attention || p.attention.modelVersion!==ATTENTION_MODEL_VERSION) migratePresidentialAttention(state);
         if (!state.infrastructure?.edges || state.regions.some(region=>!state.infrastructure.nodes?.some(node=>node.regionId===region.id))) migrateInfrastructureSystem(state);
         if (!e.privateSector?.companies) migratePrivateSector(state);
         if (!e.laborMarket || e.laborMarket.modelVersion!==LABOR_MARKET_MODEL_VERSION) migrateLaborMarketSystem(state);
         if (!state.information?.outlets || !state.information?.narratives) migrateInformationSystem(state);
+        if (!state.information?.scandals || state.information.scandals.modelVersion!==SCANDAL_MODEL_VERSION) migrateScandalSystem(state);
         if (!state.intelligence?.dossiers || !state.intelligence?.operations) migrateIntelligenceSystem(state);
         if (!state.climate?.resources || state.regions.some(region => !region.climate)) migrateClimateSystem(state);
         if (!state.geography?.chokepoints || state.geography.modelVersion!==GEOGRAPHY_MODEL_VERSION) migrateWorldGeography(state);
@@ -22458,6 +24003,7 @@
         if (!p.elections?.candidates) migrateElectionSystem(state);
         if (!p.justice?.cases) migrateJusticeSystem(state);
         if (!state.diplomacy?.law) migrateInternationalLaw(state);
+        if (!state.diplomacy?.multilateral || state.diplomacy.multilateral.modelVersion!==MULTILATERAL_MODEL_VERSION) migrateMultilateralSystem(state);
         e.inflation = clamp(e.inflation, -2, 80);
         e.unemployment = clamp(e.unemployment, 1, 45);
         e.smallBusiness = clamp(e.smallBusiness, 0, 100);
@@ -22475,7 +24021,7 @@
         e.industries = e.industries.map((sector, index) => normalizeIndustry(sector, industryDefaultMap.get(sector.id) || industryDefaults[index % industryDefaults.length]));
         const privateSector=e.privateSector;["competition","businessConfidence","consumerConfidence","ventureCapital","foreignInvestment","laborDemand","monopolyRisk","regulation","propertyRights","procurementTransparency"].forEach(key=>privateSector[key]=clamp(num(privateSector[key]),0,100));privateSector.insolvencyRate=clamp(num(privateSector.insolvencyRate),0,100);privateSector.companies=privateSector.companies.map((company,index)=>normalizePrivateCompany(company,null,index)).slice(0,40);privateSector.history=(privateSector.history||[]).slice(0,60);updatePrivateSectorTotals(state);syncLegacyCompanies(state);
         const labor=e.laborMarket;["participationRate","employmentRate","vacancyRate","underemployment","longTermUnemployment","mismatch","mobility","bargainingCoverage","informality"].forEach(key=>labor[key]=clamp(num(labor[key]),0,100));["laborForce","employed","unemployed","vacancies"].forEach(key=>labor[key]=Math.max(0,num(labor[key])));labor.wageGrowth=clamp(num(labor.wageGrowth),-12,24);labor.realWageGrowth=clamp(num(labor.realWageGrowth),-20,20);labor.sectors=labor.sectors.map((item,index)=>{const fallback=laborSectorDefaults(state)[index]||laborSectorDefaults(state)[0];return Object.assign(fallback,item,{name:fallback.name,employment:Math.max(0,num(item.employment)),vacancies:Math.max(0,num(item.vacancies)),avgWage:Math.max(100,num(item.avgWage)),wageGrowth:clamp(num(item.wageGrowth),-12,24),shortage:clamp(num(item.shortage),0,100)});}).slice(0,16);labor.history=(labor.history||[]).slice(0,24);
-        const information=state.information;["publicMood","governmentCredibility","pluralism","misinformation","mediaLiteracy","transparency","pressAccess","crisisCommunication","echoChambers","factChecking"].forEach(key=>information[key]=clamp(num(information[key]),0,100));information.briefingCooldown=Math.max(0,Math.round(num(information.briefingCooldown)));information.outlets=information.outlets.map((item,index)=>normalizeInformationOutlet(item,null,index)).slice(0,18);information.narratives=information.narratives.map((item,index)=>normalizeInformationNarrative(item,null,index)).slice(0,16);information.history=(information.history||[]).slice(0,70);syncLegacyInformation(state);
+        const information=state.information;["publicMood","governmentCredibility","pluralism","misinformation","mediaLiteracy","transparency","pressAccess","crisisCommunication","echoChambers","factChecking"].forEach(key=>information[key]=clamp(num(information[key]),0,100));information.briefingCooldown=Math.max(0,Math.round(num(information.briefingCooldown)));information.outlets=information.outlets.map((item,index)=>normalizeInformationOutlet(item,null,index)).slice(0,18);information.narratives=information.narratives.map((item,index)=>normalizeInformationNarrative(item,null,index)).slice(0,16);information.history=(information.history||[]).slice(0,70);const scandals=information.scandals;["leakRisk","investigativeCapacity","sourceProtection","ethics"].forEach(key=>scandals[key]=clamp(num(scandals[key]),0,100));scandals.nextLeakDays=Math.max(1,Math.round(num(scandals.nextLeakDays,90)));scandals.cases=(scandals.cases||[]).map(normalizeScandalCase).slice(0,24);scandals.history=(scandals.history||[]).slice(0,70);scandals.unresolved=scandals.cases.filter(item=>item.status!=="закрыто").length;syncLegacyInformation(state);
         const intelligence=state.intelligence;["humint","sigint","cyber","analysis","counterIntel","covertAction","oversight","secrecy","foreignNetworks","domesticRisk","cyberThreat","threatLevel"].forEach(key=>intelligence[key]=clamp(num(intelligence[key]),0,100));intelligence.budget=Math.max(0,num(intelligence.budget));intelligence.operations=(intelligence.operations||[]).map(normalizeIntelligenceOperation).slice(0,24);intelligence.dossiers=(intelligence.dossiers||[]).map(item=>{const country=state.diplomacy.countries.find(country=>country.id===item.countryId);return country?normalizeIntelligenceDossier(item,country,state):null;}).filter(Boolean).slice(0,36);intelligence.reports=(intelligence.reports||[]).slice(0,70);state.governance.intelligence.counterIntel=intelligence.counterIntel;state.governance.intelligence.foreignNetworks=intelligence.foreignNetworks;state.governance.intelligence.domesticRisk=intelligence.domesticRisk;state.governance.intelligence.cyberThreat=intelligence.cyberThreat;
         const climate=state.climate;["emissions","resilience","preparedness","adaptation","mitigation","waterStress","biodiversity","airQuality","responseCapacity"].forEach(key=>climate[key]=clamp(num(climate[key]),0,100));climate.temperatureAnomaly=clamp(num(climate.temperatureAnomaly,1.18),.2,4.8);climate.emissionsTrend=clamp(num(climate.emissionsTrend),-5,5);climate.emergencyReserve=Math.max(0,num(climate.emergencyReserve));["fossil","nuclear","renewable"].forEach(key=>climate.energyMix[key]=clamp(num(climate.energyMix[key]),0,100));const energyTotal=climate.energyMix.fossil+climate.energyMix.nuclear+climate.energyMix.renewable||100;["fossil","nuclear","renewable"].forEach(key=>climate.energyMix[key]=climate.energyMix[key]/energyTotal*100);climate.resources=(climate.resources||[]).map((item,index)=>normalizeClimateResource(item,null,index)).slice(0,18);climate.emergencies=(climate.emergencies||[]).map(normalizeClimateEmergency).slice(0,18);climate.history=(climate.history||[]).slice(0,70);
         const geography=state.geography;geography.home=playerGeographyProfile(state);geography.chokepoints=geography.chokepoints.map((item,index)=>normalizeGeographicChokepoint(item,defaultGeographicChokepoints()[index]||defaultGeographicChokepoints()[0])).slice(0,12);["networkReliability","averageDeliveryDays","transitRisk"].forEach(key=>geography[key]=clamp(num(geography[key]),0,key==="averageDeliveryDays"?180:100));state.diplomacy.countries.forEach(ensureCountryGeography);
@@ -22549,6 +24095,7 @@
         m.wars = (m.wars || []).map(war => normalizeWar(war, state));
         state.regions = (state.regions || []).map(ensureRegionDefaults);
         state.regions.forEach((region,index)=>{region.demography=Object.assign(defaultRegionDemography(region,index),region.demography||{});const rd=region.demography;["urbanShare","housingPressure","attractiveness"].forEach(key=>rd[key]=clamp(num(rd[key]),0,key==="housingPressure"?120:100));rd.housingCapacity=Math.max(1000,num(rd.housingCapacity,region.population*1.04));rd.workers=Math.max(0,num(rd.workers));region.climate=Object.assign(defaultRegionClimate(region,index),region.climate||{});const rc=region.climate;["floodRisk","droughtRisk","fireRisk","heatRisk","stormRisk","vulnerability","preparedness"].forEach(key=>rc[key]=clamp(num(rc[key]),0,100));rc.displaced=Math.max(0,Math.round(num(rc.displaced)));region.identity=normalizeRegionIdentity(region.identity,defaultRegionIdentity(state,region,index));});
+        const municipalities=state.municipalities;const existingCities=new Map((municipalities.cities||[]).filter(city=>state.regions.some(region=>region.id===city.regionId)).map(city=>[city.id,city]));const defaultCities=createMunicipalCities(state);municipalities.cities=defaultCities.map((fallback,index)=>normalizeMunicipalCity(existingCities.get(fallback.id),fallback,index));for(const city of existingCities.values())if(!municipalities.cities.some(item=>item.id===city.id))municipalities.cities.push(normalizeMunicipalCity(city,null,municipalities.cities.length));municipalities.cities=municipalities.cities.slice(0,36);municipalities.history=(municipalities.history||[]).slice(0,70);updateMunicipalTotals(state);
         const federation=state.federation;["cohesion","centerLegitimacy","autonomyBalance","culturalPluralism","fiscalSolidarity","separatismRisk"].forEach(key=>federation[key]=clamp(num(federation[key]),0,100));federation.councilCooldown=Math.max(0,Math.round(num(federation.councilCooldown)));federation.disputes=(federation.disputes||[]).slice(0,18);federation.log=(federation.log||[]).slice(0,32);
         const succession=state.succession;["readiness","continuity","transitionRisk","institutionalMemory","caretakerNeutrality","archiveQuality"].forEach(key=>succession[key]=clamp(num(succession[key]),0,100));succession.termsServed=Math.max(1,Math.round(num(succession.termsServed,1)));succession.termNumber=Math.max(1,Math.round(num(succession.termNumber,1)));succession.currentEra=normalizePoliticalEra(succession.currentEra);succession.eras=(succession.eras||[]).map(item=>normalizePoliticalEra(item)).slice(0,24);succession.log=(succession.log||[]).slice(0,40);
         const infrastructure=state.infrastructure;["reliability","maintenanceBacklog","freightIndex","digitalCoverage","outageRisk","investmentEfficiency"].forEach(key=>infrastructure[key]=clamp(num(infrastructure[key]),0,key==="freightIndex"?110:100));infrastructure.powerReserve=clamp(num(infrastructure.powerReserve),-45,55);infrastructure.waterReserve=clamp(num(infrastructure.waterReserve),-45,55);infrastructure.maintenanceBudget=Math.max(0,num(infrastructure.maintenanceBudget));infrastructure.edges=infrastructure.edges.map(edge=>normalizeInfrastructureEdge(edge)).slice(0,160);infrastructure.history=(infrastructure.history||[]).slice(0,60);
@@ -22564,6 +24111,7 @@
         const law = state.diplomacy.law;
         ["reputation","legalStanding","treatyReliability","humanitarianStanding","sanctionsExposure"].forEach(key => law[key] = clamp(num(law[key]), 0, 100));
         law.maintenanceDays=Math.max(0,Math.round(num(law.maintenanceDays)));
+        const multilateral=state.diplomacy.multilateral;multilateral.memberships=(multilateral.memberships||[]).map((item,index)=>normalizeMultilateralMembership(item,null,index)).slice(0,24);multilateral.resolutions=(multilateral.resolutions||[]).map(normalizeMultilateralResolution).slice(0,28);multilateral.summits=(multilateral.summits||[]).slice(0,30);multilateral.coalitions=(multilateral.coalitions||[]).slice(0,30);multilateral.history=(multilateral.history||[]).slice(0,70);multilateral.diplomaticCapital=clamp(num(multilateral.diplomaticCapital),0,100);multilateral.nextInitiativeDays=Math.max(1,Math.round(num(multilateral.nextInitiativeDays,120)));updateMultilateralTotals(state);
       }
 
       function setEditorPath(path, value, asNumber) {
