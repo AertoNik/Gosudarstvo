@@ -3786,13 +3786,16 @@
 
       const STORAGE_KEY = "aaa_president_sim_state_v4";
       const SLOTS_KEY = "aaa_president_sim_slots_v4";
-      const SAVE_VERSION = 26;
+      const SAVE_VERSION = 27;
       const ECONOMY_MODEL_VERSION = 5;
       const FOREIGN_STATE_MODEL_VERSION = 1;
       const BILATERAL_MODEL_VERSION = 2;
       const GEOGRAPHY_MODEL_VERSION = 2;
       const NARRATIVE_MODEL_VERSION = 1;
       const CAREER_MODEL_VERSION = 1;
+      const HOUSEHOLD_MODEL_VERSION = 1;
+      const HOUSING_MODEL_VERSION = 1;
+      const ATTENTION_MODEL_VERSION = 1;
       const SAVE_DB_NAME = "aaa_president_sim_storage";
       const SAVE_DB_STORE = "saves";
       const DAY_MS = 1800;
@@ -3805,6 +3808,7 @@
         ["infrastructure", "Инфраструктура", "⌘"],
         ["economy", "Экономика", "₿"],
         ["finance", "Финансовая система", "₣"],
+        ["housing", "Жильё", "⌂"],
         ["markets", "Частный сектор", "▥"],
         ["politics", "Политика", "§"],
         ["elections", "Выборы", "◎"],
@@ -4423,6 +4427,10 @@
         if (copy.chronicle?.yearlyReports) copy.chronicle.yearlyReports = copy.chronicle.yearlyReports.slice(0, 12);
         if (copy.economy?.financial?.history) copy.economy.financial.history = copy.economy.financial.history.slice(0, level === "normal" ? 30 : 12);
         if (copy.economy?.privateSector?.history) copy.economy.privateSector.history = copy.economy.privateSector.history.slice(0, level === "normal" ? 36 : 14);
+        if (copy.population?.households?.history) copy.population.households.history = copy.population.households.history.slice(0, level === "normal" ? 12 : 6);
+        if (copy.population?.households?.segments) copy.population.households.segments.forEach(item=>["name","size","earners","incomeFactor","taxFactor","benefitFactor","rentShare","mortgageShare","foodFactor","unemploymentExposure"].forEach(key=>delete item[key]));
+        if (copy.housing?.history) copy.housing.history = copy.housing.history.slice(0, level === "normal" ? 12 : 6);
+        if (copy.politics?.attention?.history) copy.politics.attention.history = copy.politics.attention.history.slice(0, level === "normal" ? 14 : 7);
         if (copy.economy?.cycle?.history) copy.economy.cycle.history = copy.economy.cycle.history.slice(0, level === "normal" ? 24 : 10);
         if (copy.economy?.cycle?.quarters) copy.economy.cycle.quarters = copy.economy.cycle.quarters.slice(0, level === "normal" ? 32 : 12);
         if (copy.diplomacy?.countries) copy.diplomacy.countries.forEach(country => {
@@ -4710,6 +4718,9 @@
         migrateFederationSystem(loaded);
         migrateWorldGeography(loaded);
         migrateWorldMarketSystem(loaded);
+        migrateHousingSystem(loaded);
+        migrateHouseholdSystem(loaded);
+        migratePresidentialAttention(loaded);
         migrateEliteSystem(loaded);
         migrateStatisticsSystem(loaded);
         migrateShadowEconomySystem(loaded);
@@ -5536,7 +5547,7 @@
         const capacity = num(minister?.performance, 50) * .27 + c.execution * .22 + c.capacity * .14
           + (100 - c.bureaucracy) * .12 + integrity * .1 + regional * program.regionalWeight * .15
           + game.governance.delivery.interagencyCoordination * .12 - program.complexity * .1 - num(minister?.workload, 45) * .08;
-        return clamp(capacity + program.priority * .09 + difficultySettings(game).implementation, 18, 112);
+        return clamp(capacity + program.priority * .09 + difficultySettings(game).implementation + attentionExecutionModifier(game), 18, 112);
       }
 
       function finishStateProgram(game, program) {
@@ -6267,6 +6278,436 @@
         const working=d.cohorts.filter(c=>["youth","prime","mature"].includes(c.id)).reduce((sum,c)=>sum+c.population,0);d.dependencyRatio=clamp(dependents/Math.max(1,working)*100,0,150);
         d.urbanization=clamp(game.regions.reduce((sum,r)=>sum+r.population*num(r.demography?.urbanShare,50),0)/Math.max(1,game.regions.reduce((sum,r)=>sum+r.population,0)),0,100);
         p.migration=(d.inboundRate-d.outboundRate)/10;
+      }
+
+      function householdSegmentCatalog() {
+        return [
+          {id:"low",name:"Низкодоходные семьи",share:18,size:2.55,earners:.78,incomeFactor:.58,taxFactor:.3,benefitFactor:1.45,rentShare:.57,mortgageShare:.16,foodFactor:1.08,unemploymentExposure:1.35},
+          {id:"workers",name:"Работающие семьи",share:30,size:2.78,earners:1.43,incomeFactor:.92,taxFactor:.72,benefitFactor:.45,rentShare:.38,mortgageShare:.33,foodFactor:1,unemploymentExposure:1.05},
+          {id:"middle",name:"Городской средний класс",share:22,size:2.62,earners:1.56,incomeFactor:1.42,taxFactor:.96,benefitFactor:.16,rentShare:.25,mortgageShare:.44,foodFactor:.93,unemploymentExposure:.72},
+          {id:"young",name:"Молодые семьи",share:10,size:3.08,earners:1.34,incomeFactor:1.03,taxFactor:.7,benefitFactor:.82,rentShare:.52,mortgageShare:.38,foodFactor:1.03,unemploymentExposure:1.12},
+          {id:"pensioners",name:"Пенсионные домохозяйства",share:14,size:1.72,earners:.12,incomeFactor:.34,taxFactor:.08,benefitFactor:1.62,rentShare:.2,mortgageShare:.08,foodFactor:1.12,unemploymentExposure:.1},
+          {id:"wealthy",name:"Высокодоходные семьи",share:6,size:2.7,earners:1.72,incomeFactor:3.25,taxFactor:1.34,benefitFactor:0,rentShare:.12,mortgageShare:.34,foodFactor:.82,unemploymentExposure:.28}
+        ];
+      }
+
+      function defaultHouseholdSystem(game) {
+        return {
+          modelVersion:HOUSEHOLD_MODEL_VERSION,
+          totalHouseholds:0,
+          averageSize:2.55,
+          medianGrossIncome:num(game.economy?.avgSalary,1290)*1.18,
+          medianDisposableIncome:num(game.economy?.avgSalary,1290)*.18,
+          essentialBurden:58,
+          savingsRate:6,
+          householdDebt:0,
+          debtToIncome:42,
+          delinquencyRate:4.2,
+          consumptionIndex:100,
+          inequality:35,
+          segments:householdSegmentCatalog().map(item=>Object.assign({},item,{households:0,grossIncome:0,taxes:0,benefits:0,housing:0,food:0,utilities:0,transport:0,other:0,disposable:0,essentialBurden:0,savings:num(game.economy?.avgSalary,1290)*item.incomeFactor*2.2,debt:num(game.economy?.avgSalary,1290)*item.mortgageShare*9,delinquency:2,stress:35})),
+          policies:{taxCreditDays:0,utilitySupportDays:0,debtRestructuringDays:0,childcareDays:0,cooldown:0},
+          history:[],
+          lastBriefing:"Семейные бюджеты сбалансированы, но цены и стоимость жилья требуют постоянного наблюдения."
+        };
+      }
+
+      function normalizeHouseholdSegment(item,fallback) {
+        const segment=Object.assign({},fallback,item&&typeof item==="object"?item:{});
+        segment.id=fallback.id;segment.name=fallback.name;
+        ["share","size","earners","incomeFactor","taxFactor","benefitFactor","rentShare","mortgageShare","foodFactor","unemploymentExposure"].forEach(key=>segment[key]=Math.max(0,num(segment[key],fallback[key])));
+        ["households","grossIncome","taxes","benefits","housing","food","utilities","transport","other","savings","debt"].forEach(key=>segment[key]=Math.max(0,num(segment[key])));
+        segment.disposable=num(segment.disposable);segment.essentialBurden=clamp(num(segment.essentialBurden),0,240);segment.delinquency=clamp(num(segment.delinquency),0,100);segment.stress=clamp(num(segment.stress,35),0,100);
+        return segment;
+      }
+
+      function defaultRegionHousing(game,region,index=0) {
+        const households=Math.max(1000,num(region.population)/clamp(2.46+(index%3)*.08,2.2,2.9));
+        const stock=Math.round(households*(1.055+(region.buildings?.cities||0)*.008));
+        return {
+          stock,
+          vacancyRate:clamp(6.4+(index%4)*.8-(region.demography?.housingPressure||35)*.012,2.5,14),
+          priceIndex:clamp(86+region.wealth*.24+(region.demography?.urbanShare||50)*.08,70,135),
+          rentIndex:clamp(88+region.wealth*.16+(region.demography?.urbanShare||50)*.1,72,130),
+          affordability:55,
+          demandPressure:48,
+          construction:Math.max(120,Math.round(households*.012)),
+          permitsDays:150,
+          socialShare:6+(index%3),
+          damagedStock:0,
+          annualPriceChange:0,
+          annualRentChange:0
+        };
+      }
+
+      function defaultHousingSystem(game) {
+        const stock=(game.regions||[]).reduce((sum,region,index)=>sum+defaultRegionHousing(game,region,index).stock,0);
+        const households=Math.max(1,num(game.population?.total,14500000)/2.55);
+        return {
+          modelVersion:HOUSING_MODEL_VERSION,
+          priceIndex:100,
+          rentIndex:100,
+          constructionCostIndex:100,
+          mortgageRate:num(game.economy?.keyRate,8.5)+2.8,
+          affordability:52,
+          vacancyRate:clamp((stock/households-1)*100,2,18),
+          stock,
+          startsAnnual:Math.round(households*.014),
+          completionsAnnual:Math.round(households*.012),
+          demandPressure:50,
+          bubbleRisk:24,
+          mortgageArrears:4,
+          socialHousingShare:7,
+          investorShare:13,
+          averageHomePrice:num(game.economy?.avgSalary,1290)*12*4.8,
+          averageRent:num(game.economy?.avgSalary,1290)*.31,
+          policies:{zoningDays:0,vacancyTaxDays:0,rentAllowanceDays:0,guaranteeDays:0,preparedSitesDays:0,cooldown:0},
+          pipeline:[],
+          history:[],
+          lastBriefing:"Предложение жилья близко к спросу; доступность зависит от ставок, доходов и региональной миграции."
+        };
+      }
+
+      function syncHousingAggregates(game) {
+        const housing=game.housing,totalStock=game.regions.reduce((sum,region)=>sum+Math.max(0,num(region.housing?.stock)-num(region.housing?.damagedStock)),0),rawStock=game.regions.reduce((sum,region)=>sum+Math.max(0,num(region.housing?.stock)),0);
+        const regionalWeight=Math.max(1,rawStock);
+        housing.stock=Math.round(rawStock);
+        for(const key of ["priceIndex","rentIndex","vacancyRate","affordability","demandPressure","socialShare"]){
+          const targetKey=key==="socialShare"?"socialHousingShare":key;
+          housing[targetKey]=game.regions.reduce((sum,region)=>sum+num(region.housing?.[key])*num(region.housing?.stock),0)/regionalWeight;
+        }
+        const households=Math.max(1,num(game.population?.households?.totalHouseholds,game.population.total/2.55));
+        housing.vacancyRate=clamp(Math.max(0,(totalStock/households-1)*100),0,25);
+        housing.averageHomePrice=Math.max(1000,num(game.economy.avgSalary)*12*4.7*housing.priceIndex/100);
+        housing.averageRent=Math.max(40,num(game.economy.avgSalary)*.31*housing.rentIndex/100);
+        game.population.demography.housingProgram=clamp(housing.socialHousingShare*4+Math.max(0,10-housing.vacancyRate)*1.6+(housing.policies.preparedSitesDays>0?10:0),0,100);
+      }
+
+      function migrateHousingSystem(game) {
+        const base=defaultHousingSystem(game),incoming=game.housing&&typeof game.housing==="object"&&!Array.isArray(game.housing)?game.housing:{};
+        const housing=Object.assign(base,incoming,{modelVersion:HOUSING_MODEL_VERSION});
+        ["priceIndex","rentIndex","constructionCostIndex","mortgageRate","affordability","vacancyRate","demandPressure","bubbleRisk","mortgageArrears","socialHousingShare","investorShare"].forEach(key=>housing[key]=clamp(num(housing[key],base[key]),key==="mortgageRate"?0:key==="priceIndex"||key==="rentIndex"||key==="constructionCostIndex"?20:0,key==="mortgageRate"?45:key==="priceIndex"||key==="rentIndex"||key==="constructionCostIndex"?1000:120));
+        ["stock","startsAnnual","completionsAnnual","averageHomePrice","averageRent"].forEach(key=>housing[key]=Math.max(0,num(housing[key],base[key])));
+        housing.policies=Object.assign(base.policies,incoming.policies||{});
+        Object.keys(base.policies).forEach(key=>housing.policies[key]=Math.max(0,Math.round(num(housing.policies[key],base.policies[key]))));
+        housing.pipeline=(Array.isArray(incoming.pipeline)?incoming.pipeline:[]).filter(Boolean).map(item=>({id:item.id||uid("housing"),type:item.type||"строительство",regionId:item.regionId||game.regions[0]?.id||"",units:Math.max(0,Math.round(num(item.units))),monthsLeft:Math.max(0,Math.round(num(item.monthsLeft,12))),started:item.started||formatDate(game.date)})).slice(0,16);
+        housing.history=(Array.isArray(incoming.history)?incoming.history:[]).filter(Boolean).slice(0,24);
+        game.regions.forEach((region,index)=>{
+          const regionBase=defaultRegionHousing(game,region,index);
+          region.housing=Object.assign(regionBase,region.housing&&typeof region.housing==="object"?region.housing:{});
+          ["stock","construction","damagedStock"].forEach(key=>region.housing[key]=Math.max(0,num(region.housing[key],regionBase[key])));
+          ["vacancyRate","priceIndex","rentIndex","affordability","demandPressure","permitsDays","socialShare","annualPriceChange","annualRentChange"].forEach(key=>region.housing[key]=clamp(num(region.housing[key],regionBase[key]),key==="priceIndex"||key==="rentIndex"?20:0,key==="priceIndex"||key==="rentIndex"?1000:key==="permitsDays"?800:160));
+        });
+        game.housing=housing;syncHousingAggregates(game);return housing;
+      }
+
+      function recalculateHouseholdBudgets(game,accrue=false) {
+        const system=game.population.households,housing=game.housing,e=game.economy,pop=game.population;
+        const totalHouseholds=Math.max(1000,pop.total/Math.max(1.4,system.segments.reduce((sum,item)=>sum+item.size*item.share/100,0)));
+        const inflationFactor=clamp(1+(e.inflation-4)*.012,.88,1.35),unemployment=e.unemployment/100,policies=system.policies;
+        for(const segment of system.segments){
+          segment.households=Math.round(totalHouseholds*segment.share/100);
+          const employedFactor=clamp(1-unemployment*segment.unemploymentExposure,.55,1);
+          const earned=segment.id==="pensioners" ? e.pensions*1.45+e.avgSalary*segment.earners*.45 : e.avgSalary*segment.incomeFactor*segment.earners*employedFactor;
+          const taxCredit=policies.taxCreditDays>0&&["low","workers","young"].includes(segment.id)?e.avgSalary*(segment.id==="low"?.09:.045):0;
+          const childcare=policies.childcareDays>0&&segment.id==="young"?e.avgSalary*.12:0;
+          segment.grossIncome=Math.max(0,earned);
+          segment.taxes=Math.max(0,segment.grossIncome*e.taxes.income/100*segment.taxFactor);
+          segment.benefits=Math.max(0,e.avgSalary*(e.spending.welfare/100)*segment.benefitFactor*.23+taxCredit+childcare);
+          const rentCost=housing.averageRent*segment.rentShare;
+          const mortgageUnit=e.avgSalary*.39*(housing.priceIndex/100)*clamp(.62+housing.mortgageRate/18,.72,2.5);
+          const mortgageCost=mortgageUnit*segment.mortgageShare;
+          const ownerCost=e.avgSalary*.065*Math.max(0,1-segment.rentShare-segment.mortgageShare);
+          const allowance=policies.utilitySupportDays>0&&["low","pensioners"].includes(segment.id)?e.avgSalary*.045:0;
+          segment.housing=Math.max(0,rentCost+mortgageCost+ownerCost-(housing.policies.rentAllowanceDays>0&&segment.rentShare>.3?e.avgSalary*.055:0));
+          segment.food=e.avgSalary*(.145+segment.size*.032)*segment.foodFactor*inflationFactor;
+          segment.utilities=Math.max(0,e.avgSalary*(.075+segment.size*.014)*inflationFactor-allowance);
+          segment.transport=e.avgSalary*(.055+segment.size*.011)*clamp(1+(num(game.worldMarket?.freightIndex,100)-100)*.002,.82,1.32);
+          segment.other=e.avgSalary*(.085+segment.size*.018);
+          const netIncome=segment.grossIncome+segment.benefits-segment.taxes,totalCosts=segment.housing+segment.food+segment.utilities+segment.transport+segment.other;
+          segment.disposable=netIncome-totalCosts;
+          segment.essentialBurden=clamp((segment.housing+segment.food+segment.utilities+segment.transport)/Math.max(1,netIncome)*100,0,240);
+          if(accrue){
+            const monthlyInterest=segment.debt*Math.max(0,housing.mortgageRate-2)/100/12;
+            segment.debt=Math.max(0,segment.debt+monthlyInterest+Math.max(0,-segment.disposable)*.58-Math.max(0,segment.disposable)*.075);
+            if(policies.debtRestructuringDays>0)segment.debt=Math.max(0,segment.debt-e.avgSalary*(segment.id==="low"?.055:.018));
+            segment.savings=Math.max(0,segment.savings+Math.max(0,segment.disposable)*.28-Math.max(0,-segment.disposable)*.22);
+          }
+          const debtMonths=segment.debt/Math.max(1,netIncome),delinquencyTarget=clamp(1+Math.max(0,segment.essentialBurden-70)*.28+Math.max(0,debtMonths-4)*1.5+unemployment*18-(policies.debtRestructuringDays>0?4:0),0,55);
+          segment.delinquency=clamp(segment.delinquency+(delinquencyTarget-segment.delinquency)*(accrue?.18:.04),0,100);
+          segment.stress=clamp(18+Math.max(0,segment.essentialBurden-48)*.72+segment.delinquency*.55+Math.max(0,-segment.disposable)/Math.max(1,e.avgSalary)*28,0,100);
+        }
+        system.totalHouseholds=Math.round(totalHouseholds);
+        system.averageSize=pop.total/Math.max(1,totalHouseholds);
+        const weight=(key)=>system.segments.reduce((sum,item)=>sum+num(item[key])*item.share/100,0);
+        system.medianGrossIncome=system.segments.find(item=>item.id==="workers")?.grossIncome||weight("grossIncome");
+        system.medianDisposableIncome=system.segments.find(item=>item.id==="workers")?.disposable||weight("disposable");
+        system.essentialBurden=clamp(weight("essentialBurden"),0,200);
+        system.savingsRate=clamp(system.segments.reduce((sum,item)=>sum+Math.max(0,item.disposable)*item.share/100,0)/Math.max(1,weight("grossIncome")+weight("benefits")-weight("taxes"))*100,0,40);
+        system.householdDebt=system.segments.reduce((sum,item)=>sum+item.debt*item.households,0)/1000000;
+        const annualIncome=system.segments.reduce((sum,item)=>(sum+(item.grossIncome+item.benefits-item.taxes)*12*item.households),0)/1000000;
+        system.debtToIncome=clamp(system.householdDebt/Math.max(1,annualIncome)*100,0,220);
+        system.delinquencyRate=clamp(weight("delinquency"),0,100);
+        system.consumptionIndex=clamp(106-(system.essentialBurden-50)*.7-system.delinquencyRate*.6+system.savingsRate*.18,45,125);
+        system.inequality=clamp(28+(system.segments.find(item=>item.id==="wealthy")?.grossIncome||0)/Math.max(1,system.medianGrossIncome)*3.1-(system.segments.find(item=>item.id==="low")?.benefits||0)/Math.max(1,e.avgSalary)*8,18,62);
+        system.lastBriefing=system.essentialBurden>78?"Обязательные расходы вытесняют потребление; низкодоходные семьи быстро накапливают просрочку.":system.delinquencyRate>10?"Долговая нагрузка стала главным риском семейных бюджетов.":system.savingsRate<4?"Доходы покрывают текущие расходы, но запас прочности домохозяйств почти исчерпан.":"Доходы, обязательные расходы и сбережения остаются в управляемом коридоре.";
+        if(e.financial)e.financial.householdDebt=clamp(system.householdDebt/Math.max(1,e.gdp)*100,0,160);
+        return system;
+      }
+
+      function migrateHouseholdSystem(game) {
+        const base=defaultHouseholdSystem(game),incoming=game.population?.households&&typeof game.population.households==="object"&&!Array.isArray(game.population.households)?game.population.households:{};
+        const system=Object.assign(base,incoming,{modelVersion:HOUSEHOLD_MODEL_VERSION});
+        const map=new Map((Array.isArray(incoming.segments)?incoming.segments:[]).map(item=>[item.id,item]));
+        system.segments=base.segments.map(fallback=>normalizeHouseholdSegment(map.get(fallback.id),fallback));
+        system.policies=Object.assign(base.policies,incoming.policies||{});
+        Object.keys(base.policies).forEach(key=>system.policies[key]=Math.max(0,Math.round(num(system.policies[key],base.policies[key]))));
+        system.history=(Array.isArray(incoming.history)?incoming.history:[]).filter(Boolean).slice(0,24);
+        game.population.households=system;recalculateHouseholdBudgets(game,false);return system;
+      }
+
+      function simulateHousingMarket(game) {
+        const housing=game.housing||migrateHousingSystem(game),e=game.economy,pop=game.population;
+        Object.keys(housing.policies).forEach(key=>housing.policies[key]=Math.max(0,num(housing.policies[key])-(key==="cooldown"?1:1)));
+        if(game.date.day!==1)return;
+        const pipelineCompleted=[];
+        for(const project of housing.pipeline){
+          project.monthsLeft=Math.max(0,project.monthsLeft-1);
+          if(project.monthsLeft===0){
+            const region=game.regions.find(item=>item.id===project.regionId)||game.regions[0];
+            if(region){region.housing.stock+=project.units;region.housing.socialShare=clamp(region.housing.socialShare+(project.type==="социальное жильё"?project.units/Math.max(1,region.housing.stock)*100:0),0,40);}
+            pipelineCompleted.push(project);
+          }
+        }
+        housing.pipeline=housing.pipeline.filter(item=>item.monthsLeft>0);
+        let totalCompletions=0,totalStarts=0;
+        for(const region of game.regions){
+          const h=region.housing,households=Math.max(1000,region.population/Math.max(2.15,pop.households?.averageSize||2.55));
+          h.damagedStock=Math.round(h.stock*clamp(region.damage,0,100)/100*.065);
+          const effectiveStock=Math.max(1,h.stock-h.damagedStock);
+          const migrationSignal=clamp(num(region.demography?.lastFlow)/Math.max(1000,region.population)*12000,-12,18);
+          const laborSignal=clamp((8-num(region.administration?.unemployment,e.unemployment))*1.2,-18,12);
+          h.demandPressure=clamp(48+migrationSignal+(num(region.demography?.attractiveness,50)-50)*.38+laborSignal+(housing.policies.guaranteeDays>0?8:0),5,115);
+          const zoningBoost=housing.policies.zoningDays>0?1.2:1,siteBoost=housing.policies.preparedSitesDays>0?1.16:1;
+          const annualStarts=Math.max(24,households*.012*zoningBoost*siteBoost*clamp((100+e.privateSector.businessConfidence-housing.constructionCostIndex*.45)/105,.45,1.35));
+          const completions=Math.max(0,annualStarts/12*clamp(infrastructureEfficiency(game),.55,1.12));
+          h.stock+=completions;h.construction=annualStarts;totalStarts+=annualStarts;totalCompletions+=completions;
+          const vacancy=clamp((effectiveStock/households-1)*100,0,24);
+          h.vacancyRate=clamp(h.vacancyRate*.62+vacancy*.38,0,25);
+          const mortgageDrag=Math.max(0,housing.mortgageRate-7)*.42,vacancyRelief=(h.vacancyRate-6)*.48,supplyRelief=Math.max(0,annualStarts/Math.max(1,households)*100-1.2)*1.8;
+          h.annualPriceChange=clamp(e.growth+e.inflation*.48+(h.demandPressure-50)*.105-mortgageDrag-vacancyRelief-supplyRelief-(housing.policies.vacancyTaxDays>0?1.2:0),-16,19);
+          h.annualRentChange=clamp(e.inflation*.68+(h.demandPressure-50)*.075-(h.vacancyRate-6)*.36+(housing.policies.rentAllowanceDays>0?.55:0),-8,15);
+          h.priceIndex=Math.max(25,h.priceIndex*Math.pow(1+h.annualPriceChange/100,1/12));
+          h.rentIndex=Math.max(25,h.rentIndex*Math.pow(1+h.annualRentChange/100,1/12));
+          const localRatio=4.7*h.priceIndex/100;
+          h.affordability=clamp(93-localRatio*7.2-housing.mortgageRate*1.25-Math.max(0,h.rentIndex-100)*.12+h.socialShare*.35,4,95);
+          h.permitsDays=clamp(h.permitsDays+(housing.policies.zoningDays>0?-4.5:1.2)+(h.demandPressure>75?1.2:0),45,480);
+          region.demography.housingPressure=clamp(100-h.affordability+(6-h.vacancyRate)*3,0,110);
+        }
+        housing.startsAnnual=Math.round(totalStarts);housing.completionsAnnual=Math.round(totalCompletions*12);
+        const construction=e.industries.find(item=>item.id==="construction"),householdCount=Math.max(1,pop.households?.totalHouseholds||pop.total/2.55),startRate=housing.startsAnnual/householdCount*100;
+        if(construction)construction.demand=clamp(construction.demand*.88+(78+startRate*5+housing.pipeline.length*1.6)*.12,20,220);
+        housing.mortgageRate=clamp(e.keyRate+2.2+e.financial.badLoanRatio*.08-(e.financial.stability-50)*.018,1,42);
+        housing.constructionCostIndex=clamp(housing.constructionCostIndex*Math.pow(1+clamp(e.inflation*.55+e.supplyShock*.08+(game.worldMarket?.freightIndex-100)*.012,-5,18)/100,1/12),35,900);
+        syncHousingAggregates(game);
+        const priceIncome= housing.averageHomePrice/Math.max(1,e.avgSalary*12);
+        housing.bubbleRisk=clamp(8+Math.max(0,priceIncome-4)*10+Math.max(0,housing.priceIndex-housing.rentIndex)*.34+Math.max(0,e.financial.creditGrowth-8)*1.15-housing.vacancyRate*.65,0,100);
+        housing.mortgageArrears=clamp(num(pop.households?.delinquencyRate,4)*.72+e.financial.badLoanRatio*.28,0,45);
+        housing.lastBriefing=housing.affordability<30?"Покупка и аренда жилья отрываются от доходов; требуется расширение предложения, а не только кредитная поддержка.":housing.vacancyRate<3.5?"Свободного жилья почти нет, миграция и новые семьи усиливают дефицит.":housing.bubbleRisk>58?"Цены опережают аренду и доходы; кредитное расширение повышает риск коррекции.":"Рынок жилья сохраняет баланс между спросом, строительством и доступностью.";
+        housing.history.unshift({date:formatDate(game.date),price:housing.priceIndex,rent:housing.rentIndex,affordability:housing.affordability,vacancy:housing.vacancyRate,starts:housing.startsAnnual,completions:housing.completionsAnnual});
+        housing.history=housing.history.slice(0,24);
+        if(pipelineCompleted.length)pushNews(game,"Экономика","Жилищные проекты введены",`${pipelineCompleted.reduce((sum,item)=>sum+item.units,0).toFixed(0)} квартир введено в ${pipelineCompleted.length} проектах.`);
+      }
+
+      function simulateHouseholds(game) {
+        const system=game.population.households||migrateHouseholdSystem(game);
+        Object.keys(system.policies).forEach(key=>system.policies[key]=Math.max(0,num(system.policies[key])-1));
+        if(game.date.day!==1)return;
+        recalculateHouseholdBudgets(game,true);
+        const stress=system.segments.reduce((sum,item)=>sum+item.stress*item.share/100,0),e=game.economy;
+        const povertyTarget=clamp(5+system.segments.filter(item=>item.disposable<0).reduce((sum,item)=>sum+item.share*.62,0)+Math.max(0,system.essentialBurden-62)*.18,3,68);
+        game.population.poverty=clamp(game.population.poverty+(povertyTarget-game.population.poverty)*.08,0,80);
+        const confidenceTarget=clamp(92-system.essentialBurden*.55-system.delinquencyRate*.65+system.savingsRate*.35,10,90);
+        e.privateSector.consumerConfidence=clamp(e.privateSector.consumerConfidence+(confidenceTarget-e.privateSector.consumerConfidence)*.12,0,100);
+        const groupMap={workers:["workers","low"],business:["wealthy","middle"],public:["middle","workers"],rural:["low","workers"],youth:["young"],pensioners:["pensioners"],professionals:["middle","young"]};
+        for(const group of game.population.groups||[]){
+          const ids=groupMap[group.id];if(!ids)continue;const segments=system.segments.filter(item=>ids.includes(item.id));if(!segments.length)continue;
+          const groupStress=segments.reduce((sum,item)=>sum+item.stress,0)/segments.length;
+          group.stress=clamp(group.stress+(groupStress-group.stress)*.08,0,100);
+        }
+        system.history.unshift({date:formatDate(game.date),income:system.medianGrossIncome,disposable:system.medianDisposableIncome,burden:system.essentialBurden,savings:system.savingsRate,debt:system.debtToIncome,delinquency:system.delinquencyRate,stress});
+        system.history=system.history.slice(0,24);
+      }
+
+      function defaultPresidentialAttention(game) {
+        return {modelVersion:ATTENTION_MODEL_VERSION,capital:72,maxCapital:100,capacity:3,used:0,operationalLoad:0,overload:0,recoveryRate:.09,focusId:"",active:[],history:[],briefingCooldown:0,lastBriefing:"Президентская повестка свободна для трёх крупных приоритетов."};
+      }
+
+      function normalizePresidentialPriority(item,game) {
+        const priority=Object.assign({id:uid("priority"),key:"",title:"Президентское поручение",category:"государственное управление",started:formatDate(game.date),duration:120,daysRemaining:120,progress:0,load:1,delegated:false,status:"active"},item||{});
+        priority.duration=clamp(Math.round(num(priority.duration,120)),14,730);priority.daysRemaining=clamp(Math.round(num(priority.daysRemaining,priority.duration)),0,priority.duration);priority.progress=clamp(num(priority.progress),0,100);priority.load=clamp(num(priority.load,1),.4,2);priority.delegated=!!priority.delegated;priority.status=["active","completed","cancelled"].includes(priority.status)?priority.status:"active";
+        return priority;
+      }
+
+      function migratePresidentialAttention(game) {
+        game.politics ||= defaultPolitics({});
+        const base=defaultPresidentialAttention(game),incoming=game.politics.attention&&typeof game.politics.attention==="object"&&!Array.isArray(game.politics.attention)?game.politics.attention:{};
+        const attention=Object.assign(base,incoming,{modelVersion:ATTENTION_MODEL_VERSION});
+        ["capital","maxCapital","capacity","used","operationalLoad","overload","recoveryRate","briefingCooldown"].forEach(key=>attention[key]=Math.max(0,num(attention[key],base[key])));
+        attention.maxCapital=clamp(attention.maxCapital,40,140);attention.capital=clamp(attention.capital,0,attention.maxCapital);attention.capacity=clamp(Math.round(attention.capacity),2,5);attention.overload=clamp(attention.overload,0,100);
+        attention.active=(Array.isArray(incoming.active)?incoming.active:[]).map(item=>normalizePresidentialPriority(item,game)).filter(item=>item.status==="active"&&item.daysRemaining>0).slice(0,8);
+        attention.history=(Array.isArray(incoming.history)?incoming.history:[]).filter(Boolean).slice(0,30);
+        if(!attention.active.some(item=>item.id===attention.focusId))attention.focusId="";
+        game.politics.attention=attention;return attention;
+      }
+
+      function attentionActionSpec(actionEl) {
+        const action=actionEl?.dataset?.action;
+        const specs={
+          "policy":["быстрое решение",4,75],"gov-action":["государственная программа",5,120],"project-action":["национальный проект",5,150],
+          "budget-action":["бюджетная политика",6,120],"politics-action":["политическая повестка",5,90],"law-package":["законодательство",6,150],
+          "cabinet-action":["правительство",4,75],"demography-action":["демография",5,150],"housing-action":["жилищная политика",6,180],
+          "household-action":["семейная политика",5,150],"climate-action":["климатическая политика",5,150],"federal-action":["федеративная политика",5,120],
+          "statistics-action":["государственная статистика",4,90],"world-market-action":["международная логистика",5,120],"succession-action":["преемственность власти",6,180]
+        };
+        const spec=specs[action];if(!spec)return null;
+        const mode=actionEl.dataset.mode||actionEl.dataset.policy||actionEl.dataset.gov||actionEl.dataset.project||actionEl.dataset.law||"решение";
+        const scope=actionEl.closest?.(".project-action-line, .policy-action-card");
+        const heading=scope?.querySelector?.(".action-summary-main strong")?.textContent;
+        const title=(heading||actionEl.textContent||"Президентское решение").trim().replace(/\s+/g," ").slice(0,90)||"Президентское решение";
+        return {key:`${action}:${mode}`,title,category:spec[0],cost:spec[1],duration:spec[2],load:["budget-action","law-package","project-action"].includes(action)?1.25:1};
+      }
+
+      function authorizePresidentialAction(actionEl) {
+        const spec=attentionActionSpec(actionEl);if(!spec)return true;
+        const attention=state.politics.attention||migratePresidentialAttention(state),existing=attention.active.find(item=>item.key===spec.key);
+        if(existing){
+          if(attention.capital<1){showBlockedDecision("Недостаточно политического капитала","Даже продление действующего поручения требует переговоров и контроля исполнения.",[["Политический капитал",`${attention.capital.toFixed(1)} / 1`,"bad"]]);return false;}
+          attention.capital-=1;existing.daysRemaining=Math.max(existing.daysRemaining,Math.round(spec.duration*.55));existing.progress=clamp(existing.progress+2,0,100);attention.focusId=existing.id;return true;
+        }
+        const used=attention.active.reduce((sum,item)=>sum+item.load,0);
+        if(used+spec.load>attention.capacity+.01){
+          showBlockedDecision("Президентская повестка перегружена","Новый крупный приоритет нельзя качественно контролировать: освободите внимание, завершите или делегируйте действующее поручение.",[["Занято",`${used.toFixed(1)} из ${attention.capacity}`,"bad"],["Политический капитал",attention.capital.toFixed(1),"warn"]]);return false;
+        }
+        if(attention.capital<spec.cost){
+          showBlockedDecision("Недостаточно политического капитала","Коалиция, общество и аппарат пока не готовы поддержать ещё одно крупное президентское решение.",[["Доступно",attention.capital.toFixed(1),"bad"],["Необходимо",String(spec.cost),"warn"]]);return false;
+        }
+        attention.capital-=spec.cost;
+        const priority=normalizePresidentialPriority({id:uid("priority"),key:spec.key,title:spec.title,category:spec.category,duration:spec.duration,daysRemaining:spec.duration,load:spec.load,started:formatDate(state.date)},state);
+        attention.active.unshift(priority);attention.focusId=priority.id;attention.lastBriefing=`Открыт новый приоритет: ${priority.title}. Контрольный срок ${priority.duration} дней.`;
+        return true;
+      }
+
+      function simulatePresidentialAttention(game) {
+        const attention=game.politics.attention||migratePresidentialAttention(game),cabinet=game.politics.cabinet;
+        attention.briefingCooldown=Math.max(0,attention.briefingCooldown-1);
+        attention.capacity=clamp(2+(cabinet.capacity>=55?1:0)+(cabinet.capacity>=78?1:0)+(game.tech.nodes.find(item=>item.id==="ai_admin")?.done?1:0),2,5);
+        const activeCrisisLoad=game.governance.crises.filter(item=>item.severity>35).reduce((sum,item)=>sum+clamp(item.severity/100*.42,.08,.42),0);
+        const warLoad=game.military.wars.length*.7,narrativeLoad=(game.narrative?.activeChains||[]).length*.16;
+        attention.used=attention.active.reduce((sum,item)=>sum+item.load,0);
+        attention.operationalLoad=attention.used+activeCrisisLoad+warLoad+narrativeLoad;
+        const overloadTarget=clamp((attention.operationalLoad-attention.capacity)*28+Math.max(0,game.politics.cabinet.bureaucracy-62)*.45,0,100);
+        attention.overload=clamp(attention.overload+(overloadTarget-attention.overload)*.055,0,100);
+        const legitimacy=(game.politics.popularity+game.politics.coalition+calcGovernanceScore(game))/3;
+        const recovery=clamp(.045+(legitimacy-45)*.0018-attention.overload*.0007,0,.18);
+        attention.recoveryRate=recovery;attention.capital=clamp(attention.capital+recovery,0,attention.maxCapital);
+        const completed=[];
+        for(const priority of attention.active){
+          const focus=priority.id===attention.focusId?1.35:.88,delegation=priority.delegated?.82:1,execution=clamp((cabinet.execution+cabinet.capacity)/130,.45,1.35),overload=clamp(1-attention.overload*.006,.35,1);
+          const dailyProgress=100/priority.duration*focus*delegation*execution*overload;
+          priority.progress=clamp(priority.progress+dailyProgress,0,100);priority.daysRemaining=Math.max(0,priority.daysRemaining-1);
+          if(priority.progress>=100||priority.daysRemaining===0){priority.status="completed";priority.progress=100;completed.push(priority);}
+        }
+        if(completed.length){
+          for(const priority of completed){
+            attention.history.unshift({date:formatDate(game.date),title:priority.title,category:priority.category,status:"завершено",progress:priority.progress});
+            attention.capital=clamp(attention.capital+2.5,0,attention.maxCapital);
+          }
+          attention.active=attention.active.filter(item=>item.status==="active");if(!attention.active.some(item=>item.id===attention.focusId))attention.focusId=attention.active[0]?.id||"";
+          attention.lastBriefing=`Завершено поручений: ${completed.length}. Освобождённое внимание можно направить на новый приоритет.`;
+        }
+        attention.history=attention.history.slice(0,30);
+      }
+
+      function attentionExecutionModifier(game) {
+        const attention=game.politics.attention||migratePresidentialAttention(game);
+        return clamp((attention.active.length?2:0)+(attention.focusId?1.5:0)-attention.overload*.16,-16,4);
+      }
+
+      function householdAction(mode) {
+        const system=state.population.households||migrateHouseholdSystem(state),policy=system.policies,e=state.economy;
+        const catalog={
+          taxCredit:{cost:1180,title:"Адресный налоговый кредит",result:"Работающие семьи с низкими и средними доходами получают возврат части подоходного налога на один год.",days:365,key:"taxCreditDays",effects:[["Семейный доход","выше","good"],["Срок","12 месяцев","warn"]]},
+          utilities:{cost:860,title:"Компенсация базовых коммунальных расходов",result:"Низкодоходные и пенсионные домохозяйства получают временную адресную компенсацию счетов.",days:180,key:"utilitySupportDays",effects:[["Обязательные расходы","ниже","good"],["Срок","6 месяцев","warn"]]},
+          debt:{cost:640,title:"Стандарт реструктуризации долгов",result:"Банки обязаны предлагать устойчивый график платежей уязвимым заёмщикам до начала взыскания.",days:365,key:"debtRestructuringDays",effects:[["Просрочка","снижается постепенно","good"],["Банковская маржа","под давлением","warn"]]},
+          childcare:{cost:1460,title:"Система ухода за детьми",result:"Муниципальные ясли, налоговый вычет и защита занятости снижают издержки молодых семей.",days:540,key:"childcareDays",effects:[["Молодые семьи","доход и занятость выше","good"],["Срок","18 месяцев","warn"]]}
+        };
+        const item=catalog[mode];if(!item)return;
+        if(policy[item.key]>30)return showBlockedDecision("Мера уже действует",`${item.title}: до окончания программы осталось ${Math.ceil(policy[item.key])} дней.`,[["Осталось",`${Math.ceil(policy[item.key])} дн.`,"warn"]]);
+        if(e.budget<item.cost)return showBlockedDecision("Семейная мера не профинансирована","Для адресной программы нет свободного бюджетного лимита.",[["Необходимо",money(item.cost),"bad"],["Бюджет",money(e.budget),"warn"]]);
+        e.budget-=item.cost;policy[item.key]=item.days;policy.cooldown=30;recalculateHouseholdBudgets(state,false);
+        if(mode==="debt")e.financial.badLoanRatio=clamp(e.financial.badLoanRatio-.4,0,65);
+        if(mode==="childcare")state.population.demography.familySupport=clamp(state.population.demography.familySupport+5,0,100);
+        showDecision(item.title,item.result,[...item.effects,["Бюджет",`-${money(item.cost)}`,"bad"]],"good");
+      }
+
+      function housingAction(mode) {
+        const housing=state.housing||migrateHousingSystem(state),e=state.economy;
+        const region=state.regions.find(item=>item.id===selectedRegionId)||state.regions.slice().sort((a,b)=>a.housing.affordability-b.housing.affordability)[0]||state.regions[0];
+        const actions={
+          zoning:{cost:280,title:"Реформа градостроительных разрешений",result:"Единые сроки, цифровой кадастр и стандарт подключения сокращают задержки без отмены строительного надзора.",key:"zoningDays",days:720},
+          social:{cost:2640,title:"Программа социального жилья",result:`В регионе ${region.name} начато строительство квартир для очередников и работников критических служб.`},
+          sites:{cost:1520,title:"Инженерная подготовка участков",result:`В регионе ${region.name} государство подводит дороги, воду, тепло и сети к новым кварталам.`,key:"preparedSitesDays",days:540},
+          vacancy:{cost:160,title:"Налог на длительно пустующее жильё",result:"Крупные собственники получают стимул вывести неиспользуемые квартиры на рынок аренды.",key:"vacancyTaxDays",days:720},
+          allowance:{cost:1240,title:"Адресное пособие на аренду",result:"Семьи с высокой долей жилищных расходов получают временную компенсацию; предложение жилья не меняется мгновенно.",key:"rentAllowanceDays",days:365},
+          guarantee:{cost:880,title:"Ипотечная гарантия для первого жилья",result:"Государство разделяет кредитный риск молодых платёжеспособных семей; спрос и бюджетный риск одновременно растут.",key:"guaranteeDays",days:365}
+        };
+        const item=actions[mode];if(!item)return;
+        if(item.key&&housing.policies[item.key]>30)return showBlockedDecision("Жилищная мера уже действует",`${item.title}: действующий период ещё не завершён.`,[["Осталось",`${Math.ceil(housing.policies[item.key])} дн.`,"warn"]]);
+        if(e.budget<item.cost)return showBlockedDecision("Жилищная мера не профинансирована","Казначейство не подтвердило бюджетный лимит.",[["Необходимо",money(item.cost),"bad"],["Бюджет",money(e.budget),"warn"]]);
+        e.budget-=item.cost;housing.policies.cooldown=30;
+        const households=Math.max(1000,state.population.households.totalHouseholds);
+        if(item.key)housing.policies[item.key]=item.days;
+        if(mode==="social"){
+          const units=Math.max(1800,Math.round(households*.0045));housing.pipeline.unshift({id:uid("housing"),type:"социальное жильё",regionId:region.id,units,monthsLeft:18,started:formatDate(state.date)});
+        }
+        if(mode==="sites"){
+          const units=Math.max(1300,Math.round(households*.0035));housing.pipeline.unshift({id:uid("housing"),type:"подготовленные участки",regionId:region.id,units,monthsLeft:12,started:formatDate(state.date)});
+        }
+        if(mode==="vacancy")housing.investorShare=clamp(housing.investorShare-1.2,0,50);
+        if(mode==="guarantee"){e.financial.creditGrowth=clamp(e.financial.creditGrowth+1.4,-25,30);housing.bubbleRisk=clamp(housing.bubbleRisk+2.5,0,100);}
+        housing.pipeline=housing.pipeline.slice(0,16);syncHousingAggregates(state);recalculateHouseholdBudgets(state,false);
+        const details=[["Регион",region.name,"good"],["Бюджет",`-${money(item.cost)}`,"bad"]];
+        if(item.key)details.push(["Срок",`${Math.round(item.days/30)} мес.`,"warn"]);
+        if(mode==="social"||mode==="sites")details.push(["Ввод",`${housing.pipeline[0].units.toLocaleString("ru-RU")} квартир через ${housing.pipeline[0].monthsLeft} мес.`,"good"]);
+        showDecision(item.title,item.result,details,mode==="guarantee"?"warn":"good");
+      }
+
+      function presidentialAttentionAction(mode,id="") {
+        const attention=state.politics.attention||migratePresidentialAttention(state),priority=attention.active.find(item=>item.id===id);
+        if(mode==="focus"&&priority){
+          attention.focusId=priority.id;attention.lastBriefing=`Главный контроль президента: ${priority.title}. Остальные поручения продолжаются в обычном темпе.`;
+          notify("Президентский фокус изменён.","good","Повестка");return;
+        }
+        if(mode==="delegate"&&priority){
+          if(priority.delegated)return notify("Поручение уже делегировано.","warn","Повестка");
+          if(state.economy.budget<120||attention.capital<1)return showBlockedDecision("Делегирование не согласовано","Нужны аппаратный ресурс и минимум одна единица политического капитала.",[["Стоимость",money(120),"bad"],["Капитал","1","warn"]]);
+          state.economy.budget-=120;attention.capital-=1;priority.delegated=true;priority.load=clamp(priority.load*.62,.4,2);attention.lastBriefing=`${priority.title}: оперативный контроль передан профильному министру.`;
+          showDecision("Делегирование президентского поручения",attention.lastBriefing,[["Внимание президента","освобождено частично","good"],["Темп исполнения","ниже","warn"],["Бюджет",`-${money(120)}`,"bad"]],"institution");return;
+        }
+        if(mode==="cancel"&&priority){
+          priority.status="cancelled";attention.active=attention.active.filter(item=>item.id!==priority.id);attention.history.unshift({date:formatDate(state.date),title:priority.title,category:priority.category,status:"снято",progress:priority.progress});
+          if(attention.focusId===priority.id)attention.focusId=attention.active[0]?.id||"";
+          attention.capital=clamp(attention.capital-1,0,attention.maxCapital);state.politics.coalition=clamp(state.politics.coalition-.35,0,100);
+          showDecision("Приоритет снят с президентского контроля",`${priority.title}: дальнейшее исполнение остаётся на профильном ведомстве без специального политического сопровождения.`,[["Освобождено внимания",priority.load.toFixed(1),"good"],["Политический капитал","-1","bad"],["Коалиция","-0.4 п.п.","warn"]],"warn");return;
+        }
+        if(mode==="briefing"){
+          if(attention.briefingCooldown>0)return showBlockedDecision("Повторный разбор пока не требуется",`Следующий расширенный разбор доступен через ${Math.ceil(attention.briefingCooldown)} дней.`,[["Осталось",`${Math.ceil(attention.briefingCooldown)} дн.`,"warn"]]);
+          if(state.economy.budget<180)return showBlockedDecision("Разбор повестки не профинансирован","Аппарату нужен лимит на межведомственную аналитическую группу.",[["Необходимо",money(180),"bad"]]);
+          state.economy.budget-=180;attention.briefingCooldown=30;attention.overload=clamp(attention.overload-14,0,100);attention.capital=clamp(attention.capital+3,0,attention.maxCapital);state.politics.cabinet.cohesion=clamp(state.politics.cabinet.cohesion+1.2,0,100);
+          attention.lastBriefing="Администрация уточнила сроки, сняла дублирование поручений и вернула президенту часть политической инициативы.";
+          showDecision("Разбор президентской повестки",attention.lastBriefing,[["Перегрузка","-14 п.п.","good"],["Политический капитал","+3","good"],["Бюджет",`-${money(180)}`,"bad"]],"good");
+        }
       }
 
       function infrastructureNetworkTypes() {
@@ -9870,6 +10311,9 @@
         migrateActorAISystem(game);
         migrateNarrativeSystem(game);
         applyGameScenario(game, config.scenario || "balanced");
+        migrateHousingSystem(game);
+        migrateHouseholdSystem(game);
+        migratePresidentialAttention(game);
         applyInitialDifficulty(game);
         migrateCareerSystem(game, config);
         selectedRegionId = regions[0]?.id || null;
@@ -10995,6 +11439,7 @@
             </nav>
             <div class="side-foot">
               <div class="mini-stat"><span>Популярность</span><strong>${pct(state.politics.popularity, 0)}</strong></div>
+              <div class="mini-stat"><span>Политкапитал</span><strong>${state.politics.attention.capital.toFixed(0)} / ${state.politics.attention.maxCapital.toFixed(0)}</strong></div>
               <div class="mini-stat"><span>Нацриск</span><strong>${pct(calcNationalRisk(), 0)}</strong></div>
               <div class="mini-stat"><span>Бюджет</span><strong>${money(state.economy.budget)}</strong></div>
             </div>
@@ -11013,6 +11458,7 @@
         if (id === "map") return state.regions.length;
         if (id === "infrastructure") return pct(state.infrastructure.reliability,0);
         if (id === "finance") return pct(state.economy.financial.stability,0);
+        if (id === "housing") return pct(state.housing.affordability,0);
         if (id === "markets") return pct(state.economy.privateSector.businessConfidence,0);
         if (id === "elections") return `${state.politics.electionInDays} дн.`;
         if (id === "justice") return state.politics.justice.cases.filter(item=>item.status!=="закрыто").length;
@@ -11027,6 +11473,7 @@
         if (activeTab === "infrastructure") return renderInfrastructure();
         if (activeTab === "economy") return renderEconomy();
         if (activeTab === "finance") return renderFinance();
+        if (activeTab === "housing") return renderHousing();
         if (activeTab === "markets") return renderMarkets();
         if (activeTab === "politics") return renderPolitics();
         if (activeTab === "elections") return renderElections();
@@ -11201,6 +11648,7 @@
               </aside>
             </section>
             ${renderCareerOverviewPanel()}
+            ${renderPresidentialAttentionPanel(true)}
             <div class="metric-grid">
               ${metric("ВВП", money(e.gdp), `Рост ${pct(e.growth)} · Биржа ${Math.round(e.stockIndex)}`, e.growth >= 0 ? "good" : "bad")}
               ${metric("Инфляция", pct(e.inflation), `Ключевая ставка ${pct(e.keyRate)}`, e.inflation < 7 ? "good" : "warn")}
@@ -12746,6 +13194,32 @@
         </section>`;
       }
 
+      function renderPresidentialAttentionPanel(compactView=false) {
+        const attention=state.politics.attention||migratePresidentialAttention(state),used=attention.active.reduce((sum,item)=>sum+item.load,0);
+        const tone=attention.overload>55?"bad":attention.overload>24?"warn":"good";
+        const active=compactView?attention.active.slice(0,3):attention.active;
+        return `
+          <section class="panel pad">
+            <div class="panel-section-head"><span><h3 class="section-title">Политический капитал и внимание президента</h3><p class="subtle">Крупные решения требуют поддержки коалиции и места в президентской повестке. Одновременно качественно контролируются только ${attention.capacity} приоритета; войны и кризисы тоже занимают внимание.</p></span><span class="pill delta ${tone}">нагрузка ${used.toFixed(1)} / ${attention.capacity}</span></div>
+            <div class="kpi-strip" style="margin-top:12px;">
+              <div class="kpi"><span>Политический капитал</span><strong>${attention.capital.toFixed(1)} / ${attention.maxCapital}</strong><small class="subtle">восстановление ${attention.recoveryRate.toFixed(2)}/день</small></div>
+              <div class="kpi"><span>Президентское внимание</span><strong>${used.toFixed(1)} / ${attention.capacity}</strong><small class="subtle">активных поручений ${attention.active.length}</small></div>
+              <div class="kpi"><span>Полная нагрузка</span><strong>${attention.operationalLoad.toFixed(1)}</strong><small class="subtle">приоритеты, кризисы и войны</small></div>
+              <div class="kpi"><span>Перегрузка</span><strong class="delta ${tone}">${pct(attention.overload,0)}</strong><small class="subtle">снижает исполнение решений</small></div>
+            </div>
+            <div class="decision-banner ${tone}" style="margin-top:12px;"><strong>${esc(attention.lastBriefing)}</strong><span class="subtle">Новый крупный выбор автоматически становится президентским приоритетом и расходует политический капитал.</span></div>
+            <div class="bill-grid" style="margin-top:12px;">${active.length?active.map(priority=>`
+              <article class="bill-card ${priority.id===attention.focusId?"good":priority.delegated?"institution":"warn"}">
+                <header><span><strong>${esc(priority.title)}</strong><small>${esc(priority.category)} · с ${esc(priority.started)}</small></span><span class="pill">${priority.id===attention.focusId?"главный фокус":priority.delegated?"делегировано":"под контролем"}</span></header>
+                <div class="progress"><i style="--w:${priority.progress}%"></i></div>
+                <div class="bill-kpis"><div><span>Готовность</span><strong>${pct(priority.progress,0)}</strong></div><div><span>Осталось</span><strong>${priority.daysRemaining} дн.</strong></div><div><span>Нагрузка</span><strong>${priority.load.toFixed(1)}</strong></div></div>
+                <div class="actions"><button data-action="attention-action" data-mode="focus" data-id="${priority.id}" ${priority.id===attention.focusId?"disabled":""}>В главный фокус</button><button data-action="attention-action" data-mode="delegate" data-id="${priority.id}" ${priority.delegated?"disabled":""}>Делегировать</button><button class="danger" data-action="attention-action" data-mode="cancel" data-id="${priority.id}">Снять контроль</button></div>
+              </article>`).join(""):`<div class="row"><span><strong>Крупных президентских приоритетов нет</strong><br><small class="subtle">Первое стратегическое решение займёт место в повестке. Рутинные действия и просмотр разделов внимания не расходуют.</small></span><span class="pill">свободно</span></div>`}</div>
+            ${compactView&&attention.active.length>3?`<p class="subtle" style="margin:10px 0 0;">Ещё ${attention.active.length-3} поручений показаны в разделе «Политика».</p>`:""}
+            <div class="actions" style="margin-top:12px;"><button data-action="attention-action" data-mode="briefing" ${attention.briefingCooldown>0?"disabled":""}>${attention.briefingCooldown>0?`Разбор через ${Math.ceil(attention.briefingCooldown)} дн.`:"Разобрать повестку"}</button></div>
+          </section>`;
+      }
+
       function renderPolitics() {
         const p = state.politics;
         const groups = state.population.groups || [];
@@ -12760,6 +13234,7 @@
               ${metric("Силы влияния", `${hostileForces.length}/${p.forces.length}`, hostileForces.length ? "есть активное давление" : "конфликтов нет", hostileForces.length ? "warn" : "good")}
               ${metric("Законопроекты", `${activeBills.length}`, `${p.legislation.filter(bill => bill.stage === "president").length} ждут решения президента`, activeBills.length ? "warn" : "good")}
             </div>
+            ${renderPresidentialAttentionPanel()}
             <section class="panel pad">
               <h3 class="section-title">Как устроена политика</h3>
               <div class="signal-grid" style="margin-top: 12px;">
@@ -14971,6 +15446,68 @@
         `;
       }
 
+      function personalAmount(value,suffix="") {
+        return `${Math.round(num(value)).toLocaleString("ru-RU")} ${esc(state.country.currency)}${suffix}`;
+      }
+
+      function renderHouseholdBudgetPanel() {
+        const households=state.population.households||migrateHouseholdSystem(state),worker=households.segments.find(item=>item.id==="workers");
+        const tone=households.essentialBurden>78?"bad":households.essentialBurden>62?"warn":"good";
+        return `
+          <section class="panel pad">
+            <div class="panel-section-head"><span><h3 class="section-title">Домохозяйства и семейные бюджеты</h3><p class="subtle">Доход семьи проходит через налоги и пособия, затем расходуется на жильё, питание, коммунальные услуги, транспорт и другие нужды. Отрицательный остаток превращается в долг, положительный формирует сбережения.</p></span><span class="pill">${compact(households.totalHouseholds)} домохозяйств</span></div>
+            <div class="kpi-strip" style="margin-top:12px;">
+              <div class="kpi"><span>Типичный валовой доход</span><strong>${personalAmount(households.medianGrossIncome,"/мес.")}</strong><small class="subtle">работающая семья</small></div>
+              <div class="kpi"><span>Свободный остаток</span><strong class="delta ${households.medianDisposableIncome>=0?"good":"bad"}">${personalAmount(households.medianDisposableIncome,"/мес.")}</strong><small class="subtle">после обязательных расходов</small></div>
+              <div class="kpi"><span>Обязательная нагрузка</span><strong class="delta ${tone}">${pct(households.essentialBurden,0)}</strong><small class="subtle">жильё, еда, услуги, транспорт</small></div>
+              <div class="kpi"><span>Сбережения</span><strong>${pct(households.savingsRate,1)}</strong><small class="subtle">от чистого дохода</small></div>
+              <div class="kpi"><span>Долг семей</span><strong>${money(households.householdDebt)}</strong><small class="subtle">${pct(households.debtToIncome,0)} годового дохода</small></div>
+              <div class="kpi"><span>Просрочка</span><strong class="delta ${households.delinquencyRate>10?"bad":households.delinquencyRate>6?"warn":"good"}">${pct(households.delinquencyRate,1)}</strong><small class="subtle">кредитная уязвимость</small></div>
+            </div>
+            <div class="decision-banner ${tone}" style="margin-top:12px;"><strong>${esc(households.lastBriefing)}</strong><span class="subtle">Индекс потребления ${pct(households.consumptionIndex,0)} · оценка неравенства ${households.inequality.toFixed(1)}</span></div>
+            <div class="bill-grid" style="margin-top:12px;">${households.segments.map(segment=>{
+              const net=segment.grossIncome+segment.benefits-segment.taxes,total=segment.housing+segment.food+segment.utilities+segment.transport+segment.other;
+              return `<article class="bill-card ${segment.disposable<0||segment.stress>72?"bad":segment.essentialBurden>68?"warn":"good"}"><header><span><strong>${esc(segment.name)}</strong><small>${pct(segment.share,0)} семей · средний размер ${segment.size.toFixed(1)} чел.</small></span><span class="pill">стресс ${pct(segment.stress,0)}</span></header><details class="action-fold"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Остаток ${personalAmount(segment.disposable,"/мес.")}</strong><small>чистый доход ${personalAmount(net,"/мес.")} · обязательная нагрузка ${pct(segment.essentialBurden,0)}</small></span></summary><div class="action-fold-body"><div class="bill-kpis"><div><span>Валовой доход</span><strong>${personalAmount(segment.grossIncome)}</strong></div><div><span>Налоги</span><strong>${personalAmount(segment.taxes)}</strong></div><div><span>Пособия</span><strong>${personalAmount(segment.benefits)}</strong></div><div><span>Жильё</span><strong>${personalAmount(segment.housing)}</strong></div><div><span>Питание</span><strong>${personalAmount(segment.food)}</strong></div><div><span>Коммунальные</span><strong>${personalAmount(segment.utilities)}</strong></div><div><span>Транспорт</span><strong>${personalAmount(segment.transport)}</strong></div><div><span>Прочие расходы</span><strong>${personalAmount(segment.other)}</strong></div><div><span>Всего расходов</span><strong>${personalAmount(total)}</strong></div><div><span>Долг на семью</span><strong>${personalAmount(segment.debt)}</strong></div><div><span>Сбережения</span><strong>${personalAmount(segment.savings)}</strong></div><div><span>Просрочка</span><strong>${pct(segment.delinquency,1)}</strong></div></div></div></details></article>`;
+            }).join("")}</div>
+            <div class="policy-action-grid compact" style="margin-top:12px;">
+              ${renderActionCard({title:"Адресный налоговый кредит",category:"доходы семей",desc:"Возврат части подоходного налога работающим семьям с низкими и средними доходами.",signal:`нагрузка ${pct(households.essentialBurden,0)}`,when:"Когда работа не защищает семью от дефицита бюджета.",effect:"Повышает свободный остаток без общего снижения налоговой ставки.",risk:"Требует точных реестров и годового бюджетного лимита.",cta:"Ввести на год",tone:"good"},{"data-action":"household-action","data-mode":"taxCredit"},{compact:true})}
+              ${renderActionCard({title:"Компенсация коммунальных расходов",category:"стоимость жизни",desc:"Адресная выплата низкодоходным и пенсионным домохозяйствам.",signal:`инфляция ${pct(state.economy.inflation,1)}`,when:"При ценовом или энергетическом шоке.",effect:"Сразу снижает обязательную нагрузку уязвимых семей.",risk:"Временная мера не устраняет дефицит энергии или износ сетей.",cta:"Компенсировать",tone:"warn"},{"data-action":"household-action","data-mode":"utilities"},{compact:true})}
+              ${renderActionCard({title:"Реструктуризация долгов",category:"кредитная защита",desc:"Обязательный устойчивый график до взыскания и временное снижение платежа.",signal:`просрочка ${pct(households.delinquencyRate,1)}`,when:"Когда просрочка становится системной.",effect:"Снижает дефолты и социальный стресс постепенно.",risk:"Банки ужесточат новый кредит и потребуют качественного надзора.",cta:"Утвердить стандарт",tone:"institution"},{"data-action":"household-action","data-mode":"debt"},{compact:true})}
+              ${renderActionCard({title:"Система ухода за детьми",category:"молодые семьи",desc:"Ясли, вычет и защита занятости родителей.",signal:`поддержка семей ${pct(state.population.demography.familySupport,0)}`,when:"При низкой рождаемости и выпадении родителей из занятости.",effect:"Повышает доход, участие в труде и устойчивость молодых семей.",risk:"Долгосрочно требует муниципальных кадров и бюджета.",cta:"Расширить",tone:"good"},{"data-action":"household-action","data-mode":"childcare"},{compact:true})}
+            </div>
+            ${households.history.length?`<details class="action-fold" style="margin-top:12px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>История семейных бюджетов</strong><small>${households.history.length} месячных наблюдений</small></span></summary><div class="action-fold-body"><div class="scroll"><table class="table"><thead><tr><th>Дата</th><th>Доход</th><th>Остаток</th><th>Нагрузка</th><th>Просрочка</th></tr></thead><tbody>${households.history.map(item=>`<tr><td>${esc(item.date)}</td><td>${personalAmount(item.income)}</td><td>${personalAmount(item.disposable)}</td><td>${pct(item.burden,0)}</td><td>${pct(item.delinquency,1)}</td></tr>`).join("")}</tbody></table></div></div></details>`:""}
+          </section>`;
+      }
+
+      function renderHousing() {
+        const housing=state.housing||migrateHousingSystem(state),regions=state.regions.slice().sort((a,b)=>a.housing.affordability-b.housing.affordability);
+        const tone=housing.affordability<30?"bad":housing.affordability<48?"warn":"good";
+        return `<section class="grid">
+          <div class="metric-grid">
+            ${metric("Цена жилья",pct(housing.priceIndex,1),`средняя ${personalAmount(housing.averageHomePrice)}`,housing.bubbleRisk>58?"bad":tone)}
+            ${metric("Аренда",pct(housing.rentIndex,1),`${personalAmount(housing.averageRent,"/мес.")}`,housing.rentIndex>housing.priceIndex+12?"warn":"good")}
+            ${metric("Доступность",pct(housing.affordability,0),`ипотека ${pct(housing.mortgageRate,1)}`,tone)}
+            ${metric("Свободное жильё",pct(housing.vacancyRate,1),`ввод ${compact(housing.completionsAnnual)} в год`,housing.vacancyRate<3.5?"bad":housing.vacancyRate>5?"good":"warn")}
+            ${metric("Риск пузыря",pct(housing.bubbleRisk,0),`инвесторы ${pct(housing.investorShare,0)}`,housing.bubbleRisk>58?"bad":housing.bubbleRisk>38?"warn":"good")}
+            ${metric("Социальный фонд",pct(housing.socialHousingShare,1),`${compact(housing.stock)} квартир всего`,housing.socialHousingShare>=8?"good":"warn")}
+          </div>
+          <section class="panel pad">
+            <div class="panel-section-head"><span><h3 class="section-title">Национальный жилищный рынок</h3><p class="subtle">Цены и аренда зависят от доходов, ключевой ставки, миграции, вакансии, себестоимости строительства и скорости разрешений. Кредитная субсидия повышает спрос, но без нового предложения способна разогнать цены.</p></span><span class="pill delta ${tone}">доступность ${pct(housing.affordability,0)}</span></div>
+            <div class="decision-banner ${tone}" style="margin-top:12px;"><strong>${esc(housing.lastBriefing)}</strong><span class="subtle">Начато ${compact(housing.startsAnnual)} · введено ${compact(housing.completionsAnnual)} квартир в год · себестоимость ${pct(housing.constructionCostIndex,0)}</span></div>
+            <div class="policy-action-grid compact" style="margin-top:12px;">
+              ${renderActionCard({title:"Реформа разрешений",category:"предложение",desc:"Кадастр, единые сроки и стандарт подключения участков к сетям.",signal:`срок разрешений ${Math.round(avg(regions.map(region=>({value:region.housing.permitsDays})),"value"))} дн.`,when:"Когда строительство не успевает за спросом.",effect:"Постепенно повышает частные старты и сокращает административную задержку.",risk:"Без надзора ускорение может снизить качество застройки.",cta:"Сократить сроки",tone:"institution"},{"data-action":"housing-action","data-mode":"zoning"},{compact:true})}
+              ${renderActionCard({title:"Социальное жильё",category:"государственный фонд",desc:"Строительство арендных квартир для очередников и работников критических служб.",signal:`социальный фонд ${pct(housing.socialHousingShare,1)}`,when:"Когда рынок не обеспечивает уязвимые семьи.",effect:"Через 18 месяцев увеличивает фонд и доступность выбранного региона.",risk:"Высокая стоимость, закупочные и эксплуатационные риски.",cta:"Начать проект",tone:"good"},{"data-action":"housing-action","data-mode":"social"},{compact:true})}
+              ${renderActionCard({title:"Подготовленные участки",category:"инфраструктура",desc:"Государство подводит транспорт, воду, тепло и электричество к новым кварталам.",signal:`себестоимость ${pct(housing.constructionCostIndex,0)}`,when:"При дорогом подключении и нехватке земли с сетями.",effect:"Через год расширяет предложение и частное строительство.",risk:"Нагрузка на инфраструктурный бюджет.",cta:"Подготовить",tone:"good"},{"data-action":"housing-action","data-mode":"sites"},{compact:true})}
+              ${renderActionCard({title:"Налог на пустующее жильё",category:"использование фонда",desc:"Повышенный налог после длительного подтверждённого простоя крупных портфелей.",signal:`вакансия ${pct(housing.vacancyRate,1)}`,when:"При высокой доле инвестиционных квартир и дефиците аренды.",effect:"Возвращает часть пустого фонда на рынок.",risk:"Слабый кадастр создаёт споры и обход правил.",cta:"Ввести",tone:"warn"},{"data-action":"housing-action","data-mode":"vacancy"},{compact:true})}
+              ${renderActionCard({title:"Пособие на аренду",category:"адресная помощь",desc:"Временная компенсация семьям с чрезмерной жилищной нагрузкой.",signal:`аренда ${pct(housing.rentIndex,1)}`,when:"Для быстрого снятия социальной остроты.",effect:"Снижает расходы арендаторов немедленно.",risk:"При дефиците предложения часть выплаты перейдёт в рост аренды.",cta:"Назначить",tone:"warn"},{"data-action":"housing-action","data-mode":"allowance"},{compact:true})}
+              ${renderActionCard({title:"Гарантия первого жилья",category:"ипотека",desc:"Частичная государственная гарантия платёжеспособным молодым семьям.",signal:`ставка ${pct(housing.mortgageRate,1)}`,when:"При доступных ценах, но жёстком первоначальном взносе.",effect:"Расширяет кредитный доступ.",risk:"При дефиците квартир повышает цены и риск бюджета.",cta:"Открыть программу",tone:"warn"},{"data-action":"housing-action","data-mode":"guarantee"},{compact:true})}
+            </div>
+          </section>
+          <section class="panel pad"><div class="panel-section-head"><span><h3 class="section-title">Рынки жилья по регионам</h3><p class="subtle">Военный ущерб временно выводит часть фонда из использования. Миграция, занятость и привлекательность формируют спрос отдельно в каждом регионе.</p></span><span class="pill">${regions.length} регионов</span></div><div class="bill-grid" style="margin-top:12px;">${regions.map(region=>{const h=region.housing;return `<article class="bill-card ${h.affordability<30?"bad":h.affordability<48?"warn":"good"}"><header><span><strong>${esc(region.name)}</strong><small>${compact(h.stock)} квартир · повреждено ${compact(h.damagedStock)}</small></span><span class="pill">доступность ${pct(h.affordability,0)}</span></header><div class="bill-kpis"><div><span>Цена</span><strong>${pct(h.priceIndex,0)}</strong></div><div><span>Аренда</span><strong>${pct(h.rentIndex,0)}</strong></div><div><span>Свободно</span><strong>${pct(h.vacancyRate,1)}</strong></div><div><span>Спрос</span><strong>${pct(h.demandPressure,0)}</strong></div><div><span>Строится в год</span><strong>${compact(h.construction)}</strong></div><div><span>Разрешения</span><strong>${Math.round(h.permitsDays)} дн.</strong></div></div><details class="action-fold"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Цена ${h.annualPriceChange>=0?"+":""}${pct(h.annualPriceChange,1)} в год</strong><small>аренда ${h.annualRentChange>=0?"+":""}${pct(h.annualRentChange,1)} · социальный фонд ${pct(h.socialShare,1)}</small></span></summary><div class="action-fold-body"><p class="subtle" style="margin:0;">Жилищное давление ${pct(region.demography.housingPressure,0)}, миграционная привлекательность ${pct(region.demography.attractiveness,0)}, повреждение территории ${pct(region.damage,0)}.</p><div class="actions"><button data-action="select-region" data-id="${region.id}">Выбрать регион</button></div></div></details></article>`;}).join("")}</div></section>
+          <section class="panel pad"><div class="panel-section-head"><span><h3 class="section-title">Строительные очереди</h3><p class="subtle">Государственные квартиры появляются только после завершения проекта.</p></span><span class="pill">${housing.pipeline.length} проектов</span></div><div class="list" style="margin-top:12px;">${housing.pipeline.length?housing.pipeline.map(item=>{const region=state.regions.find(region=>region.id===item.regionId);return `<div class="row"><span><strong>${esc(item.type)}</strong><br><small class="subtle">${esc(region?.name||"регион")} · ${compact(item.units)} квартир · начато ${esc(item.started)}</small></span><span class="pill">${item.monthsLeft} мес.</span></div>`;}).join(""):`<div class="row"><span>Государственных строительных проектов пока нет</span><span class="pill">рынок</span></div>`}</div></section>
+        </section>`;
+      }
+
       function renderPopulation() {
         const p = state.population,d=p.demography;
         const regions=state.regions.slice().sort((a,b)=>b.demography.attractiveness-a.demography.attractiveness);
@@ -14982,6 +15519,7 @@
               ${metric("Чистая миграция", `${d.netMigration>=0?"+":""}${compact(d.netMigration)}`, `въезд ${compact(d.annualImmigration)} · выезд ${compact(d.annualEmigration)}`, d.netMigration>=0?"good":"bad")}
               ${metric("Демографическая нагрузка", pct(d.dependencyRatio,0), `рабочая сила ${compact(d.laborForce)}`, d.dependencyRatio<58?"good":"warn")}
             </div>
+            ${renderHouseholdBudgetPanel()}
             <section class="panel pad">
               <div class="panel-section-head"><span><h3 class="section-title">Возраст и трудовые ресурсы</h3><p class="subtle">Когорты меняются ежедневно: дети взрослеют, население стареет, смертность зависит от возраста, а миграция преимущественно пополняет молодую рабочую силу.</p></span><span class="pill">урбанизация ${pct(d.urbanization,0)}</span></div>
               <div class="bill-grid" style="margin-top:12px;">${d.cohorts.map(cohort=>`<article class="bill-card ${cohort.id==="elderly"&&d.dependencyRatio>60?"warn":""}"><header><span><strong>${esc(cohort.name)}</strong><small>смертность ${cohort.mortality.toFixed(1)}‰ · участие в труде ${pct(cohort.labor*100,0)}</small></span><span class="pill">${pct(cohort.share,1)}</span></header><div class="progress"><i style="--w:${cohort.share}%"></i></div><div class="bill-kpis"><div><span>Численность</span><strong>${compact(cohort.population)}</strong></div><div><span>Доля</span><strong>${pct(cohort.share,1)}</strong></div></div></article>`).join("")}</div>
@@ -15314,6 +15852,27 @@
                 "Бедная страна может расти быстрее благодаря догоняющему развитию, но только при инвестициях, образовании, инфраструктуре и работающих институтах.",
                 "Сырьевая экономика сильнее реагирует на мировой рынок, развитая растет медленнее и устойчивее, а хрупкая тяжелее собирает налоги и получает доступ к долгу.",
                 "Профиль не гарантирует результат: война, кризис, плохое управление и дефициты способны разрушить преимущества любой модели."
+              ])}
+              ${manualCard("Домохозяйства и семейные бюджеты", [
+                "Население разделено на шесть типов домохозяйств: низкодоходные, работающие, средний класс, молодые семьи, пенсионные и высокодоходные.",
+                "Для каждой группы отдельно считаются валовой доход, налоги, пособия, жильё, питание, коммунальные услуги, транспорт, прочие расходы, свободный остаток, долг, сбережения и просрочка.",
+                "Инфляция, безработица, зарплаты, пенсии, налоговые ставки, социальные расходы и стоимость жилья меняют семейный бюджет помесячно.",
+                "Отрицательный остаток постепенно накапливает долг, высокая обязательная нагрузка повышает стресс и бедность, а устойчивые сбережения поддерживают потребительский спрос.",
+                "Адресный налоговый кредит, компенсация услуг, реструктуризация и уход за детьми помогают разным группам, имеют срок и реальную бюджетную цену."
+              ])}
+              ${manualCard("Жилищный рынок и недвижимость", [
+                "У каждого региона есть жилищный фонд, вакансия, цена, аренда, спрос, доступность, строительство, срок разрешений, социальный фонд и временно повреждённые войной квартиры.",
+                "Цены меняются от доходов, инфляции, ипотеки, миграции, занятости, вакансии и нового предложения. Аренда сильнее реагирует на нехватку свободного жилья.",
+                "Ключевая ставка передаётся в ипотечную ставку через банковский риск. Дешёвый кредит без строительства способен повысить пузырь и ухудшить доступность.",
+                "Социальное жильё и подготовленные участки вводятся через 12-18 месяцев; они не создают квартиры в день подписания решения.",
+                "Пособие на аренду быстро помогает семье, но при дефиците часть поддержки переходит в цену. Реформа разрешений и инфраструктура действуют медленнее, зато расширяют предложение."
+              ])}
+              ${manualCard("Политический капитал и внимание президента", [
+                "Крупные законы, программы и стратегические решения расходуют политический капитал и автоматически занимают место в президентской повестке.",
+                "Число мест зависит от качества кабинета и цифрового управления. Войны, тяжёлые кризисы и активные цепочки событий создают дополнительную оперативную нагрузку.",
+                "Главный фокус ускоряет одно поручение; делегирование освобождает часть внимания ценой более медленного исполнения; снятие контроля имеет политическую цену.",
+                "Перегрузка снижает исполнение кабинета и государственного конвейера. Поэтому одновременно объявить множество реформ без потери качества нельзя.",
+                "Политический капитал восстанавливается постепенно из общественного мандата, коалиции и управляемости. Разбор повестки снимает дублирование, но требует аппарата и бюджета."
               ])}
               ${manualCard("Исполнение решений", [
                 "После принятия закона или указа создается отдельная государственная программа с ответственным министром, сметой, сроком, риском и целевыми регионами.",
@@ -16387,6 +16946,7 @@
           return;
         }
         if (!state) return;
+        if (!authorizePresidentialAction(actionEl)) return;
 
         if (action === "speed") state.speed = num(actionEl.dataset.speed);
         else if (action === "tick") tickManual();
@@ -16458,6 +17018,9 @@
         else if (action === "set-tech") state.tech.focus = actionEl.dataset.id;
         else if (action === "social") socialAction(actionEl.dataset.social);
         else if (action === "demography-action") demographyAction(actionEl.dataset.mode);
+        else if (action === "household-action") householdAction(actionEl.dataset.mode);
+        else if (action === "housing-action") housingAction(actionEl.dataset.mode);
+        else if (action === "attention-action") presidentialAttentionAction(actionEl.dataset.mode,actionEl.dataset.id);
         else if (action === "information-action") informationAction(actionEl.dataset.mode);
         else if (action === "generate-news") generateNews(actionEl.dataset.category);
         else if (action === "add-law") addLaw();
@@ -16987,6 +17550,9 @@
           simulateShadowEconomySystem(game);
           simulateEconomy(game);
           simulatePrivateSector(game);
+          simulateHousingMarket(game);
+          simulateHouseholds(game);
+          simulatePresidentialAttention(game);
           simulatePolitics(game);
           simulateShadowCabinetSystem(game);
           simulatePromiseSystem(game);
@@ -17331,7 +17897,8 @@
         updatePrivateSectorTotals(game);const active=ps.companies.filter(c=>c.status!=="банкротство"),largest=active.length?Math.max(...active.map(c=>c.marketShare)):100;ps.monopolyRisk=clamp(ps.monopolyRisk*.99+Math.max(0,largest-20)*.015+(100-ps.competition)*.006,0,100);
         const businessTarget=clamp(50+e.growth*2-e.inflation*.6+(financialHealth(game)-55)*.2+(infraFactor-1)*20-ps.insolvencyRate*.8,10,90);
         ps.businessConfidence=clamp(ps.businessConfidence+(businessTarget-ps.businessConfidence)*.0015,0,100);
-        const consumerTarget=clamp(50+(game.population.happiness-50)*.4-(e.inflation-4)*.8-(e.unemployment-6)*.6,10,90);
+        const householdSignal=game.population.households?clamp((game.population.households.consumptionIndex-100)*.45-(game.population.households.delinquencyRate-4)*.35,-18,15):0;
+        const consumerTarget=clamp(50+(game.population.happiness-50)*.4-(e.inflation-4)*.8-(e.unemployment-6)*.6+householdSignal,10,90);
         ps.consumerConfidence=clamp(ps.consumerConfidence+(consumerTarget-ps.consumerConfidence)*.0015,0,100);
         const laborTarget=clamp(48+(ps.businessConfidence-50)*.35+(e.growth-1.5)*2.5-e.unemployment*.45,8,92);
         ps.laborDemand=clamp(ps.laborDemand+(laborTarget-ps.laborDemand)*.0015+(hires-layoffs)/Math.max(1000,ps.privateEmployment)*30,0,100);
@@ -17636,7 +18203,8 @@
         const incomeAnnualBefore = calcIncomeBreakdown(game);
         const expenseAnnualBefore = calcExpenseBreakdown(game);
         const primaryBalanceRatio = (incomeAnnualBefore.total - expenseAnnualBefore.primary) / Math.max(1, e.gdp);
-        const consumerImpulse = clamp((privateSector.consumerConfidence - 50) * .015 + (pop.happiness - 50) * .008 - Math.max(0, e.inflation - 6) * .035, -1.5, 1.2);
+        const householdDemand = pop.households ? (pop.households.consumptionIndex - 100) * .012 - Math.max(0, pop.households.essentialBurden - 70) * .009 : 0;
+        const consumerImpulse = clamp((privateSector.consumerConfidence - 50) * .015 + (pop.happiness - 50) * .008 - Math.max(0, e.inflation - 6) * .035 + householdDemand, -1.5, 1.2);
         const investmentImpulse = clamp((privateSector.businessConfidence - 50) * .012 + finance.investmentGrowth * .035 - Math.max(0, e.keyRate - e.inflation - 2) * .045, -1.5, 1.3);
         const fiscalImpulse = clamp((-primaryBalanceRatio - .01) * 7 * num(calibration.fiscalMultiplier,.8), -1.35, 1.5);
         const austerityPenalty = -clamp(num(accounts.forcedAusterity) * .024, 0, 1.65);
@@ -17769,7 +18337,8 @@
         const investmentShare = clamp(
           num(calibration.investmentShare,.21) * .42 + (privateSector.businessConfidence - 50) * .00045
           + (privateSector.foreignInvestment - 50) * .0002
-          + (e.financial.creditGrowth - 5) * .0004 - Math.max(0, e.keyRate - 9) * .0015,
+          + (e.financial.creditGrowth - 5) * .0004 - Math.max(0, e.keyRate - 9) * .0015
+          + (game.housing ? clamp(game.housing.startsAnnual / Math.max(1, game.population.households?.totalHouseholds || game.population.total / 2.55) * 100 - 1.2, -1, 2.5) * .0022 : 0),
           .035,
           .22
         );
@@ -18460,7 +19029,7 @@
         c.capacity = clamp(avg(p.ministers, "skill") * .48 + avg(p.ministers, "performance") * .34 + (100 - c.bureaucracy) * .18, 0, 100);
         c.integrity = clamp(avg(p.ministers, "integrity") * .65 + (100 - p.corruption) * .35, 0, 100);
         c.cohesion = clamp(c.cohesion + (avg(p.ministers, "loyalty") - c.cohesion) * .0012 - (p.coalition < 40 ? .002 : .001), 0, 100);
-        c.execution = clamp(c.capacity * .42 + c.cohesion * .23 + c.integrity * .2 + (100 - c.bureaucracy) * .15, 0, 100);
+        c.execution = clamp(c.capacity * .42 + c.cohesion * .23 + c.integrity * .2 + (100 - c.bureaucracy) * .15 + attentionExecutionModifier(game), 0, 100);
         const activeProjects=game.governance.projects.filter(x=>x.status==="active").length;
         const implementing=p.legislation.filter(x=>x.stage==="implementation").length;
         const digitalService=game.governance.services.find(item=>item.id==="digital")?.level||50;
@@ -21139,6 +21708,9 @@
         if (!e.nationalAccounts) migrateNationalAccounts(state);
         if (!e.financial?.centralBank || !Array.isArray(e.financial?.banks)) migrateFinancialSystem(state);
         if (!pop.demography?.cohorts || state.regions.some(region=>!region.demography)) migrateDemographySystem(state);
+        if (!state.housing || state.housing.modelVersion!==HOUSING_MODEL_VERSION || state.regions.some(region=>!region.housing)) migrateHousingSystem(state);
+        if (!pop.households || pop.households.modelVersion!==HOUSEHOLD_MODEL_VERSION) migrateHouseholdSystem(state);
+        if (!p.attention || p.attention.modelVersion!==ATTENTION_MODEL_VERSION) migratePresidentialAttention(state);
         if (!state.infrastructure?.edges || state.regions.some(region=>!state.infrastructure.nodes?.some(node=>node.regionId===region.id))) migrateInfrastructureSystem(state);
         if (!e.privateSector?.companies) migratePrivateSector(state);
         if (!state.information?.outlets || !state.information?.narratives) migrateInformationSystem(state);
@@ -21204,6 +21776,8 @@
         pop.education = clamp(pop.education, 0, 100);
         pop.poverty = clamp(pop.poverty, 0, 80);
         const demography=pop.demography;["inboundRate","outboundRate"].forEach(key=>demography[key]=clamp(num(demography[key]),0,40));["internalMobility","integrationCapacity","urbanization","laborParticipation","familySupport","housingProgram"].forEach(key=>demography[key]=clamp(num(demography[key]),0,100));demography.retirementAge=clamp(num(demography.retirementAge,65),55,75);demography.cohorts=demography.cohorts.map(cohort=>normalizeAgeCohort(cohort,null,pop.total));demography.history=(demography.history||[]).slice(0,60);syncDemographicIndicators(state);
+        syncHousingAggregates(state);recalculateHouseholdBudgets(state,false);
+        const attention=p.attention;attention.capital=clamp(num(attention.capital),0,num(attention.maxCapital,100));attention.capacity=clamp(Math.round(num(attention.capacity,3)),2,5);attention.overload=clamp(num(attention.overload),0,100);attention.active=attention.active.map(item=>normalizePresidentialPriority(item,state)).filter(item=>item.status==="active").slice(0,8);attention.history=(attention.history||[]).slice(0,30);
         const groupAggregate = calcPublicApproval(state);
         const directPopularityDelta = p.popularity - groupAggregate;
         if (Math.abs(directPopularityDelta) > .001) {
