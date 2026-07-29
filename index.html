@@ -3786,7 +3786,7 @@
 
       const STORAGE_KEY = "aaa_president_sim_state_v4";
       const SLOTS_KEY = "aaa_president_sim_slots_v4";
-      const SAVE_VERSION = 29;
+      const SAVE_VERSION = 30;
       const ECONOMY_MODEL_VERSION = 5;
       const FOREIGN_STATE_MODEL_VERSION = 1;
       const BILATERAL_MODEL_VERSION = 2;
@@ -3802,6 +3802,9 @@
       const SCANDAL_MODEL_VERSION = 1;
       const MUNICIPAL_MODEL_VERSION = 1;
       const MULTILATERAL_MODEL_VERSION = 1;
+      const CONSTITUTIONAL_ORDER_MODEL_VERSION = 1;
+      const GENERATIONAL_MEMORY_MODEL_VERSION = 1;
+      const STATE_DOCTRINE_MODEL_VERSION = 1;
       const SAVE_DB_NAME = "aaa_president_sim_storage";
       const SAVE_DB_STORE = "saves";
       const DAY_MS = 1800;
@@ -4113,6 +4116,12 @@
         }
         settings.scenarioApplied=true;
         settings.scenarioName=scenario.name;
+        if(game.population.generationalMemory)syncGenerationalPopulation(game);
+        if(p.constitutionalOrder){
+          for(const tradition of p.constitutionalOrder.traditions){const target=constitutionalTraditionTarget(game,tradition.id);tradition.strength=target;tradition.adherence=target;}
+          p.constitutionalOrder.constitutionalCulture=clamp(p.justice.ruleOfLaw*.34+p.justice.independence*.28+p.constitutionalOrder.executiveRestraint*.2+p.constitutionalOrder.precedentConsistency*.18,0,100);
+        }
+        if(game.governance.doctrines){game.governance.doctrines.context={};game.governance.doctrines.lastContextDate="";}
         reconcileNationalAccounts(game);
       }
 
@@ -4474,6 +4483,10 @@
           (copy.municipalities.cities || []).forEach(city=>{city.history=[];delete city.lastReport;if(city.project?.status==="completed")city.project=null;});
         }
         if (copy.population?.demography?.history) copy.population.demography.history = copy.population.demography.history.slice(0, level === "normal" ? 36 : 14);
+        if (copy.population?.generationalMemory) {
+          copy.population.generationalMemory.history = (copy.population.generationalMemory.history || []).slice(0, level === "normal" ? 12 : 5);
+          (copy.population.generationalMemory.cohorts || []).forEach(cohort => { cohort.memories = (cohort.memories || []).slice(0, level === "normal" ? 5 : 3); });
+        }
         if (copy.information?.history) copy.information.history = copy.information.history.slice(0, level === "normal" ? 40 : 16);
         if (copy.information?.scandals) {
           copy.information.scandals.cases = (copy.information.scandals.cases || []).filter(item=>!["закрыто","опровергнуто"].includes(item.status)).concat((copy.information.scandals.cases || []).filter(item=>["закрыто","опровергнуто"].includes(item.status)).slice(0,level==="normal"?4:2)).slice(0,level==="normal"?10:6);
@@ -4519,6 +4532,7 @@
           copy.governance.procurement.audits = (copy.governance.procurement.audits || []).slice(0, level === "normal" ? 8 : 3);
           copy.governance.procurement.history = (copy.governance.procurement.history || []).slice(0, level === "normal" ? 12 : 5);
         }
+        if (copy.governance?.doctrines) copy.governance.doctrines.history = (copy.governance.doctrines.history || []).slice(0, level === "normal" ? 14 : 6);
         if (copy.softPower?.programs) copy.softPower.programs = copy.softPower.programs.slice(0, level === "normal" ? 14 : 7);
         if (copy.softPower?.events) copy.softPower.events = copy.softPower.events.slice(0, level === "normal" ? 14 : 6);
         if (copy.softPower?.log) copy.softPower.log = copy.softPower.log.slice(0, level === "normal" ? 20 : 8);
@@ -4528,6 +4542,10 @@
         if (copy.succession?.log) copy.succession.log = copy.succession.log.slice(0, level === "normal" ? 24 : 10);
         if (copy.politics?.elections?.log) copy.politics.elections.log = copy.politics.elections.log.slice(0, level === "normal" ? 40 : 16);
         if (copy.politics?.justice?.history) copy.politics.justice.history = copy.politics.justice.history.slice(0, level === "normal" ? 40 : 16);
+        if (copy.politics?.constitutionalOrder) {
+          copy.politics.constitutionalOrder.precedents = (copy.politics.constitutionalOrder.precedents || []).slice(0, level === "normal" ? 14 : 7);
+          copy.politics.constitutionalOrder.history = (copy.politics.constitutionalOrder.history || []).slice(0, level === "normal" ? 16 : 7);
+        }
         if (level === "safe") {
           if (copy.country?.president) copy.country.president.photo = "";
           if (copy.country?.flag) copy.country.flag.image = "";
@@ -4748,6 +4766,7 @@
         loaded.regions = loaded.regions.map((r, index) => ensureRegionDefaults(r, index));
         migrateRegionalAdministration(loaded);
         migrateDemographySystem(loaded);
+        migrateGenerationalMemory(loaded);
         migrateInfrastructureSystem(loaded);
         migratePrivateSector(loaded);
         migrateInformationSystem(loaded);
@@ -4756,6 +4775,7 @@
         migrateClimateSystem(loaded);
         migrateChronicle(loaded);
         migrateSuccessionSystem(loaded);
+        migrateConstitutionalOrder(loaded);
         migrateFederationSystem(loaded);
         migrateWorldGeography(loaded);
         migrateWorldMarketSystem(loaded);
@@ -4772,6 +4792,7 @@
         migrateSoftPowerSystem(loaded);
         migrateStateDelivery(loaded);
         migrateProcurementSystem(loaded);
+        migrateStateDoctrineSystem(loaded);
         migrateActorAISystem(loaded);
         migrateNarrativeSystem(loaded);
         migrateGameSettings(loaded);
@@ -5453,6 +5474,224 @@
         game.politics ||= defaultPolitics({});
         game.politics.cabinet = Object.assign(defaultCabinetSystem(), game.politics.cabinet || {});
         game.politics.ministers = (game.politics.ministers || []).map(normalizeMinister);
+      }
+
+      function stateDoctrineCatalog() {
+        return {
+          economic:{
+            name:"Экономическая доктрина",portfolio:"economy",
+            options:{
+              balanced:{name:"Сбалансированное развитие",principle:"Рост производительности при устойчивом бюджете и конкуренции.",risk:"Медленнее концентрирует ресурсы на одном прорывном направлении.",effects:{growth:.28,fiscal:.28,institutions:.12}},
+              developmental:{name:"Государство развития",principle:"Инфраструктура, промышленная политика и долгий инвестиционный кредит.",risk:"Слабые закупки превращают инвестиции в долг и захват ренты.",effects:{growth:.52,infrastructure:.42,fiscal:-.18}},
+              market:{name:"Конкурентная рыночная экономика",principle:"Защита собственности, конкуренция и ограничение прямого участия государства.",risk:"Без социальной и региональной компенсации растёт неравенство.",effects:{growth:.34,institutions:.34,social:-.16}},
+              resilience:{name:"Экономическая устойчивость",principle:"Резервы, диверсификация поставок и защита критических производств.",risk:"Избыточное резервирование снижает краткосрочную эффективность.",effects:{resilience:.58,growth:.08,fiscal:-.12}},
+              socialMarket:{name:"Социальная рыночная модель",principle:"Конкуренция сочетается с коллективными договорами и защитой семейных доходов.",risk:"Высокие постоянные обязательства требуют сильной налоговой базы.",effects:{social:.48,growth:.14,fiscal:-.14,institutions:.14}}
+            }
+          },
+          foreign:{
+            name:"Внешнеполитическая доктрина",portfolio:"foreign",
+            options:{
+              multivector:{name:"Многовекторный баланс",principle:"Несколько центров партнёрства без исключительной зависимости от одного блока.",risk:"Партнёры могут сомневаться в предсказуемости обязательств.",effects:{diplomacy:.34,resilience:.24}},
+              integration:{name:"Интеграция и правила",principle:"Договоры, международные организации и совместимые стандарты.",risk:"Часть самостоятельности передаётся общим институтам и арбитражу.",effects:{diplomacy:.58,growth:.2,institutions:.18}},
+              sovereignty:{name:"Стратегическая автономия",principle:"Внутренняя способность принимать решения под внешним давлением.",risk:"Самодостаточность дорого обходится и может снизить доступ к рынкам.",effects:{resilience:.44,security:.22,diplomacy:-.18}},
+              collective:{name:"Коллективная безопасность",principle:"Союзы, совместное сдерживание и взаимные гарантии.",risk:"Обязательства партнёров способны вовлечь страну в чужой кризис.",effects:{security:.46,diplomacy:.3,fiscal:-.1}},
+              neutral:{name:"Вооружённый нейтралитет",principle:"Невступление в блоки при готовности защитить территорию и торговые пути.",risk:"Страна должна самостоятельно оплачивать значительную часть обороны.",effects:{security:.3,resilience:.2,diplomacy:.08,fiscal:-.14}}
+            }
+          },
+          social:{
+            name:"Общественная доктрина",portfolio:"health",
+            options:{
+              universal:{name:"Универсальное государство услуг",principle:"Базовые образование, медицина и социальная защита доступны всем.",risk:"Качество падает, если обязательства растут быстрее кадров и доходов.",effects:{social:.54,institutions:.16,fiscal:-.24}},
+              targeted:{name:"Адресная социальная поддержка",principle:"Ресурсы концентрируются на семьях с подтверждённой нуждаемостью.",risk:"Ошибки данных исключают часть граждан и снижают доверие.",effects:{social:.3,fiscal:.34,institutions:.08}},
+              opportunity:{name:"Равенство возможностей",principle:"Образование, конкуренция и мобильность важнее постоянного перераспределения.",risk:"Результат приходит медленно и не закрывает острый разрыв доходов.",effects:{growth:.24,social:.22,institutions:.24}},
+              demographic:{name:"Демографическая устойчивость",principle:"Жильё, уход за детьми, здоровье и управляемая миграция образуют единый контур.",risk:"Программы дороги, а демографический эффект проявляется через годы.",effects:{social:.42,resilience:.2,fiscal:-.2}},
+              solidarity:{name:"Поколенческая солидарность",principle:"Дети, работники и старшие получают взаимосвязанные гарантии.",risk:"Политический компромисс ограничивает быстрые изменения пенсий и налогов.",effects:{social:.48,cohesion:.3,fiscal:-.18}}
+            }
+          },
+          territorial:{
+            name:"Территориальная доктрина",portfolio:"administration",
+            options:{
+              cooperative:{name:"Кооперативный федерализм",principle:"Центр, регионы и города совместно финансируют стандарты и проекты.",risk:"Согласование замедляет решения при слабой дисциплине сторон.",effects:{cohesion:.48,infrastructure:.22,institutions:.16}},
+              decentralization:{name:"Ответственная децентрализация",principle:"Полномочия следуют за собственной доходной базой и местной подотчётностью.",risk:"Слабые регионы могут отстать без выравнивающего механизма.",effects:{cohesion:.28,growth:.14,institutions:.34}},
+              equalization:{name:"Территориальное выравнивание",principle:"Федеральный бюджет гарантирует сопоставимые базовые услуги по всей стране.",risk:"Постоянные трансферты способны ослабить стимул к собственной налоговой базе.",effects:{cohesion:.54,social:.22,fiscal:-.2}},
+              metropolitan:{name:"Сеть городов развития",principle:"Крупные города и транспортные коридоры становятся двигателями производительности.",risk:"Столица и агломерации могут усилить отток из периферии.",effects:{growth:.3,infrastructure:.4,cohesion:-.12}},
+              territorialSecurity:{name:"Территориальная связанность",principle:"Поселения, границы, логистика и резерв инфраструктуры рассматриваются как единая безопасность.",risk:"Избыточный приоритет устойчивости увеличивает стоимость проектов.",effects:{resilience:.42,infrastructure:.32,security:.18,fiscal:-.14}}
+            }
+          },
+          security:{
+            name:"Доктрина национальной безопасности",portfolio:"security",
+            options:{
+              comprehensive:{name:"Всеобъемлющая безопасность",principle:"Оборона, разведка, киберзащита, здоровье и инфраструктура планируются вместе.",risk:"Широкий перечень угроз распыляет внимание и бюджет.",effects:{security:.38,resilience:.36,institutions:.12}},
+              deterrence:{name:"Сдерживание и готовность",principle:"Боевой потенциал и запасы должны исключить рациональность нападения.",risk:"Гонка вооружений повышает внешнюю напряжённость и расходы.",effects:{security:.56,diplomacy:-.14,fiscal:-.18}},
+              humanSecurity:{name:"Безопасность человека",principle:"Права, правосудие, медицина и устойчивые города снижают внутренние угрозы.",risk:"Недостаточный военный резерв опасен при резком внешнем кризисе.",effects:{social:.34,institutions:.38,security:.16}},
+              territorialDefense:{name:"Территориальная оборона",principle:"Мобилизационный резерв, укреплённая инфраструктура и защита регионов.",risk:"Высокая готовность резерва требует постоянных тренировок и складов.",effects:{security:.45,cohesion:.2,resilience:.3,fiscal:-.16}},
+              expeditionary:{name:"Проекция силы",principle:"Мобильные силы защищают морские пути, союзников и интересы за рубежом.",risk:"Дальние операции создают потери, истощение и международно-правовые риски.",effects:{security:.34,diplomacy:.12,fiscal:-.28}}
+            }
+          }
+        };
+      }
+
+      function normalizeStateDoctrineDomain(item,domainId,fallbackId,game) {
+        const catalog=stateDoctrineCatalog()[domainId],value=Object.assign({id:domainId,name:catalog.name,activeId:fallbackId,recommendedId:fallbackId,alignment:58,publicSupport:55,institutionalReadiness:57,stability:62,reviewDays:120,status:"действует",adoptedDate:formatDate(game.date),reason:"доктрина соответствует исходному государственному курсу",revisions:0},item||{});
+        if(!catalog.options[value.activeId])value.activeId=fallbackId;if(!catalog.options[value.recommendedId])value.recommendedId=fallbackId;
+        ["alignment","publicSupport","institutionalReadiness","stability"].forEach(key=>value[key]=clamp(num(value[key],55),0,100));
+        value.reviewDays=Math.max(0,Math.round(num(value.reviewDays,120)));value.revisions=Math.max(0,Math.round(num(value.revisions)));value.status=["действует","требует пересмотра","переход"].includes(value.status)?value.status:"действует";
+        return value;
+      }
+
+      function defaultStateDoctrineSystem(game) {
+        const defaults={economic:"balanced",foreign:"multivector",social:"universal",territorial:"cooperative",security:"comprehensive"};
+        return {
+          modelVersion:STATE_DOCTRINE_MODEL_VERSION,
+          domains:Object.entries(defaults).map(([id,activeId])=>normalizeStateDoctrineDomain(null,id,activeId,game)),
+          strategicConsistency:58,
+          adaptability:56,
+          implementation:55,
+          publicClarity:53,
+          revisionCooldown:0,
+          context:{},
+          lastContextDate:"",
+          lastEraReviewed:game.succession?.currentEra?.startDate||formatDate(game.date),
+          history:[],
+          lastBriefing:"Пять государственных доктрин задают долгий курс, но их полезность зависит от реальной обстановки и способности аппарата."
+        };
+      }
+
+      function migrateStateDoctrineSystem(game) {
+        game.governance ||= migrateGovernance(game.governance);
+        const base=defaultStateDoctrineSystem(game),incoming=game.governance.doctrines&&typeof game.governance.doctrines==="object"&&!Array.isArray(game.governance.doctrines)?game.governance.doctrines:{},system=Object.assign(base,incoming,{modelVersion:STATE_DOCTRINE_MODEL_VERSION});
+        const incomingDomains=new Map((Array.isArray(incoming.domains)?incoming.domains:[]).map(item=>[item.id,item])),fallbackIds={economic:"balanced",foreign:"multivector",social:"universal",territorial:"cooperative",security:"comprehensive"};
+        system.domains=Object.keys(fallbackIds).map(id=>normalizeStateDoctrineDomain(incomingDomains.get(id),id,fallbackIds[id],game));
+        ["strategicConsistency","adaptability","implementation","publicClarity"].forEach(key=>system[key]=clamp(num(system[key],base[key]),0,100));
+        system.revisionCooldown=Math.max(0,Math.round(num(system.revisionCooldown)));system.context=incoming.context&&typeof incoming.context==="object"&&!Array.isArray(incoming.context)?incoming.context:{};system.lastContextDate||="";system.history=(Array.isArray(incoming.history)?incoming.history:[]).filter(Boolean).slice(0,45);
+        game.governance.doctrines=system;return system;
+      }
+
+      function doctrineContextScore(game,domainId,optionId) {
+        const e=game.economy,p=game.politics,pop=game.population,wm=game.worldMarket,f=game.federation,m=game.military,j=p.justice;
+        const debtRatio=e.debt/Math.max(1,e.gdp)*100,inequality=num(pop.households?.inequality,35),infraGap=num(game.infrastructure?.maintenanceBacklog,40),threat=game.diplomacy.countries.reduce((max,country)=>Math.max(max,num(country.strategy?.threat)),0),war=game.military.wars.length;
+        const scores={
+          economic:{
+            balanced:62-Math.abs(e.growth-2.3)*2-Math.max(0,debtRatio-75)*.2,
+            developmental:42+e.unemployment*1.5+infraGap*.35+Math.max(0,70-avg(e.industries,"efficiency"))*.2,
+            market:36+p.corruption*.35+num(e.privateSector.monopolyRisk)*.25+num(e.privateSector.propertyRights<55?55-e.privateSector.propertyRights:0)*.4,
+            resilience:34+num(wm?.importDependency,50)*.35+num(e.supplyShock)*.4+num(game.climate?.waterStress,30)*.2,
+            socialMarket:38+inequality*.55+pop.poverty*.7+num(pop.households?.essentialBurden,55)*.25
+          },
+          foreign:{
+            multivector:55+game.country.neighbors.length*2+Math.max(0,55-game.diplomacy.law.reputation)*.18,
+            integration:35+game.diplomacy.law.reputation*.35+game.diplomacy.law.treatyReliability*.25,
+            sovereignty:30+game.diplomacy.law.sanctionsExposure*.55+threat*.25+num(wm?.importDependency)*.18,
+            collective:28+threat*.42+war*14+game.diplomacy.globalTension*.22,
+            neutral:42+threat*.2+num(m.readiness)*.18-Math.max(0,game.diplomacy.law.treatyReliability-70)*.2
+          },
+          social:{
+            universal:40+pop.poverty*.7+(100-game.governance.services.reduce((sum,item)=>sum+item.level,0)/game.governance.services.length)*.35,
+            targeted:46+Math.max(0,debtRatio-65)*.38+num(game.statistics.quality)*.18,
+            opportunity:38+e.unemployment*.6+(100-pop.education)*.4+num(e.laborMarket?.mismatch)*.22,
+            demographic:35+num(pop.demography.dependencyRatio)*.3+Math.max(0,10-pop.birthRate)*3+num(pop.demography.housingProgram<55?55-pop.demography.housingProgram:0)*.25,
+            solidarity:36+num(pop.generationalMemory?.intergenerationalGap,25)*.55+inequality*.3
+          },
+          territorial:{
+            cooperative:45+num(f?.cohesion,55)*.22+num(game.municipalities?.serviceIndex,55)*.18,
+            decentralization:35+num(game.regions.reduce((sum,region)=>sum+region.administration.governorSkill,0)/Math.max(1,game.regions.length))*.38+num(f?.centerLegitimacy,55)*.18,
+            equalization:34+Math.max(...game.regions.map(region=>region.wealth))-Math.min(...game.regions.map(region=>region.wealth))+num(f?.separatismRisk)*.2,
+            metropolitan:34+num(pop.demography.urbanization)*.32+num(game.municipalities?.urbanPressure)*.3,
+            territorialSecurity:30+infraGap*.35+game.regions.reduce((sum,region)=>sum+region.damage,0)/Math.max(1,game.regions.length)*.5+threat*.2
+          },
+          security:{
+            comprehensive:52+num(game.infrastructure?.outageRisk)*.18+num(game.intelligence?.cyberThreat)*.2,
+            deterrence:30+threat*.48+game.diplomacy.globalTension*.2,
+            humanSecurity:34+pop.crime*.38+(100-j.ruleOfLaw)*.35+pop.poverty*.35,
+            territorialDefense:32+threat*.35+war*18+num(f?.separatismRisk)*.22,
+            expeditionary:20+num(m.airlift)*.28+num(m.navalPower)*.25+game.softPower?.prestige*.12
+          }
+        };
+        return clamp(num(scores[domainId]?.[optionId],50),0,100);
+      }
+
+      function recommendedStateDoctrine(game,domainId) {
+        const options=stateDoctrineCatalog()[domainId].options;
+        const cached=game.governance.doctrines?.context?.[domainId]||{};
+        return Object.keys(options).map(id=>({id,score:Number.isFinite(cached[id])?cached[id]:doctrineContextScore(game,domainId,id)})).sort((a,b)=>b.score-a.score)[0];
+      }
+
+      function doctrineAggregateEffects(game) {
+        const system=game.governance.doctrines||migrateStateDoctrineSystem(game),catalog=stateDoctrineCatalog(),totals={growth:0,fiscal:0,institutions:0,infrastructure:0,resilience:0,diplomacy:0,security:0,social:0,cohesion:0};
+        for(const domain of system.domains){
+          const effects=catalog[domain.id].options[domain.activeId]?.effects||{},weight=clamp(domain.alignment*.6+domain.institutionalReadiness*.4,0,100)/100/system.domains.length;
+          for(const [key,value]of Object.entries(effects))totals[key]+=value*weight;
+        }
+        return totals;
+      }
+
+      function simulateStateDoctrineSystem(game) {
+        const system=game.governance.doctrines||migrateStateDoctrineSystem(game),catalog=stateDoctrineCatalog(),p=game.politics;
+        system.revisionCooldown=Math.max(0,system.revisionCooldown-1);
+        if(!system.lastContextDate||game.date.day===1){
+          system.context={};
+          for(const domain of system.domains){
+            system.context[domain.id]={};
+            for(const optionId of Object.keys(catalog[domain.id].options))system.context[domain.id][optionId]=doctrineContextScore(game,domain.id,optionId);
+          }
+          system.lastContextDate=formatDate(game.date);
+        }
+        for(const domain of system.domains){
+          domain.reviewDays=Math.max(0,domain.reviewDays-1);
+          const recommendation=recommendedStateDoctrine(game,domain.id);domain.recommendedId=recommendation.id;
+          const cachedActive=system.context?.[domain.id]?.[domain.activeId],activeScore=Number.isFinite(cachedActive)?cachedActive:doctrineContextScore(game,domain.id,domain.activeId),minister=game.politics.ministers.find(item=>item.portfolio===catalog[domain.id].portfolio)||game.politics.ministers[0];
+          const readinessTarget=clamp(p.cabinet.execution*.34+p.cabinet.capacity*.24+num(minister?.skill,60)*.24+game.governance.delivery.interagencyCoordination*.18,0,100);
+          domain.alignment=clamp(domain.alignment+(activeScore-domain.alignment)*.002,0,100);domain.institutionalReadiness=clamp(domain.institutionalReadiness+(readinessTarget-domain.institutionalReadiness)*.0017,0,100);
+          const supportTarget=clamp(p.popularity*.35+p.coalition*.16+domain.alignment*.3+system.publicClarity*.19,0,100);
+          domain.publicSupport=clamp(domain.publicSupport+(supportTarget-domain.publicSupport)*.0015,0,100);
+          domain.stability=clamp(domain.stability+((domain.alignment*.35+domain.institutionalReadiness*.3+domain.publicSupport*.2+system.strategicConsistency*.15)-domain.stability)*.0013,0,100);
+          if(domain.reviewDays<=0){domain.reviewDays=180;if(domain.activeId!==recommendation.id&&recommendation.score-activeScore>12){domain.status="требует пересмотра";domain.reason=`Обстановка лучше соответствует курсу «${catalog[domain.id].options[recommendation.id].name}» (${Math.round(recommendation.score)}/100 против ${Math.round(activeScore)}/100).`;}else{domain.status="действует";domain.reason="Полугодовой обзор подтверждает приемлемое соответствие доктрины обстановке.";}}
+        }
+        const alignment=system.domains.reduce((sum,item)=>sum+item.alignment,0)/system.domains.length,readiness=system.domains.reduce((sum,item)=>sum+item.institutionalReadiness,0)/system.domains.length,conflicts=system.domains.filter(item=>item.status==="требует пересмотра").length;
+        system.strategicConsistency=clamp(system.strategicConsistency+((alignment-conflicts*4)-system.strategicConsistency)*.0015,0,100);system.implementation=clamp(system.implementation+((readiness*.65+alignment*.35)-system.implementation)*.0015,0,100);system.adaptability=clamp(system.adaptability+((100-conflicts*12+system.publicClarity*.2)-system.adaptability)*.0008,0,100);
+        const effects=doctrineAggregateEffects(game);
+        game.economy.growth=clamp(game.economy.growth+effects.growth*.00035,-25,25);
+        game.governance.delivery.fiscalDiscipline=clamp(game.governance.delivery.fiscalDiscipline+effects.fiscal*.00045,0,100);
+        game.economy.nationalAccounts.sovereignRisk=clamp(game.economy.nationalAccounts.sovereignRisk-effects.fiscal*.0002,0,100);
+        game.politics.justice.ruleOfLaw=clamp(game.politics.justice.ruleOfLaw+effects.institutions*.00045,0,100);
+        game.infrastructure.reliability=clamp(game.infrastructure.reliability+(effects.infrastructure+effects.resilience*.35)*.0005,0,100);
+        game.diplomacy.law.reputation=clamp(game.diplomacy.law.reputation+effects.diplomacy*.00045,0,100);
+        game.military.readiness=clamp(game.military.readiness+effects.security*.0004,0,100);
+        game.population.happiness=clamp(game.population.happiness+effects.social*.00035,0,100);
+        game.federation.cohesion=clamp(game.federation.cohesion+effects.cohesion*.00042,0,100);
+        if(conflicts)system.lastBriefing=`${conflicts} из ${system.domains.length} доктрин требуют пересмотра: формальный курс расходится с рисками и возможностями страны.`;
+        else system.lastBriefing="Государственные доктрины согласованы с текущей обстановкой и возможностями аппарата.";
+      }
+
+      function reassessDoctrinesForNewEra(game) {
+        const system=game.governance.doctrines||migrateStateDoctrineSystem(game),ideology=String(game.country.president.ideology||"центризм").toLowerCase(),maps={
+          либерализм:{economic:"market",foreign:"integration",social:"opportunity",territorial:"decentralization",security:"humanSecurity"},
+          социализм:{economic:"developmental",foreign:"multivector",social:"universal",territorial:"equalization",security:"comprehensive"},
+          "социал-демократия":{economic:"socialMarket",foreign:"integration",social:"solidarity",territorial:"cooperative",security:"humanSecurity"},
+          консерватизм:{economic:"balanced",foreign:"sovereignty",social:"demographic",territorial:"territorialSecurity",security:"deterrence"},
+          федерализм:{economic:"balanced",foreign:"multivector",social:"universal",territorial:"decentralization",security:"territorialDefense"},
+          суверенизм:{economic:"resilience",foreign:"sovereignty",social:"demographic",territorial:"territorialSecurity",security:"deterrence"},
+          технократия:{economic:"developmental",foreign:"integration",social:"opportunity",territorial:"metropolitan",security:"comprehensive"},
+          центризм:{economic:"balanced",foreign:"multivector",social:"universal",territorial:"cooperative",security:"comprehensive"}
+        };
+        const preferred=maps[ideology]||maps.центризм;let revised=0;
+        for(const domain of system.domains.slice().sort((a,b)=>a.alignment-b.alignment)){
+          const target=preferred[domain.id];if(revised>=2||!target||target===domain.activeId)continue;
+          const old=domain.activeId;domain.activeId=target;domain.adoptedDate=formatDate(game.date);domain.status="переход";domain.stability=clamp(domain.stability-10,0,100);domain.revisions++;domain.reviewDays=180;domain.reason=`Новая администрация сменила курс «${stateDoctrineCatalog()[domain.id].options[old].name}» на «${stateDoctrineCatalog()[domain.id].options[target].name}».`;revised++;
+          system.history.unshift({date:formatDate(game.date),domain:domain.id,title:"Доктрина изменена при смене политической эпохи",text:domain.reason});
+        }
+        system.lastEraReviewed=game.succession?.currentEra?.startDate||formatDate(game.date);system.history=system.history.slice(0,45);
+      }
+
+      function stateDoctrineAction(domainId,doctrineId) {
+        const system=state.governance.doctrines||migrateStateDoctrineSystem(state),catalog=stateDoctrineCatalog(),domain=system.domains.find(item=>item.id===domainId),option=catalog[domainId]?.options?.[doctrineId];
+        if(!domain||!option)return;
+        if(domain.activeId===doctrineId)return showBlockedDecision("Доктрина уже действует",`Курс «${option.name}» является официальной государственной доктриной.`,[["Соответствие",pct(domain.alignment,0),domain.alignment>=55?"good":"warn"]]);
+        if(system.revisionCooldown>0)return showBlockedDecision("Стратегический пересмотр ещё не завершён",`Аппарат сможет подготовить новую смену курса через ${Math.ceil(system.revisionCooldown)} дней.`,[["Срок",`${Math.ceil(system.revisionCooldown)} дн.`,"warn"]]);
+        const cost=260;if(state.economy.budget<cost)return showBlockedDecision("Пересмотр доктрины не профинансирован","Нужны межведомственная оценка, парламентские консультации и обновление планов.",[["Нужно",money(cost),"bad"]]);
+        const previous=catalog[domainId].options[domain.activeId],context=doctrineContextScore(state,domainId,doctrineId);state.economy.budget-=cost;domain.activeId=doctrineId;domain.adoptedDate=formatDate(state.date);domain.alignment=clamp(context,0,100);domain.stability=clamp(domain.stability-12,0,100);domain.publicSupport=clamp(domain.publicSupport+(context-50)*.08,0,100);domain.status="переход";domain.reviewDays=180;domain.revisions++;domain.reason=`Президент утвердил переход от курса «${previous.name}» к курсу «${option.name}».`;system.revisionCooldown=120;system.publicClarity+=4;system.history.unshift({date:formatDate(state.date),domain:domainId,title:`Утверждена доктрина «${option.name}»`,text:domain.reason});system.history=system.history.slice(0,45);
+        recordDecisionMemory(state,"Утверждена государственная доктрина",`${catalog[domainId].name}: ${option.name}. ${option.principle}`,{topic:domainId==="foreign"?"foreign":domainId==="security"?"security":domainId==="territorial"?"regional":domainId==="social"?"welfare":"economy",valence:context>=55?18:4,weight:65,source:"государственная доктрина"});
+        normalizeCore();showDecision(`Доктрина «${option.name}» утверждена`,option.principle,[["Соответствие обстановке",pct(context,0),context>=60?"good":context<42?"bad":"warn"],["Переходный период","180 дней","warn"],["Бюджет",`-${money(cost)}`,"bad"],["Главный риск",option.risk,"warn"]],context>=55?"institution":"warn");
       }
 
       function defaultStateDeliverySystem() {
@@ -6334,6 +6573,179 @@
         p.migration=(d.inboundRate-d.outboundRate)/10;
       }
 
+      function generationalCohortDefaults(game) {
+        const year=num(game.date?.year,currentGameDate().year);
+        return [
+          {id:`generation_${year-95}_${year-66}`,name:"Поколение основания",birthFrom:year-95,birthTo:year-66,formativeTheme:"война, создание институтов и цена распада порядка",institutionalTrust:63,securitySensitivity:74,reformOpenness:34,solidarity:67,economicExpectations:42,governmentApproval:55},
+          {id:`generation_${year-65}_${year-46}`,name:"Поколение стабильности",birthFrom:year-65,birthTo:year-46,formativeTheme:"массовая индустриализация, социальные гарантии и сильное государство",institutionalTrust:59,securitySensitivity:63,reformOpenness:43,solidarity:61,economicExpectations:52,governmentApproval:54},
+          {id:`generation_${year-45}_${year-26}`,name:"Поколение реформ",birthFrom:year-45,birthTo:year-26,formativeTheme:"смена экономических правил, кризисы занятости и политическая конкуренция",institutionalTrust:48,securitySensitivity:51,reformOpenness:68,solidarity:49,economicExpectations:61,governmentApproval:51},
+          {id:`generation_${year-25}_${year-11}`,name:"Цифровое поколение",birthFrom:year-25,birthTo:year-11,formativeTheme:"открытая информация, мобильность, образование и цифровые права",institutionalTrust:52,securitySensitivity:42,reformOpenness:78,solidarity:55,economicExpectations:72,governmentApproval:53},
+          {id:`generation_${year-10}_${year}`,name:"Новое поколение",birthFrom:year-10,birthTo:year,formativeTheme:"качество школ, климатическая устойчивость и долгосрочное доверие",institutionalTrust:57,securitySensitivity:46,reformOpenness:82,solidarity:64,economicExpectations:68,governmentApproval:54}
+        ].map(item=>Object.assign(item,{population:0,share:0,memories:[],lastShift:"исходные установки сформированы историей до начала президентского срока"}));
+      }
+
+      function normalizeGenerationalCohort(item,fallback,game) {
+        const value=Object.assign({},fallback||{},item||{});
+        value.birthFrom=Math.round(num(value.birthFrom,fallback?.birthFrom||game.date.year-30));value.birthTo=Math.max(value.birthFrom,Math.round(num(value.birthTo,fallback?.birthTo||game.date.year)));
+        value.id ||= fallback?.id||`generation_${value.birthFrom}_${value.birthTo}`;value.name ||= fallback?.name||`Поколение ${value.birthFrom}-${value.birthTo}`;
+        value.formativeTheme ||= fallback?.formativeTheme||"общественные перемены и опыт государственных институтов";
+        ["institutionalTrust","securitySensitivity","reformOpenness","solidarity","economicExpectations","governmentApproval"].forEach(key=>value[key]=clamp(num(value[key],fallback?.[key]||55),0,100));
+        value.population=Math.max(0,num(value.population));value.share=clamp(num(value.share),0,100);
+        value.memories=(Array.isArray(value.memories)?value.memories:[]).filter(Boolean).map(memory=>Object.assign({id:uid("social_memory"),year:game.date.year,type:"institution",title:"Историческое событие",valence:0,salience:35},memory,{year:Math.round(num(memory.year,game.date.year)),valence:clamp(num(memory.valence),-100,100),salience:clamp(num(memory.salience,35),0,100)})).slice(0,8);
+        value.lastShift ||= "установки меняются постепенно под влиянием опыта поколения";return value;
+      }
+
+      function defaultGenerationalMemory(game) {
+        return {
+          modelVersion:GENERATIONAL_MEMORY_MODEL_VERSION,
+          cohorts:generationalCohortDefaults(game),
+          sharedMemory:58,
+          intergenerationalGap:24,
+          historicalPressure:31,
+          civicContinuity:57,
+          reconciliation:54,
+          archiveReach:52,
+          lastMemoryYear:game.date.year-1,
+          nextCohortBirthYear:game.date.year+15,
+          actionCooldown:0,
+          history:[],
+          lastBriefing:"У разных поколений различается опыт государства, кризисов, свободы и социальной защищённости."
+        };
+      }
+
+      function estimateGenerationPopulation(game,cohort) {
+        const ageBands={children:[0,14],youth:[15,24],prime:[25,44],mature:[45,64],elderly:[65,95]},year=game.date.year;
+        const ageMin=Math.max(0,year-cohort.birthTo),ageMax=Math.max(ageMin,year-cohort.birthFrom);
+        return game.population.demography.cohorts.reduce((sum,ageCohort)=>{
+          const band=ageBands[ageCohort.id]||[0,95],overlap=Math.max(0,Math.min(ageMax,band[1])-Math.max(ageMin,band[0])+1),width=band[1]-band[0]+1;
+          return sum+ageCohort.population*overlap/width;
+        },0);
+      }
+
+      function syncGenerationalPopulation(game) {
+        const system=game.population.generationalMemory,total=Math.max(1,game.population.total);
+        for(const cohort of system.cohorts){cohort.population=estimateGenerationPopulation(game,cohort);cohort.share=cohort.population/total*100;}
+        const represented=system.cohorts.reduce((sum,item)=>sum+item.share,0);
+        if(represented>0)system.cohorts.forEach(item=>item.share=item.share/represented*100);
+      }
+
+      function migrateGenerationalMemory(game) {
+        if(!game.population?.demography)migrateDemographySystem(game);
+        const base=defaultGenerationalMemory(game),incoming=game.population.generationalMemory&&typeof game.population.generationalMemory==="object"&&!Array.isArray(game.population.generationalMemory)?game.population.generationalMemory:{};
+        const system=Object.assign(base,incoming,{modelVersion:GENERATIONAL_MEMORY_MODEL_VERSION});
+        const incomingCohorts=Array.isArray(incoming.cohorts)?incoming.cohorts:[];
+        system.cohorts=(incomingCohorts.length?incomingCohorts:base.cohorts).map((item,index)=>normalizeGenerationalCohort(item,base.cohorts[index],game)).slice(0,10);
+        system.history=(Array.isArray(incoming.history)?incoming.history:[]).filter(Boolean).slice(0,40);
+        ["sharedMemory","intergenerationalGap","historicalPressure","civicContinuity","reconciliation","archiveReach"].forEach(key=>system[key]=clamp(num(system[key],base[key]),0,100));
+        system.lastMemoryYear=Math.round(num(system.lastMemoryYear,game.date.year-1));system.nextCohortBirthYear=Math.round(num(system.nextCohortBirthYear,Math.max(...system.cohorts.map(item=>item.birthTo))+15));system.actionCooldown=Math.max(0,Math.round(num(system.actionCooldown)));
+        game.population.generationalMemory=system;syncGenerationalPopulation(game);return system;
+      }
+
+      function nationalMemoryEvent(game) {
+        const wars=game.military.wars?.filter(war=>!["finished","завершена"].includes(war.status))||[],crises=(game.governance.crises||[]).filter(crisis=>crisis.severity>55),e=game.economy;
+        if(wars.length)return {type:"war",title:"Опыт войны и мобилизации",valence:-58,text:"Война, потери и мобилизация стали главным коллективным опытом года."};
+        if(crises.length)return {type:"crisis",title:crises[0].title||"Государственный кризис",valence:-42,text:"Затяжной кризис изменил ожидания общества от безопасности и способности государства."};
+        if(e.cycle?.regime==="recession"||e.growth<-.8)return {type:"economy",title:"Опыт рецессии и потери доходов",valence:-38,text:"Безработица, снижение доходов и неопределённость закрепились в семейной памяти."};
+        if(e.inflation>9)return {type:"inflation",title:"Инфляционный шок",valence:-32,text:"Рост цен изменил отношение поколений к сбережениям, бюджету и обещаниям власти."};
+        if(game.succession?.peacefulTransfers>0&&game.succession.currentEra?.startDate===formatDate(game.date))return {type:"transition",title:"Мирная передача власти",valence:48,text:"Конкурентная смена администрации укрепила представление о непрерывности государства."};
+        if(game.politics.constitutionalOrder?.constitutionalCulture>68)return {type:"institution",title:"Укрепление конституционного порядка",valence:34,text:"Судебные решения и сдержанность власти стали заметным общественным опытом."};
+        if(e.growth>3&&game.population.happiness>58)return {type:"prosperity",title:"Год роста благосостояния",valence:32,text:"Рост занятости и семейных доходов повысил ожидания от будущего."};
+        return {type:"continuity",title:"Год повседневной стабильности",valence:12,text:"Общество запомнило год без системного потрясения, но с сохраняющимися различиями между поколениями."};
+      }
+
+      function recordGenerationalEvent(game,event,weight=1) {
+        const system=game.population.generationalMemory||migrateGenerationalMemory(game),year=game.date.year;
+        for(const cohort of system.cohorts){
+          const midpoint=(cohort.birthFrom+cohort.birthTo)/2,age=Math.max(0,year-midpoint),formative=age>=14&&age<=30?1.3:age<14?.75:age>70?.82:1;
+          const salience=clamp((42+Math.abs(num(event.valence))* .48)*formative*weight,8,96);
+          cohort.memories.unshift({id:uid("social_memory"),year,type:event.type||"institution",title:event.title||"Историческое событие",valence:clamp(num(event.valence),-100,100),salience});
+          cohort.memories=cohort.memories.slice(0,8);cohort.lastShift=`${event.title}: событие вошло в историческую память с весом ${Math.round(salience)}/100.`;
+        }
+        system.history.unshift({date:formatDate(game.date),title:event.title,text:event.text||"",valence:num(event.valence)});system.history=system.history.slice(0,40);
+        system.lastBriefing=`${event.title}: разные поколения запомнят этот год с неодинаковой силой.`;
+      }
+
+      function generationalMemorySignal(cohort,type,year) {
+        return cohort.memories.filter(memory=>!type||memory.type===type).reduce((sum,memory)=>sum+memory.valence*memory.salience/100*Math.pow(.965,Math.max(0,year-memory.year)),0);
+      }
+
+      function simulateGenerationalMemory(game) {
+        const system=game.population.generationalMemory||migrateGenerationalMemory(game),year=game.date.year,p=game.politics,j=p.justice;
+        system.actionCooldown=Math.max(0,system.actionCooldown-1);
+        if(game.date.day===1){
+          if(year>=system.nextCohortBirthYear){
+            const latest=Math.max(...system.cohorts.map(item=>item.birthTo)),birthFrom=latest+1,birthTo=latest+15;
+            system.cohorts.push(normalizeGenerationalCohort({id:`generation_${birthFrom}_${birthTo}`,name:`Поколение ${birthFrom}-${birthTo}`,birthFrom,birthTo,formativeTheme:"новая общественная и технологическая эпоха",institutionalTrust:system.civicContinuity,reformOpenness:78,securitySensitivity:48,solidarity:system.sharedMemory,economicExpectations:64,governmentApproval:p.popularity,memories:[]} ,null,game));
+            system.nextCohortBirthYear=birthTo+15;
+          }
+          syncGenerationalPopulation(game);
+          if(system.cohorts.length>10){
+            system.cohorts=system.cohorts.slice().sort((a,b)=>b.birthTo-a.birthTo).slice(0,10).sort((a,b)=>a.birthFrom-b.birthFrom);
+            syncGenerationalPopulation(game);
+          }
+        }
+        if(game.date.day===1&&game.date.month===1&&system.lastMemoryYear<year){
+          recordGenerationalEvent(game,nationalMemoryEvent(game));system.lastMemoryYear=year;
+        }
+        for(const cohort of system.cohorts){
+          for(const memory of cohort.memories)memory.salience=clamp(memory.salience-.0018,0,100);
+          const institutionalMemory=generationalMemorySignal(cohort,"institution",year)+generationalMemorySignal(cohort,"transition",year),warMemory=generationalMemorySignal(cohort,"war",year),economicMemory=generationalMemorySignal(cohort,"economy",year)+generationalMemorySignal(cohort,"inflation",year)+generationalMemorySignal(cohort,"prosperity",year);
+          const trustTarget=clamp(j.ruleOfLaw*.24+j.publicTrust*.2+game.statistics.publicTrust*.16+game.information.governmentCredibility*.14+system.reconciliation*.1+50*.16+institutionalMemory*.08,5,95);
+          const age=Math.max(0,year-(cohort.birthFrom+cohort.birthTo)/2),reformTarget=clamp(74-age*.25+p.constitution.rights*.16+game.population.education*.12-warMemory*.035,8,95);
+          const securityTarget=clamp(35+age*.28+Math.abs(Math.min(0,warMemory))*.12+game.diplomacy.globalTension*.18+game.military.wars.length*8,10,96);
+          const expectationTarget=clamp(52+game.economy.growth*2.1-game.economy.inflation*.72-game.economy.unemployment*.45+economicMemory*.06,8,92);
+          cohort.institutionalTrust=clamp(cohort.institutionalTrust+(trustTarget-cohort.institutionalTrust)*.0015,0,100);
+          cohort.reformOpenness=clamp(cohort.reformOpenness+(reformTarget-cohort.reformOpenness)*.0011,0,100);
+          cohort.securitySensitivity=clamp(cohort.securitySensitivity+(securityTarget-cohort.securitySensitivity)*.0012,0,100);
+          cohort.economicExpectations=clamp(cohort.economicExpectations+(expectationTarget-cohort.economicExpectations)*.0013,0,100);
+          cohort.solidarity=clamp(cohort.solidarity+((system.sharedMemory*.45+system.reconciliation*.3+(100-p.protests)*.25)-cohort.solidarity)*.0011,0,100);
+          const approvalTarget=clamp(p.popularity*.38+cohort.institutionalTrust*.22+(100-Math.abs(cohort.economicExpectations-(50+game.economy.growth*4)))*.14+(100-p.protests)*.12+cohort.solidarity*.14,5,95);
+          cohort.governmentApproval=clamp(cohort.governmentApproval+(approvalTarget-cohort.governmentApproval)*.0015,0,100);
+        }
+        const active=system.cohorts.filter(item=>item.share>.3),trustValues=active.map(item=>item.institutionalTrust),reformValues=active.map(item=>item.reformOpenness);
+        const gapTarget=clamp((Math.max(...trustValues)-Math.min(...trustValues))*.55+(Math.max(...reformValues)-Math.min(...reformValues))*.45,0,100);
+        system.intergenerationalGap=clamp(system.intergenerationalGap+(gapTarget-system.intergenerationalGap)*.002,0,100);
+        const negative=active.reduce((sum,cohort)=>sum+Math.max(0,-generationalMemorySignal(cohort,null,year))*cohort.share/100,0);
+        system.historicalPressure=clamp(system.historicalPressure+(clamp(negative*.08,0,100)-system.historicalPressure)*.0014,0,100);
+        const sharedTarget=clamp(system.archiveReach*.28+system.reconciliation*.24+(100-system.intergenerationalGap)*.22+game.politics.constitutionalOrder.constitutionalCulture*.16+system.civicContinuity*.1,0,100);
+        system.sharedMemory=clamp(system.sharedMemory+(sharedTarget-system.sharedMemory)*.0011,0,100);
+        const continuityTarget=clamp(system.sharedMemory*.3+system.reconciliation*.24+j.ruleOfLaw*.2+game.succession.institutionalMemory*.16+(100-system.intergenerationalGap)*.1,0,100);
+        system.civicContinuity=clamp(system.civicContinuity+(continuityTarget-system.civicContinuity)*.0014,0,100);
+      }
+
+      function generationalPoliticalModifier(game,groupId) {
+        const system=game.population.generationalMemory;if(!system?.cohorts?.length)return 0;
+        const year=game.date.year,filter=groupId==="youth"?cohort=>year-cohort.birthFrom<32:groupId==="pensioners"?cohort=>year-cohort.birthTo>=60:groupId==="professionals"?cohort=>year-cohort.birthFrom<58&&year-cohort.birthTo>20:()=>true;
+        const cohorts=system.cohorts.filter(item=>item.share>.2&&filter(item));const weight=cohorts.reduce((sum,item)=>sum+item.share,0);
+        if(!weight)return 0;
+        const approval=cohorts.reduce((sum,item)=>sum+item.governmentApproval*item.share,0)/weight;
+        return clamp((approval-50)*.12,-5,5);
+      }
+
+      function generationalMemoryAction(mode) {
+        const system=state.population.generationalMemory||migrateGenerationalMemory(state),e=state.economy,p=state.politics,j=p.justice;
+        if(system.actionCooldown>0)return showBlockedDecision("Общественная программа уже проводится",`Новая общенациональная инициатива доступна через ${Math.ceil(system.actionCooldown)} дней.`,[["Срок",`${Math.ceil(system.actionCooldown)} дн.`,"warn"]]);
+        let cost=0,title="Историческая память общества",text="",details=[],tone="good";
+        if(mode==="archive"){
+          cost=240;if(e.budget<cost)return showBlockedDecision("Архивная программа не профинансирована","Нужны региональные архивы, цифровизация и доступ исследователей.",[["Нужно",money(cost),"bad"]]);
+          e.budget-=cost;system.archiveReach+=10;system.sharedMemory+=5;system.civicContinuity+=4;state.succession.archiveQuality+=3;system.actionCooldown=120;
+          title="Национальный архив общественной памяти открыт";text="Документы, устные свидетельства и региональные коллекции получили единый каталог без изъятия спорных страниц истории.";details=[["Охват архива","+10 п.п.","good"],["Общая память","+5 п.п.","good"],["Бюджет",`-${money(cost)}`,"bad"]];
+        }else if(mode==="education"){
+          cost=190;if(e.budget<cost)return showBlockedDecision("Гражданское образование не профинансировано","Нужны учителя, проверяемые материалы и подготовка публичных дискуссий.",[["Нужно",money(cost),"bad"]]);
+          e.budget-=cost;system.civicContinuity+=6;system.intergenerationalGap-=4;state.population.education+=.8;p.constitutionalOrder.constitutionalCulture+=2;system.cohorts.filter(cohort=>state.date.year-cohort.birthFrom<32).forEach(cohort=>{cohort.institutionalTrust+=3;cohort.reformOpenness+=2;});system.actionCooldown=105;
+          title="Программа гражданского образования утверждена";text="Школы и университеты изучают Конституцию, разные исторические интерпретации и практику мирного разрешения конфликтов.";details=[["Гражданская преемственность","+6 п.п.","good"],["Разрыв поколений","-4 п.п.","good"],["Образование","+0.8 п.п.","good"]];
+        }else if(mode==="pact"){
+          cost=360;if(e.budget<cost)return showBlockedDecision("Поколенческий пакт не профинансирован","Требуются гарантии детства, занятости, жилья, пенсий и долговременного ухода.",[["Нужно",money(cost),"bad"]]);
+          e.budget-=cost;system.intergenerationalGap-=8;system.sharedMemory+=4;system.reconciliation+=6;state.population.groups.forEach(group=>{if(["youth","pensioners","workers"].includes(group.id)){group.approval+=1.6;group.stress-=2;}});system.actionCooldown=150;
+          title="Поколенческий общественный пакт заключён";text="Молодые семьи, работники и старшее поколение получили взаимосвязанные гарантии вместо конкуренции за отдельные бюджетные льготы.";details=[["Разрыв поколений","-8 п.п.","good"],["Примирение","+6 п.п.","good"],["Бюджет",`-${money(cost)}`,"bad"]];
+        }else if(mode==="reconcile"){
+          cost=170;if(e.budget<cost)return showBlockedDecision("Комиссия памяти не профинансирована","Нужны независимые архивисты, правозащитники и региональные слушания.",[["Нужно",money(cost),"bad"]]);
+          e.budget-=cost;system.reconciliation+=9;system.historicalPressure-=6;j.publicTrust+=1;p.protests-=.6;for(const cohort of system.cohorts)cohort.memories.filter(memory=>memory.valence<0).forEach(memory=>memory.salience=Math.max(0,memory.salience-4));system.actionCooldown=120;
+          title="Комиссия исторического признания завершила слушания";text="Государство признало документированные злоупотребления и опубликовало механизм доступа к архивам, компенсации и правовой реабилитации.";details=[["Примирение","+9 п.п.","good"],["Историческое давление","-6 п.п.","good"],["Доверие к суду","+1 п.п.","good"]];tone="institution";
+        }else return;
+        system.history.unshift({date:formatDate(state.date),title,text,valence:24});system.history=system.history.slice(0,40);system.lastBriefing=text;normalizeCore();showDecision(title,text,details,tone);
+      }
+
       function householdSegmentCatalog() {
         return [
           {id:"low",name:"Низкодоходные семьи",share:18,size:2.55,earners:.78,incomeFactor:.58,taxFactor:.3,benefitFactor:1.45,rentShare:.57,mortgageShare:.16,foodFactor:1.08,unemploymentExposure:1.35},
@@ -6623,10 +7035,11 @@
           "cabinet-action":["правительство",4,75],"demography-action":["демография",5,150],"housing-action":["жилищная политика",6,180],
           "household-action":["семейная политика",5,150],"labor-action":["рынок труда",5,180],"procurement-action":["государственные закупки",4,120],"climate-action":["климатическая политика",5,150],"federal-action":["федеративная политика",5,120],
           "statistics-action":["государственная статистика",4,90],"world-market-action":["международная логистика",5,120],"succession-action":["преемственность власти",6,180],
-          "municipal-project":["городская политика",5,180],"scandal-action":["подотчётность",4,90],"multilateral-action":["многосторонняя дипломатия",5,150]
+          "municipal-project":["городская политика",5,180],"scandal-action":["подотчётность",4,90],"multilateral-action":["многосторонняя дипломатия",5,150],
+          "constitutional-order-action":["конституционный порядок",6,150],"generation-action":["общественная память",5,150],"doctrine-action":["государственная стратегия",7,180]
         };
         const spec=specs[action];if(!spec)return null;
-        const mode=actionEl.dataset.mode||actionEl.dataset.policy||actionEl.dataset.gov||actionEl.dataset.project||actionEl.dataset.law||"решение";
+        const mode=actionEl.dataset.mode||actionEl.dataset.policy||actionEl.dataset.gov||actionEl.dataset.project||actionEl.dataset.law||actionEl.dataset.doctrine||"решение";
         const scope=actionEl.closest?.(".project-action-line, .policy-action-card");
         const heading=scope?.querySelector?.(".action-summary-main strong")?.textContent;
         const title=(heading||actionEl.textContent||"Президентское решение").trim().replace(/\s+/g," ").slice(0,90)||"Президентское решение";
@@ -8282,6 +8695,7 @@
         c.status ||= "следствие";
         c.outcome ||= "";
         c.linkedBill ||= "";
+        c.principle ||= "";
         return c;
       }
 
@@ -8293,6 +8707,198 @@
         justice.history = Array.isArray(incoming.history) ? incoming.history.slice(0,60) : [];
         game.politics.justice = justice;
         game.politics.constitution.courtIndependence = justice.independence;
+      }
+
+      function constitutionalTraditionCatalog() {
+        return {
+          peacefulTransfer:{name:"Мирная передача власти",principle:"Итог конкурентных выборов исполняется, а государственный аппарат сохраняет непрерывность."},
+          judicialReview:{name:"Обязательность судебного контроля",principle:"Конституционный суд вправе отменить акт, а исполнительная власть исполняет решение без давления."},
+          parliamentaryAccountability:{name:"Ответственность перед парламентом",principle:"Бюджет, законы и контроль кабинета проходят публичную парламентскую процедуру."},
+          emergencyRestraint:{name:"Сдержанность чрезвычайных полномочий",principle:"Исключительные меры ограничены сроком, предметом и последующим независимым контролем."},
+          federalConsultation:{name:"Федеративное согласование",principle:"Решения о полномочиях и ресурсах регионов принимаются после консультации субъектов."},
+          civilianControl:{name:"Гражданский контроль безопасности",principle:"Военные и специальные службы подчинены гражданской власти, закону и бюджетному надзору."}
+        };
+      }
+
+      function defaultConstitutionalTraditions(game) {
+        const catalog=constitutionalTraditionCatalog(),j=game.politics.justice,p=game.politics,s=game.succession;
+        const initial={
+          peacefulTransfer:clamp(48+num(s?.peacefulTransfers)*6+num(s?.caretakerNeutrality,58)*.18,30,82),
+          judicialReview:clamp(j.independence*.55+j.ruleOfLaw*.3+j.dueProcess*.15,25,88),
+          parliamentaryAccountability:clamp(p.coalition*.22+(100-p.lobbyism)*.22+j.ruleOfLaw*.28+56*.28,24,86),
+          emergencyRestraint:clamp(76-num(p.constitution.emergencyPower,32)*.55+j.dueProcess*.18,20,90),
+          federalConsultation:clamp(num(game.federation?.cohesion,58)*.45+num(p.constitution.federalism,54)*.35+18,25,88),
+          civilianControl:clamp(j.ruleOfLaw*.35+num(game.military?.command,60)*.18+num(game.governance?.procurement?.transparency,56)*.22+18,25,88)
+        };
+        return Object.entries(catalog).map(([id,item])=>({id,name:item.name,principle:item.principle,strength:initial[id],adherence:initial[id],breaches:0,lastObserved:"традиция действует как неписаное правило государственного порядка"}));
+      }
+
+      function normalizeConstitutionalTradition(item,fallback) {
+        const value=Object.assign({},fallback||{},item||{});
+        value.id ||= fallback?.id||uid("tradition");value.name ||= fallback?.name||"Конституционная традиция";value.principle ||= fallback?.principle||"Устойчивая практика органов власти.";
+        value.strength=clamp(num(value.strength,fallback?.strength||55),0,100);value.adherence=clamp(num(value.adherence,fallback?.adherence||55),0,100);
+        value.breaches=Math.max(0,Math.round(num(value.breaches)));value.lastObserved ||= fallback?.lastObserved||"практика находится под наблюдением";
+        return value;
+      }
+
+      function normalizeJudicialPrecedent(item) {
+        const value=Object.assign({id:uid("precedent"),date:"",title:"Судебный прецедент",principle:"separation",principleLabel:"Разделение властей",holding:"upheld",holdingLabel:"акт признан конституционным",authority:55,consistency:55,citations:0,linkedCase:"",summary:"Суд сформулировал правило для будущих решений.",status:"действует"},item||{});
+        value.authority=clamp(num(value.authority,55),0,100);value.consistency=clamp(num(value.consistency,55),0,100);value.citations=Math.max(0,Math.round(num(value.citations)));value.status=value.status==="пересмотрен"?"пересмотрен":"действует";
+        return value;
+      }
+
+      function defaultConstitutionalOrder(game) {
+        return {
+          modelVersion:CONSTITUTIONAL_ORDER_MODEL_VERSION,
+          constitutionalCulture:58,
+          conventionConfidence:57,
+          precedentConsistency:56,
+          executiveRestraint:61,
+          emergencyNormalization:18,
+          amendmentStability:66,
+          reviewDays:90,
+          actionCooldown:0,
+          traditions:defaultConstitutionalTraditions(game),
+          precedents:[
+            normalizeJudicialPrecedent({id:"precedent_budget_authority",date:"до начала срока",title:"Пределы бюджетного распоряжения",principle:"budget",principleLabel:"Бюджетные полномочия",holding:"limited",holdingLabel:"расходы требуют парламентского основания",authority:64,consistency:62,citations:2,summary:"Исполнительная власть не может создавать постоянное расходное обязательство без утверждённого бюджетного основания."}),
+            normalizeJudicialPrecedent({id:"precedent_due_process",date:"до начала срока",title:"Гарантии надлежащей процедуры",principle:"rights",principleLabel:"Основные права",holding:"protected",holdingLabel:"процедурные гарантии обязательны",authority:67,consistency:66,citations:3,summary:"Ограничение прав допускается только по закону, с возможностью независимого обжалования."})
+          ],
+          history:[],
+          lastBriefing:"Конституционный порядок опирается одновременно на текст, судебные решения и устойчивую практику органов власти."
+        };
+      }
+
+      function migrateConstitutionalOrder(game) {
+        game.politics ||= defaultPolitics({});
+        if(!game.politics.justice)migrateJusticeSystem(game);
+        const base=defaultConstitutionalOrder(game),incoming=game.politics.constitutionalOrder&&typeof game.politics.constitutionalOrder==="object"&&!Array.isArray(game.politics.constitutionalOrder)?game.politics.constitutionalOrder:{};
+        const system=Object.assign(base,incoming,{modelVersion:CONSTITUTIONAL_ORDER_MODEL_VERSION});
+        const incomingTraditions=new Map((Array.isArray(incoming.traditions)?incoming.traditions:[]).map(item=>[item.id,item]));
+        system.traditions=base.traditions.map(fallback=>normalizeConstitutionalTradition(incomingTraditions.get(fallback.id),fallback));
+        system.precedents=(Array.isArray(incoming.precedents)&&incoming.precedents.length?incoming.precedents:base.precedents).map(normalizeJudicialPrecedent).slice(0,28);
+        system.history=(Array.isArray(incoming.history)?incoming.history:[]).filter(Boolean).slice(0,50);
+        ["constitutionalCulture","conventionConfidence","precedentConsistency","executiveRestraint","emergencyNormalization","amendmentStability"].forEach(key=>system[key]=clamp(num(system[key],base[key]),0,100));
+        system.reviewDays=Math.max(1,Math.round(num(system.reviewDays,90)));system.actionCooldown=Math.max(0,Math.round(num(system.actionCooldown)));
+        game.politics.constitutionalOrder=system;return system;
+      }
+
+      function constitutionalPrincipleForCase(game,item) {
+        if(item.principle)return item.principle;
+        const bill=game.politics.legislation?.find(candidate=>candidate.id===item.linkedBill);
+        if(bill?.kind==="freedoms"||item.type==="rights")return "rights";
+        if(bill?.kind==="regions")return "federalism";
+        if(bill?.kind==="security")return "emergency";
+        if(["economy","social"].includes(bill?.kind))return "budget";
+        return "separation";
+      }
+
+      function constitutionalPrincipleLabel(id) {
+        return ({rights:"Основные права",federalism:"Федеративные полномочия",emergency:"Чрезвычайные полномочия",budget:"Бюджетные полномочия",separation:"Разделение властей"})[id]||"Конституционный порядок";
+      }
+
+      function precedentBiasForCase(game,item) {
+        if(item.type!=="constitutional")return 0;
+        const system=game.politics.constitutionalOrder||migrateConstitutionalOrder(game),principle=constitutionalPrincipleForCase(game,item);
+        const relevant=system.precedents.filter(precedent=>precedent.status==="действует"&&precedent.principle===principle).slice(0,6);
+        if(!relevant.length)return 0;
+        let weighted=0,total=0;
+        for(const precedent of relevant){
+          const direction=precedent.holding==="upheld"?1:-1,weight=precedent.authority*(.5+precedent.consistency/200);
+          weighted+=direction*weight;total+=weight;precedent.citations=Math.min(999,precedent.citations+1);
+        }
+        return clamp(weighted/Math.max(1,total)*8*(system.precedentConsistency/65),-10,10);
+      }
+
+      function recordConstitutionalPractice(game,traditionId,text,tone="good",magnitude=2) {
+        const system=game.politics.constitutionalOrder||migrateConstitutionalOrder(game),tradition=system.traditions.find(item=>item.id===traditionId);
+        if(!tradition)return;
+        const positive=tone!=="bad";tradition.adherence=clamp(tradition.adherence+(positive?magnitude:-magnitude),0,100);tradition.strength=clamp(tradition.strength+(positive?magnitude*.35:-magnitude*.55),0,100);
+        if(!positive)tradition.breaches++;tradition.lastObserved=text;
+        system.history.unshift({date:formatDate(game.date),title:tradition.name,text,tone});system.history=system.history.slice(0,50);
+      }
+
+      function recordJudicialPrecedent(game,item,score) {
+        if(item.type!=="constitutional")return null;
+        const system=game.politics.constitutionalOrder||migrateConstitutionalOrder(game);
+        if(system.precedents.some(precedent=>precedent.linkedCase===item.id))return null;
+        const principle=constitutionalPrincipleForCase(game,item),upheld=item.outcome==="upheld";
+        const older=system.precedents.filter(precedent=>precedent.principle===principle&&precedent.status==="действует");
+        const same=older.filter(precedent=>(precedent.holding==="upheld")===upheld).length;
+        const consistency=older.length?clamp(48+same/older.length*42,20,92):62;
+        const authority=clamp(game.politics.justice.independence*.28+game.politics.justice.ruleOfLaw*.22+game.politics.justice.dueProcess*.18+item.evidence*.18+item.publicInterest*.08+Math.abs(score-50)*.06,25,95);
+        const precedent=normalizeJudicialPrecedent({
+          date:formatDate(game.date),title:item.title,principle,principleLabel:constitutionalPrincipleLabel(principle),holding:item.outcome,
+          holdingLabel:upheld?"оспариваемый акт признан допустимым":"оспариваемая норма утратила силу",authority,consistency,citations:0,linkedCase:item.id,
+          summary:upheld?`Суд подтвердил пределы усмотрения государства по вопросу «${constitutionalPrincipleLabel(principle)}».`:`Суд установил, что государственная мера нарушила требования по вопросу «${constitutionalPrincipleLabel(principle)}».`
+        });
+        system.precedents.unshift(precedent);system.precedents=system.precedents.slice(0,28);
+        system.precedentConsistency=clamp(system.precedentConsistency+(consistency-system.precedentConsistency)*.08,0,100);
+        recordConstitutionalPractice(game,"judicialReview",`Исполнительная власть приняла к исполнению решение по делу «${item.title}».`,"good",authority>=65?2.4:1.4);
+        system.lastBriefing=`${precedent.principleLabel}: сформирован ${authority>=70?"сильный":"ограниченный"} прецедент с обязательным учётом в будущих делах.`;
+        return precedent;
+      }
+
+      function constitutionalTraditionTarget(game,id) {
+        const p=game.politics,j=p.justice,order=p.constitutionalOrder,s=game.succession,f=game.federation,m=game.military;
+        if(id==="peacefulTransfer")return clamp(num(s?.caretakerNeutrality,55)*.3+num(s?.readiness,55)*.25+j.ruleOfLaw*.25+(100-num(s?.transitionRisk,30))*.2,0,100);
+        if(id==="judicialReview")return clamp(j.independence*.34+j.ruleOfLaw*.25+j.dueProcess*.16+order.precedentConsistency*.25,0,100);
+        if(id==="parliamentaryAccountability")return clamp(p.parliamentaryBargaining?.transparency*.22+p.coalition*.15+(100-p.lobbyism)*.18+j.ruleOfLaw*.25+p.cabinet.integrity*.2,0,100);
+        if(id==="emergencyRestraint")return clamp(100-p.constitution.emergencyPower*.42-order.emergencyNormalization*.3+j.dueProcess*.22-p.protests*.06,0,100);
+        if(id==="federalConsultation")return clamp(num(f?.cohesion,55)*.3+num(f?.autonomyBalance,55)*.22+num(f?.centerLegitimacy,55)*.25+p.constitution.federalism*.23,0,100);
+        return clamp(j.ruleOfLaw*.32+p.cabinet.integrity*.2+num(game.governance.procurement?.transparency,55)*.18+(100-num(m?.warExhaustion,0))*.12+j.prosecutionIndependence*.18,0,100);
+      }
+
+      function simulateConstitutionalOrder(game) {
+        const system=game.politics.constitutionalOrder||migrateConstitutionalOrder(game),p=game.politics,j=p.justice;
+        system.reviewDays=Math.max(0,system.reviewDays-1);system.actionCooldown=Math.max(0,system.actionCooldown-1);
+        const activeCrises=(game.governance.crises||[]).filter(crisis=>crisis.severity>48).length;
+        const emergencyTarget=clamp(p.constitution.emergencyPower*.5+p.protests*.14+activeCrises*6+(p.decrees?.length||0)*.18-j.dueProcess*.18,0,100);
+        system.emergencyNormalization=clamp(system.emergencyNormalization+(emergencyTarget-system.emergencyNormalization)*.0017,0,100);
+        system.executiveRestraint=clamp(system.executiveRestraint+((100-system.emergencyNormalization)*.42+j.ruleOfLaw*.33+p.cabinet.integrity*.25-system.executiveRestraint)*.0018,0,100);
+        for(const tradition of system.traditions){
+          const target=constitutionalTraditionTarget(game,tradition.id);
+          tradition.adherence=clamp(tradition.adherence+(target-tradition.adherence)*.0017,0,100);
+          tradition.strength=clamp(tradition.strength+(tradition.adherence-tradition.strength)*.00045,0,100);
+        }
+        const traditionStrength=system.traditions.reduce((sum,item)=>sum+item.strength,0)/Math.max(1,system.traditions.length);
+        const cultureTarget=clamp(traditionStrength*.38+system.precedentConsistency*.24+j.ruleOfLaw*.22+system.executiveRestraint*.16,0,100);
+        system.constitutionalCulture=clamp(system.constitutionalCulture+(cultureTarget-system.constitutionalCulture)*.0015,0,100);
+        system.conventionConfidence=clamp(system.conventionConfidence+(traditionStrength-system.conventionConfidence)*.0012,0,100);
+        system.amendmentStability=clamp(system.amendmentStability+((j.ruleOfLaw*.4+system.conventionConfidence*.35+(100-p.protests)*.25)-system.amendmentStability)*.0011,0,100);
+        if(system.constitutionalCulture<35&&system.emergencyNormalization>60){p.impeachmentRisk=clamp(p.impeachmentRisk+.006,0,100);j.publicTrust=clamp(j.publicTrust-.003,0,100);}
+        if(system.reviewDays<=0){
+          system.reviewDays=180;
+          const weakest=system.traditions.slice().sort((a,b)=>a.adherence-b.adherence)[0];
+          if(weakest?.adherence<42){weakest.breaches++;weakest.lastObserved="Полугодовой обзор выявил устойчивое расхождение фактической практики с конституционной традицией.";system.history.unshift({date:formatDate(game.date),title:`Ослабление: ${weakest.name}`,text:weakest.lastObserved,tone:"warn"});}
+          system.lastBriefing=weakest?.adherence<42?`${weakest.name}: практика требует парламентского и судебного восстановления.`:`Конституционный обзор не выявил системного разрыва между текстом, прецедентами и практикой.`;
+          system.history=system.history.slice(0,50);
+        }
+      }
+
+      function constitutionalOrderAction(mode) {
+        const system=state.politics.constitutionalOrder||migrateConstitutionalOrder(state),p=state.politics,j=p.justice,e=state.economy;
+        if(system.actionCooldown>0)return showBlockedDecision("Конституционная процедура уже проводится",`Следующее комплексное решение доступно через ${Math.ceil(system.actionCooldown)} дней.`,[["Срок",`${Math.ceil(system.actionCooldown)} дн.`,"warn"]]);
+        let cost=0,title="Конституционный порядок",text="",details=[],tone="institution";
+        if(mode==="commission"){
+          cost=280;if(e.budget<cost)return showBlockedDecision("Комиссия не профинансирована","Нужны средства на экспертизу, публичные слушания и сравнительный анализ практики.",[["Нужно",money(cost),"bad"]]);
+          e.budget-=cost;system.constitutionalCulture+=5;system.precedentConsistency+=4;system.amendmentStability+=3;j.ruleOfLaw+=1.1;system.actionCooldown=120;
+          title="Конституционная комиссия начала работу";text="Судьи, парламент, регионы, адвокатура и гражданские организации сверяют текст Конституции с судебной практикой и устойчивыми традициями.";details=[["Конституционная культура","+5 п.п.","good"],["Ясность прецедентов","+4 п.п.","good"],["Бюджет",`-${money(cost)}`,"bad"]];
+        }else if(mode==="codify"){
+          cost=190;if(e.budget<cost)return showBlockedDecision("Кодификация не профинансирована","Не хватает средств на регламент, консультации и обучение аппарата.",[["Нужно",money(cost),"bad"]]);
+          const weakest=system.traditions.slice().sort((a,b)=>a.strength-b.strength)[0];e.budget-=cost;weakest.strength+=8;weakest.adherence+=5;weakest.lastObserved="Парламент и правительство закрепили процедуру в обязательном публичном регламенте.";system.conventionConfidence+=4;system.actionCooldown=90;
+          title=`Традиция «${weakest.name}» кодифицирована`;text="Неписаное правило получило ясную процедуру, ответственных и форму публичного контроля без подмены текста Конституции.";details=[["Сила традиции","+8 п.п.","good"],["Соблюдение","+5 п.п.","good"],["Бюджет",`-${money(cost)}`,"bad"]];
+        }else if(mode==="emergency"){
+          cost=140;if(e.budget<cost)return showBlockedDecision("Аудит чрезвычайных мер не профинансирован","Нужны независимые эксперты и проверка всех действующих ограничений.",[["Нужно",money(cost),"bad"]]);
+          e.budget-=cost;system.emergencyNormalization-=9;system.executiveRestraint+=5;j.dueProcess+=1.4;p.constitution.emergencyPower=clamp(p.constitution.emergencyPower-1.5,0,100);system.actionCooldown=75;
+          recordConstitutionalPractice(state,"emergencyRestraint","Все чрезвычайные меры получили срок прекращения, правовое основание и порядок судебного обжалования.","good",4);
+          title="Чрезвычайные полномочия прошли независимый аудит";text="Меры без действующего основания прекращены, остальные получили срок, парламентский отчёт и судебное обжалование.";details=[["Нормализация исключений","-9 п.п.","good"],["Сдержанность власти","+5 п.п.","good"],["Надлежащая процедура","+1.4 п.п.","good"]];
+        }else if(mode==="precedent"){
+          const precedent=system.precedents.find(item=>item.status==="действует");if(!precedent)return showBlockedDecision("Нет действующего прецедента","Сначала Конституционный суд должен сформулировать применимое правило.",[]);
+          cost=120;if(e.budget<cost)return showBlockedDecision("Исполнение прецедента не профинансировано","Нужны изменения ведомственных регламентов и обучение правоприменителей.",[["Нужно",money(cost),"bad"]]);
+          e.budget-=cost;precedent.consistency+=6;precedent.authority+=3;system.precedentConsistency+=4;j.publicTrust+=1.4;j.ruleOfLaw+=.8;system.actionCooldown=60;
+          title=`Прецедент «${precedent.title}» внедрён в практику`;text="Правительство изменило ведомственные инструкции и проверило действующие решения на соответствие сформулированному судом правилу.";details=[["Последовательность","+6 п.п.","good"],["Верховенство права","+0.8 п.п.","good"],["Бюджет",`-${money(cost)}`,"bad"]];
+        }else return;
+        system.history.unshift({date:formatDate(state.date),title,text,tone});system.history=system.history.slice(0,50);system.lastBriefing=text;normalizeCore();showDecision(title,text,details,tone);
       }
 
       function justiceScore(game = state) {
@@ -11260,6 +11866,9 @@
         const s=game.succession,president=game.country.president;
         s.currentEra=normalizePoliticalEra({name:politicalEraName(game,s.termNumber),president:president.name,party:president.party,ideology:president.ideology,termNumber:s.termNumber,startDate:formatDate(game.date),days:0,mandate:num(game.politics.popularity),startSnapshot:politicalEraSnapshot(game),outcome:"действующий срок"});
         game.chronicle.termStart=formatDate(game.date);game.chronicle.daysInOffice=0;game.chronicle.baseline=chronicleSnapshot(game);recordSuccessionEvent(game,"Началась новая политическая эпоха",`${president.name}: ${s.currentEra.name.toLowerCase()}. Основание: ${reason}.`);
+        if(game.politics.constitutionalOrder)recordConstitutionalPractice(game,"peacefulTransfer",`Новая администрация вступила в полномочия на основании процедуры: ${reason}.`,"good",4);
+        if(game.population.generationalMemory)recordGenerationalEvent(game,{type:"transition",title:"Смена политической эпохи",valence:reason.includes("мирн")||reason.includes("выбор")?46:18,text:`${president.name} начал новый президентский срок. Основание перехода: ${reason}.`},1.15);
+        if(game.governance.doctrines)reassessDoctrinesForNewEra(game);
       }
 
       function simulateSuccessionSystem(game) {
@@ -12185,6 +12794,7 @@
         migrateCabinetSystem(game);
         migrateRegionalAdministration(game);
         migrateDemographySystem(game);
+        migrateGenerationalMemory(game);
         migrateInfrastructureSystem(game);
         migratePrivateSector(game);
         migrateInformationSystem(game);
@@ -12193,6 +12803,7 @@
         migrateClimateSystem(game);
         migrateChronicle(game);
         migrateSuccessionSystem(game);
+        migrateConstitutionalOrder(game);
         migrateFederationSystem(game);
         migrateWorldGeography(game);
         migrateWorldMarketSystem(game);
@@ -12204,6 +12815,7 @@
         migrateSoftPowerSystem(game);
         migrateStateDelivery(game);
         migrateProcurementSystem(game);
+        migrateStateDoctrineSystem(game);
         migrateActorAISystem(game);
         migrateNarrativeSystem(game);
         applyGameScenario(game, config.scenario || "balanced");
@@ -15406,10 +16018,36 @@
 
       function justiceCaseTone(item){return item.status==="закрыто"?(item.outcome==="convicted"||item.outcome==="violation"||item.outcome==="struck"?"warn":"good"):item.publicInterest>65?"bad":"warn";}
 
+      function renderConstitutionalOrderPanel() {
+        const system=state.politics.constitutionalOrder||migrateConstitutionalOrder(state),traditionAverage=system.traditions.reduce((sum,item)=>sum+item.strength,0)/Math.max(1,system.traditions.length),activePrecedents=system.precedents.filter(item=>item.status==="действует");
+        const tone=system.constitutionalCulture<42||system.emergencyNormalization>60?"bad":system.constitutionalCulture<62||system.precedentConsistency<55?"warn":"good";
+        return `<section class="panel pad">
+          <div class="panel-section-head"><span><h3 class="section-title">Конституционные традиции и судебные прецеденты</h3><p class="subtle">Конституционный порядок складывается из текста, устойчивой практики органов власти и решений суда. Прецедент не гарантирует исход, но задаёт правило и вес для будущих сходных дел.</p></span><span class="pill ${tone}">культура ${pct(system.constitutionalCulture,0)}</span></div>
+          <div class="kpi-strip" style="margin-top:12px;">
+            <div class="kpi"><span>Сила традиций</span><strong>${pct(traditionAverage,0)}</strong></div>
+            <div class="kpi"><span>Последовательность суда</span><strong>${pct(system.precedentConsistency,0)}</strong></div>
+            <div class="kpi"><span>Сдержанность власти</span><strong>${pct(system.executiveRestraint,0)}</strong></div>
+            <div class="kpi"><span>Нормализация исключений</span><strong class="delta ${system.emergencyNormalization>55?"bad":system.emergencyNormalization>32?"warn":"good"}">${pct(system.emergencyNormalization,0)}</strong></div>
+            <div class="kpi"><span>Стабильность поправок</span><strong>${pct(system.amendmentStability,0)}</strong></div>
+            <div class="kpi"><span>Действующие прецеденты</span><strong>${activePrecedents.length}</strong></div>
+          </div>
+          <div class="decision-banner ${tone}" style="margin-top:12px;"><strong>${esc(system.lastBriefing)}</strong><span class="subtle">Слабая традиция не исчезает сразу, но систематические нарушения постепенно превращают исключение в новую практику.</span></div>
+          <div class="policy-action-grid compact" style="margin-top:12px;">
+            ${renderActionCard({title:"Конституционная комиссия",category:"системный обзор",desc:"Судьи, парламент, регионы и гражданские организации сверяют Конституцию с реальной практикой.",signal:`культура ${pct(system.constitutionalCulture,0)}`,when:"При противоречивых прецедентах или ослаблении традиций.",effect:"Повышает ясность прецедентов, качество поправок и верховенство права.",risk:"Требует бюджета и может выявить неудобные противоречия.",cta:"Созвать",tone:"institution"},{"data-action":"constitutional-order-action","data-mode":"commission"},{compact:true})}
+            ${renderActionCard({title:"Кодифицировать традицию",category:"регламент",desc:"Самая слабая неписаная практика получает обязательную публичную процедуру.",signal:`традиции ${pct(traditionAverage,0)}`,when:"Когда устойчивое правило зависит только от доброй воли должностных лиц.",effect:"Укрепляет соблюдение самой слабой традиции.",risk:"Жёсткий регламент может снизить гибкость в редких обстоятельствах.",cta:"Кодифицировать",tone:"good"},{"data-action":"constitutional-order-action","data-mode":"codify"},{compact:true})}
+            ${renderActionCard({title:"Аудит чрезвычайных мер",category:"пределы власти",desc:"Каждое исключительное полномочие получает основание, срок и судебное обжалование.",signal:`нормализация ${pct(system.emergencyNormalization,0)}`,when:"После кризиса или при накоплении президентских исключений.",effect:"Снижает нормализацию чрезвычайного режима и укрепляет процедуру.",risk:"Часть силового аппарата потеряет оперативную свободу.",cta:"Провести аудит",tone:"warn"},{"data-action":"constitutional-order-action","data-mode":"emergency"},{compact:true})}
+            ${renderActionCard({title:"Внедрить последний прецедент",category:"правоприменение",desc:"Ведомственные регламенты приводятся в соответствие с действующим решением суда.",signal:activePrecedents[0]?activePrecedents[0].title:"нет нового решения",when:"После важного конституционного решения.",effect:"Повышает последовательность практики и доверие к суду.",risk:"Потребует пересмотреть прежние административные решения.",cta:"Исполнить",tone:"good"},{"data-action":"constitutional-order-action","data-mode":"precedent"},{compact:true})}
+          </div>
+          <details class="action-fold" style="margin-top:12px;" open><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Неписаные конституционные традиции</strong><small>${system.traditions.length} практик · нарушения меняют их силу постепенно</small></span></summary><div class="action-fold-body"><div class="bill-grid">${system.traditions.map(tradition=>`<article class="bill-card ${tradition.adherence<42?"bad":tradition.adherence<62?"warn":"good"}"><header><span><strong>${esc(tradition.name)}</strong><small>${esc(tradition.principle)}</small></span><span class="pill">сила ${pct(tradition.strength,0)}</span></header><div class="progress"><i style="--w:${tradition.adherence}%"></i></div><div class="bill-kpis"><div><span>Соблюдение</span><strong>${pct(tradition.adherence,0)}</strong></div><div><span>Нарушения</span><strong>${tradition.breaches}</strong></div></div><p class="subtle" style="margin:8px 0 0;">${esc(tradition.lastObserved)}</p></article>`).join("")}</div></div></details>
+          <details class="action-fold" style="margin-top:12px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Реестр судебных прецедентов</strong><small>${activePrecedents.length} действующих правил для будущих дел</small></span></summary><div class="action-fold-body"><div class="list">${activePrecedents.length?activePrecedents.slice(0,10).map(precedent=>`<div class="row"><span><strong>${esc(precedent.title)}</strong><br><small class="subtle">${esc(precedent.date)} · ${esc(precedent.principleLabel)} · ${esc(precedent.holdingLabel)}<br>${esc(precedent.summary)}</small></span><span class="pill ${precedent.authority>=68?"good":precedent.authority<45?"warn":"institution"}">вес ${Math.round(precedent.authority)} · ссылок ${precedent.citations}</span></div>`).join(""):`<div class="row"><span>Конституционный суд ещё не сформировал действующих прецедентов.</span></div>`}</div></div></details>
+        </section>`;
+      }
+
       function renderJustice(){
         const p=state.politics,j=p.justice,active=j.cases.filter(item=>item.status!=="закрыто");
         return `<section class="grid">
           <div class="metric-grid">${metric("Верховенство права",pct(j.ruleOfLaw,0),`общая оценка ${pct(justiceScore(),0)}`,j.ruleOfLaw>=62?"good":"warn")}${metric("Независимость суда",pct(j.independence,0),"решения не контролируются президентом",j.independence>=60?"good":"bad")}${metric("Судебная очередь",pct(j.backlog,0),`${active.length} активных дел`,j.backlog<45?"good":"warn")}${metric("Доверие общества",pct(j.publicTrust,0),`процедурные гарантии ${pct(j.dueProcess,0)}`,j.publicTrust>=58?"good":"warn")}</div>
+          ${renderConstitutionalOrderPanel()}
           <section class="panel pad"><div class="panel-section-head"><span><h3 class="section-title">Судебная и правоохранительная система</h3><p class="subtle">Исполнительная власть может финансировать институты, реформировать процедуры и передавать доказательства. Вердикт определяется судом по материалам дела и качеству институтов.</p></span><span class="pill">бюджет ${money(j.budget)}</span></div><div class="kpi-strip" style="margin-top:12px;"><div class="kpi"><span>Вместимость судов</span><strong>${pct(j.courtCapacity,0)}</strong></div><div class="kpi"><span>Прокуратура</span><strong>${pct(j.prosecutionIndependence,0)}</strong></div><div class="kpi"><span>Полиция</span><strong>${pct(j.policeAccountability,0)}</strong></div><div class="kpi"><span>Юридическая помощь</span><strong>${pct(j.legalAid,0)}</strong></div><div class="kpi"><span>СИЗО и колонии</span><strong>${pct(j.prisonLoad,0)}</strong></div><div class="kpi"><span>Права</span><strong>${pct(p.constitution.rights,0)}</strong></div></div>
             <div class="policy-action-grid compact" style="margin-top:12px;">
               ${renderActionCard({title:"Финансировать суды",category:"доступность",desc:"Судейские вакансии, электронные дела и региональные заседания.",signal:`очередь ${pct(j.backlog,0)}`,when:"При высокой очереди и медленных процессах.",effect:"Повышает вместимость и сокращает накопленные дела.",risk:"Требует бюджета, но не покупает нужные решения.",cta:"Выделить средства",tone:"good"},{"data-action":"justice-action","data-mode":"fund"},{compact:true})}
@@ -15463,6 +16101,28 @@
         </section>`;
       }
 
+      function renderStateDoctrinePanel() {
+        const system=state.governance.doctrines||migrateStateDoctrineSystem(state),catalog=stateDoctrineCatalog(),effects=doctrineAggregateEffects(state),misaligned=system.domains.filter(item=>item.status==="требует пересмотра");
+        const tone=misaligned.length>=3||system.strategicConsistency<40?"bad":misaligned.length||system.strategicConsistency<62?"warn":"good";
+        return `<section class="panel pad">
+          <div class="panel-section-head"><span><h3 class="section-title">Динамические государственные доктрины</h3><p class="subtle">Доктрина задаёт многолетний приоритет, но не создаёт результат сама. Эффект зависит от соответствия обстановке, поддержки общества, готовности министерств и согласованности пяти направлений.</p></span><span class="pill ${tone}">${misaligned.length?`${misaligned.length} требуют пересмотра`:"курс согласован"}</span></div>
+          <div class="kpi-strip" style="margin-top:12px;">
+            <div class="kpi"><span>Стратегическая согласованность</span><strong>${pct(system.strategicConsistency,0)}</strong></div>
+            <div class="kpi"><span>Адаптивность</span><strong>${pct(system.adaptability,0)}</strong></div>
+            <div class="kpi"><span>Исполнимость</span><strong>${pct(system.implementation,0)}</strong></div>
+            <div class="kpi"><span>Понятность обществу</span><strong>${pct(system.publicClarity,0)}</strong></div>
+            <div class="kpi"><span>Устойчивость и резервы</span><strong>${effects.resilience>=0?"+":""}${effects.resilience.toFixed(2)}</strong></div>
+            <div class="kpi"><span>Социальный приоритет</span><strong>${effects.social>=0?"+":""}${effects.social.toFixed(2)}</strong></div>
+          </div>
+          <div class="decision-banner ${tone}" style="margin-top:12px;"><strong>${esc(system.lastBriefing)}</strong><span class="subtle">При смене политической эпохи новая администрация может автоматически пересмотреть до двух самых слабых направлений в соответствии со своим мандатом.</span></div>
+          <div class="bill-grid" style="margin-top:12px;">${system.domains.map(domain=>{
+            const meta=catalog[domain.id],active=meta.options[domain.activeId],recommended=meta.options[domain.recommendedId],domainTone=domain.alignment<38?"bad":domain.alignment<58||domain.status==="требует пересмотра"?"warn":"good";
+            return `<article class="bill-card ${domainTone}"><header><span><strong>${esc(meta.name)}</strong><small>${esc(active.name)} · с ${esc(domain.adoptedDate)}</small></span><span class="pill">${esc(domain.status)}</span></header><div class="progress"><i style="--w:${domain.alignment}%"></i></div><div class="bill-kpis"><div><span>Соответствие среде</span><strong>${pct(domain.alignment,0)}</strong></div><div><span>Поддержка общества</span><strong>${pct(domain.publicSupport,0)}</strong></div><div><span>Готовность аппарата</span><strong>${pct(domain.institutionalReadiness,0)}</strong></div><div><span>Устойчивость курса</span><strong>${pct(domain.stability,0)}</strong></div></div><details class="action-fold"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>${esc(active.principle)}</strong><small>${domain.activeId===domain.recommendedId?"обзор подтверждает действующий курс":`рекомендованный курс: ${esc(recommended.name)}`}</small></span></summary><div class="action-fold-body"><div class="decision-banner ${domainTone}"><strong>${esc(domain.reason)}</strong><span class="subtle">Риск действующего курса: ${esc(active.risk)}</span></div><div class="list" style="margin-top:10px;">${Object.entries(meta.options).map(([id,option])=>{const score=doctrineContextScore(state,domain.id,id),isActive=id===domain.activeId;return `<div class="row"><span><strong>${esc(option.name)}</strong><br><small class="subtle">${esc(option.principle)}<br>Риск: ${esc(option.risk)}</small></span><span><span class="pill ${score>=62?"good":score<42?"bad":"warn"}">соответствие ${Math.round(score)}</span><button data-action="doctrine-action" data-domain="${domain.id}" data-doctrine="${id}" ${isActive?"disabled":""}>${isActive?"Действует":"Утвердить"}</button></span></div>`;}).join("")}</div></div></details></article>`;
+          }).join("")}</div>
+          ${system.history.length?`<details class="action-fold" style="margin-top:12px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Архив стратегических пересмотров</strong><small>${system.history.length} решений и смен курса</small></span></summary><div class="action-fold-body"><div class="list">${system.history.slice(0,12).map(item=>`<div class="row"><span><strong>${esc(item.title)}</strong><br><small class="subtle">${esc(item.date)} · ${esc(item.text)}</small></span></div>`).join("")}</div></div></details>`:""}
+        </section>`;
+      }
+
       function renderCabinet() {
         const p = state.politics;
         const c = p.cabinet;
@@ -15485,6 +16145,7 @@
                 ${renderActionCard({title:"Правительственный аудит",category:"контроль",desc:"Проверка деклараций, контрактов и конфликтов интересов министров.",signal:`добросовестность ${pct(c.integrity,0)}`,when:"При росте коррупции и скандалов.",effect:"Снижает скандальные риски и коррупцию.",risk:"Лояльность кабинета временно падает.",cta:"Проверить",tone:"warn"},{"data-action":"cabinet-action","data-mode":"audit"},{compact:true})}
               </div>
             </section>
+            ${renderStateDoctrinePanel()}
             ${renderStateDeliveryPanel()}
             ${renderProcurementPanel()}
             <section class="panel pad">
@@ -15742,7 +16403,8 @@
 
       function calcLawChance(kind) {
         const p = state.politics;
-        const base = p.coalition * .44 + calcPublicApproval(state) * .16 + calcForceBillSupport(state, kind) * .2 + avg(p.ministers, "skill") * .1 - p.lobbyism * .06 - p.protests * .04;
+        const constitutionalProcedure=(num(p.constitutionalOrder?.constitutionalCulture,55)-50)*.035;
+        const base = p.coalition * .44 + calcPublicApproval(state) * .16 + calcForceBillSupport(state, kind) * .2 + avg(p.ministers, "skill") * .1 - p.lobbyism * .06 - p.protests * .04 + constitutionalProcedure;
         const modifier = ({ economy: 4, anticorruption: -3, social: 6, security: 2, regions: 1, freedoms: -6 })[kind] || 0;
         return clamp(base + modifier + 8, 12, 92);
       }
@@ -17638,6 +18300,34 @@
         </section>`;
       }
 
+      function renderGenerationalMemoryPanel() {
+        const system=state.population.generationalMemory||migrateGenerationalMemory(state),year=state.date.year,cohorts=system.cohorts.filter(item=>item.share>.15).slice().sort((a,b)=>a.birthFrom-b.birthFrom);
+        const tone=system.intergenerationalGap>58||system.historicalPressure>68?"bad":system.intergenerationalGap>36||system.historicalPressure>46?"warn":"good";
+        return `<section class="panel pad">
+          <div class="panel-section-head"><span><h3 class="section-title">Поколения и историческая память общества</h3><p class="subtle">Поколение определяется годами рождения, стареет вместе со страной и сохраняет собственный опыт войн, кризисов, реформ и мирных переходов. Важные события сильнее закрепляются в возрасте формирования взглядов.</p></span><span class="pill ${tone}">разрыв ${pct(system.intergenerationalGap,0)}</span></div>
+          <div class="kpi-strip" style="margin-top:12px;">
+            <div class="kpi"><span>Общая память</span><strong>${pct(system.sharedMemory,0)}</strong></div>
+            <div class="kpi"><span>Разрыв поколений</span><strong class="delta ${system.intergenerationalGap>55?"bad":system.intergenerationalGap>35?"warn":"good"}">${pct(system.intergenerationalGap,0)}</strong></div>
+            <div class="kpi"><span>Историческое давление</span><strong class="delta ${system.historicalPressure>60?"bad":system.historicalPressure>40?"warn":"good"}">${pct(system.historicalPressure,0)}</strong></div>
+            <div class="kpi"><span>Гражданская преемственность</span><strong>${pct(system.civicContinuity,0)}</strong></div>
+            <div class="kpi"><span>Примирение</span><strong>${pct(system.reconciliation,0)}</strong></div>
+            <div class="kpi"><span>Доступ к архивам</span><strong>${pct(system.archiveReach,0)}</strong></div>
+          </div>
+          <div class="decision-banner ${tone}" style="margin-top:12px;"><strong>${esc(system.lastBriefing)}</strong><span class="subtle">Историческая память меняет доверие, отношение к реформам, безопасности и действующей власти, но постепенно ослабевает без новых подтверждающих событий.</span></div>
+          <div class="policy-action-grid compact" style="margin-top:12px;">
+            ${renderActionCard({title:"Национальный архив памяти",category:"источники",desc:"Региональные документы и устные свидетельства получают открытый проверяемый каталог.",signal:`охват ${pct(system.archiveReach,0)}`,when:"Когда история фрагментирована или используется без источников.",effect:"Укрепляет общую память и институциональную преемственность.",risk:"Открытые документы могут вызвать новые расследования.",cta:"Открыть архив",tone:"institution"},{"data-action":"generation-action","data-mode":"archive"},{compact:true})}
+            ${renderActionCard({title:"Гражданское образование",category:"молодые поколения",desc:"Школы изучают Конституцию, конфликт интерпретаций и способы мирного разрешения споров.",signal:`преемственность ${pct(system.civicContinuity,0)}`,when:"При низком доверии молодых к институтам.",effect:"Снижает поколенческий разрыв и повышает правовую грамотность.",risk:"Программа потеряет доверие без академической независимости.",cta:"Утвердить",tone:"good"},{"data-action":"generation-action","data-mode":"education"},{compact:true})}
+            ${renderActionCard({title:"Поколенческий пакт",category:"взаимные гарантии",desc:"Жильё, занятость, семьи, пенсии и уход согласуются как единый долгосрочный договор.",signal:`разрыв ${pct(system.intergenerationalGap,0)}`,when:"Когда молодые и старшие воспринимают бюджет как борьбу с нулевой суммой.",effect:"Снижает конфликт поколений и социальный стресс.",risk:"Создаёт дорогое многолетнее обязательство.",cta:"Заключить пакт",tone:"good"},{"data-action":"generation-action","data-mode":"pact"},{compact:true})}
+            ${renderActionCard({title:"Историческое признание",category:"примирение",desc:"Независимая комиссия документирует злоупотребления и предлагает реабилитацию.",signal:`давление ${pct(system.historicalPressure,0)}`,when:"При сильной негативной памяти и недоверии к государству.",effect:"Снижает травматическую нагрузку и укрепляет доверие к праву.",risk:"Вскрывает ответственность прежних элит и ведомств.",cta:"Провести слушания",tone:"warn"},{"data-action":"generation-action","data-mode":"reconcile"},{compact:true})}
+          </div>
+          <details class="action-fold" style="margin-top:12px;" open><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Живые поколения страны</strong><small>${cohorts.length} когорт с собственными установками и памятью</small></span></summary><div class="action-fold-body"><div class="bill-grid">${cohorts.map(cohort=>{
+            const ageFrom=Math.max(0,year-cohort.birthTo),ageTo=Math.max(ageFrom,year-cohort.birthFrom),memory=cohort.memories[0];
+            return `<article class="bill-card ${cohort.institutionalTrust<38?"bad":cohort.institutionalTrust<58?"warn":"good"}"><header><span><strong>${esc(cohort.name)}</strong><small>${cohort.birthFrom}-${cohort.birthTo} г.р. · возраст ${ageFrom}-${ageTo}</small></span><span class="pill">${pct(cohort.share,1)} общества</span></header><div class="bill-kpis"><div><span>Доверие институтам</span><strong>${pct(cohort.institutionalTrust,0)}</strong></div><div><span>Открытость реформам</span><strong>${pct(cohort.reformOpenness,0)}</strong></div><div><span>Чувствительность к угрозам</span><strong>${pct(cohort.securitySensitivity,0)}</strong></div><div><span>Солидарность</span><strong>${pct(cohort.solidarity,0)}</strong></div><div><span>Ожидания экономики</span><strong>${pct(cohort.economicExpectations,0)}</strong></div><div><span>Оценка власти</span><strong>${pct(cohort.governmentApproval,0)}</strong></div></div><details class="action-fold"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>${esc(cohort.formativeTheme)}</strong><small>${memory?`последняя сильная память: ${esc(memory.title)} · ${Math.round(memory.salience)}/100`:"новая когорта ещё формирует историческую память"}</small></span></summary><div class="action-fold-body"><div class="list">${cohort.memories.length?cohort.memories.slice(0,5).map(item=>`<div class="row"><span><strong>${esc(item.title)}</strong><br><small class="subtle">${item.year} · ${esc(item.type)} · влияние ${item.valence>=0?"+":""}${Math.round(item.valence)}</small></span><span class="pill ${item.valence<0?"bad":"good"}">вес ${Math.round(item.salience)}</span></div>`).join(""):`<div class="row"><span>События президентского срока ещё не закрепились в памяти этой когорты.</span></div>`}</div></div></details></article>`;
+          }).join("")}</div></div></details>
+          ${system.history.length?`<details class="action-fold" style="margin-top:12px;"><summary><span class="action-fold-arrow">›</span><span class="action-summary-main"><strong>Общая историческая лента</strong><small>${system.history.length} событий и государственных инициатив</small></span></summary><div class="action-fold-body"><div class="list">${system.history.slice(0,12).map(item=>`<div class="row"><span><strong>${esc(item.title)}</strong><br><small class="subtle">${esc(item.date)} · ${esc(item.text)}</small></span><span class="pill ${num(item.valence)<0?"bad":"institution"}">${num(item.valence)>=0?"+":""}${Math.round(num(item.valence))}</span></div>`).join("")}</div></div></details>`:""}
+        </section>`;
+      }
+
       function renderPopulation() {
         const p = state.population,d=p.demography;
         const regions=state.regions.slice().sort((a,b)=>b.demography.attractiveness-a.demography.attractiveness);
@@ -17649,6 +18339,7 @@
               ${metric("Чистая миграция", `${d.netMigration>=0?"+":""}${compact(d.netMigration)}`, `въезд ${compact(d.annualImmigration)} · выезд ${compact(d.annualEmigration)}`, d.netMigration>=0?"good":"bad")}
               ${metric("Демографическая нагрузка", pct(d.dependencyRatio,0), `рабочая сила ${compact(d.laborForce)}`, d.dependencyRatio<58?"good":"warn")}
             </div>
+            ${renderGenerationalMemoryPanel()}
             ${renderHouseholdBudgetPanel()}
             ${renderLaborMarketPanel()}
             <section class="panel pad">
@@ -18102,6 +18793,27 @@
                 "Другие государства самостоятельно вносят проекты по безопасности, торговле, климату, помощи, санкциям, здравоохранению, миграции и цифровым правилам.",
                 "До голосования можно определить позицию и собирать коалицию. Прогноз поддержки меняется, но не гарантирует результат итогового голосования.",
                 "Принятые резолюции меняют реальные показатели страны и мира. Собственная успешная инициатива увеличивает дипломатический капитал, а провал ослабляет способность задавать правила."
+              ])}
+              ${manualCard("Конституционные традиции и судебные прецеденты", [
+                "Конституция действует не только через текст. Мирная передача власти, обязательность судебных решений, парламентский контроль, пределы чрезвычайных мер, федеративные консультации и гражданский контроль безопасности образуют отдельные традиции.",
+                "Систематическое соблюдение постепенно укрепляет традицию. Нарушение не уничтожает её мгновенно, но повторяющееся исключение со временем становится опасной новой практикой.",
+                "Каждое завершённое конституционное дело формирует прецедент с предметом, выводом, авторитетом, последовательностью и числом последующих ссылок.",
+                "Сходный прецедент меняет вероятность будущего решения, но не заменяет доказательства и независимость суда. Противоречивые решения снижают ясность права.",
+                "Комиссия, кодификация, аудит чрезвычайных мер и внедрение прецедента укрепляют порядок, однако требуют бюджета, времени и готовности пересматривать прежние действия власти."
+              ])}
+              ${manualCard("Поколения и историческая память", [
+                "Поколения заданы годами рождения, ежегодно стареют и получают численность из реальных демографических возрастных групп.",
+                "Война, рецессия, инфляция, процветание, институциональная реформа и мирная смена власти входят в память с разным весом. Опыт возраста формирования взглядов сохраняется сильнее.",
+                "Память постепенно ослабевает, но меняет доверие к институтам, открытость реформам, чувствительность к угрозам, экономические ожидания и оценку действующей власти.",
+                "Каждые пятнадцать лет появляется новая когорта. Поэтому общество не остаётся навсегда составленным из стартовых групп, а политические реакции меняются десятилетиями.",
+                "Архивы, гражданское образование, поколенческий пакт и историческое признание способны уменьшать разрыв, но не стирают документированные события."
+              ])}
+              ${manualCard("Динамические государственные доктрины", [
+                "Правительство ведёт пять долгих курсов: экономический, внешнеполитический, общественный, территориальный и курс национальной безопасности.",
+                "Для каждой доктрины отдельно считаются соответствие реальной обстановке, общественная поддержка, готовность аппарата и устойчивость курса.",
+                "Доктрина влияет постепенно и только в меру исполнения. Формально объявленный курс без бюджета, компетентного министра и согласованных программ не даёт полного эффекта.",
+                "Раз в полгода аппарат сравнивает действующий курс с альтернативами и отмечает необходимость пересмотра. Президент выбирает новое направление и принимает переходную цену.",
+                "При смене политической эпохи новая администрация может изменить до двух наиболее слабых доктрин в соответствии со своим избирательным мандатом."
               ])}
               ${manualCard("Исполнение решений", [
                 "После принятия закона или указа создается отдельная государственная программа с ответственным министром, сметой, сроком, риском и целевыми регионами.",
@@ -19230,6 +19942,7 @@
         else if (action === "contract-action") procurementContractAction(actionEl.dataset.id, actionEl.dataset.mode);
         else if (action === "minister-action") ministerAction(num(actionEl.dataset.index), actionEl.dataset.mode);
         else if (action === "justice-action") justiceAction(actionEl.dataset.mode, actionEl.dataset.case);
+        else if (action === "constitutional-order-action") constitutionalOrderAction(actionEl.dataset.mode);
         else if (action === "select-country") selectedCountryId = actionEl.dataset.id;
         else if (action === "diplo") diplomacyAction(actionEl.dataset.diplo);
         else if (action === "confirm-diplo-document") confirmDiplomaticDocument(actionEl.dataset.diplo, actionEl.dataset.country);
@@ -19255,12 +19968,14 @@
         else if (action === "set-tech") state.tech.focus = actionEl.dataset.id;
         else if (action === "social") socialAction(actionEl.dataset.social);
         else if (action === "demography-action") demographyAction(actionEl.dataset.mode);
+        else if (action === "generation-action") generationalMemoryAction(actionEl.dataset.mode);
         else if (action === "household-action") householdAction(actionEl.dataset.mode);
         else if (action === "labor-action") laborMarketAction(actionEl.dataset.mode);
         else if (action === "housing-action") housingAction(actionEl.dataset.mode);
         else if (action === "attention-action") presidentialAttentionAction(actionEl.dataset.mode,actionEl.dataset.id);
         else if (action === "information-action") informationAction(actionEl.dataset.mode);
         else if (action === "scandal-action") scandalAction(actionEl.dataset.scandal, actionEl.dataset.mode);
+        else if (action === "doctrine-action") stateDoctrineAction(actionEl.dataset.domain, actionEl.dataset.doctrine);
         else if (action === "generate-news") generateNews(actionEl.dataset.category);
         else if (action === "add-law") addLaw();
         else if (action === "add-party") addParty();
@@ -19799,13 +20514,16 @@
           simulatePromiseSystem(game);
           simulateEliteSystem(game);
           simulateSuccessionSystem(game);
+          simulateConstitutionalOrder(game);
           simulateScandalSystem(game);
           simulateJusticeSystem(game);
           simulateCabinet(game);
+          simulateStateDoctrineSystem(game);
           simulateProcurementSystem(game);
           simulateStateDelivery(game);
           simulateActorAISystem(game);
           simulatePopulation(game);
+          simulateGenerationalMemory(game);
           simulateTech(game);
           simulateRegions(game);
           simulateMunicipalSystem(game);
@@ -20793,7 +21511,8 @@
       function resolveJusticeCase(game,item) {
         const p=game.politics,j=p.justice;
         const institutional= item.type==="constitutional" ? j.independence*.42+j.ruleOfLaw*.28+j.dueProcess*.3 : j.prosecutionIndependence*.35+j.independence*.22+j.ruleOfLaw*.2+j.dueProcess*.23;
-        const score=clamp(item.evidence*.58+institutional*.42+rnd(-14,14),0,100);
+        if(item.type==="constitutional")item.principle=constitutionalPrincipleForCase(game,item);
+        const score=clamp(item.evidence*.58+institutional*.42+precedentBiasForCase(game,item)+rnd(-14,14),0,100);
         let outcome="",title="Судебное решение";
         if(item.type==="constitutional"){
           const upheld=score>=48;
@@ -20815,6 +21534,7 @@
           const liable=score>=55;item.outcome=liable?"liable":"dismissed";outcome=liable?"Требования заявителя удовлетворены.":"Суд отказал в удовлетворении требований.";title=liable?"Иск удовлетворен":"Иск отклонен";
         }
         item.status="закрыто";item.resolvedDate=formatDate(game.date);item.resultText=outcome;
+        if(item.type==="constitutional")recordJudicialPrecedent(game,item,score);
         j.history.unshift({date:item.resolvedDate,title,text:`${item.title}: ${outcome}`,score:Math.round(score)});j.history=j.history.slice(0,60);
         j.backlog=clamp(j.backlog-2,0,100);j.publicTrust=clamp(j.publicTrust+(j.independence-50)*.006+(item.publicInterest > 65 ? .35 : 0),0,100);
         pushNews(game,"Политика",title,`${item.title}. ${outcome}`);
@@ -20925,7 +21645,7 @@
           security: 52 + game.military.readiness * .16 + e.spending.defense * .45 + e.spending.security * .42 - game.military.warExhaustion * .14,
           professionals: 49 + e.growth * 1.6 + (pop.education - 50) * .18 + (rights - 50) * .18 + (100 - p.corruption) * .07 - e.keyRate * .24
         };
-        return clamp(targets[group.id] ?? (50 + pop.happiness * .12 - pop.discontent * .1), 8, 92);
+        return clamp((targets[group.id] ?? (50 + pop.happiness * .12 - pop.discontent * .1))+generationalPoliticalModifier(game,group.id), 8, 92);
       }
 
       function simulatePopulationGroups(game) {
@@ -22533,6 +23253,10 @@
           ensureStateProgram(state,decree,{sourceType:"decree",kind:"decree",cost:180,duration:90,expectedOutcome:"оперативное межведомственное решение с проверяемым результатом"});
           p.popularity += .15;
           p.opposition += .3;
+          if(p.constitutionalOrder){
+            const exceptional=p.constitution.emergencyPower>55||state.governance.crises.some(crisis=>crisis.severity>70);
+            recordConstitutionalPractice(state,"emergencyRestraint",exceptional?"Указ принят в период подтверждённого кризиса и направлен на последующий контроль.":"Указ расширил исполнительное регулирование вне обычного законодательного цикла.",exceptional?"good":"bad",exceptional ? .7 : 1.1);
+          }
           report = ["Президентский указ подписан", "Правовое основание вступило в силу, но фактический результат появится после проектирования, финансирования, исполнения и оценки.", [["Политический сигнал", "+0.15 п.п.", "good"], ["Оппозиция", "+0.3 п.п.", "warn"], ["Плановый срок", "90 дней и оценка", "warn"], ["Исполнение", "зарегистрировано", "institution"]], "good"];
         }
         if (type === "referendum") {
@@ -22560,6 +23284,7 @@
           p.constitution.courtIndependence = clamp(p.constitution.courtIndependence + rnd(-2, 4), 0, 100);
           p.justice.independence = p.constitution.courtIndependence;
           p.coalition -= 2;
+          if(p.constitutionalOrder){p.constitutionalOrder.amendmentStability=clamp(p.constitutionalOrder.amendmentStability-2.5,0,100);recordConstitutionalPractice(state,"parliamentaryAccountability","Конституционная поправка передана на парламентское согласование и публичную юридическую экспертизу.","good",1.2);}
           report = ["Конституционная поправка внесена", "Юристы и парламентские фракции начинают согласование новой редакции.", [["Права", pct(p.constitution.rights,0), "warn"], ["Независимость суда", pct(p.constitution.courtIndependence,0), "good"], ["Коалиция", "-2 п.п.", "warn"]], "warn"];
         }
         if (type === "coalition") {
@@ -23974,6 +24699,7 @@
         if (!e.nationalAccounts) migrateNationalAccounts(state);
         if (!e.financial?.centralBank || !Array.isArray(e.financial?.banks)) migrateFinancialSystem(state);
         if (!pop.demography?.cohorts || state.regions.some(region=>!region.demography)) migrateDemographySystem(state);
+        if (!pop.generationalMemory || pop.generationalMemory.modelVersion!==GENERATIONAL_MEMORY_MODEL_VERSION) migrateGenerationalMemory(state);
         if (!state.housing || state.housing.modelVersion!==HOUSING_MODEL_VERSION || state.regions.some(region=>!region.housing)) migrateHousingSystem(state);
         if (!state.municipalities || state.municipalities.modelVersion!==MUNICIPAL_MODEL_VERSION) migrateMunicipalSystem(state);
         if (!pop.households || pop.households.modelVersion!==HOUSEHOLD_MODEL_VERSION) migrateHouseholdSystem(state);
@@ -23995,6 +24721,7 @@
         if (!state.softPower?.influence) migrateSoftPowerSystem(state);
         if (!state.governance?.delivery?.programs) migrateStateDelivery(state);
         if (!state.governance?.procurement || state.governance.procurement.modelVersion!==PROCUREMENT_MODEL_VERSION) migrateProcurementSystem(state);
+        if (!state.governance?.doctrines || state.governance.doctrines.modelVersion!==STATE_DOCTRINE_MODEL_VERSION) migrateStateDoctrineSystem(state);
         if (!p.actorAI?.actors) migrateActorAISystem(state);
         if (!state.narrative || state.narrative.modelVersion !== NARRATIVE_MODEL_VERSION) migrateNarrativeSystem(state);
         if (!state.settings || !state.career || state.career.modelVersion !== CAREER_MODEL_VERSION) migrateCareerSystem(state);
@@ -24002,6 +24729,7 @@
         if (!state.succession?.currentEra) migrateSuccessionSystem(state);
         if (!p.elections?.candidates) migrateElectionSystem(state);
         if (!p.justice?.cases) migrateJusticeSystem(state);
+        if (!p.constitutionalOrder || p.constitutionalOrder.modelVersion!==CONSTITUTIONAL_ORDER_MODEL_VERSION) migrateConstitutionalOrder(state);
         if (!state.diplomacy?.law) migrateInternationalLaw(state);
         if (!state.diplomacy?.multilateral || state.diplomacy.multilateral.modelVersion!==MULTILATERAL_MODEL_VERSION) migrateMultilateralSystem(state);
         e.inflation = clamp(e.inflation, -2, 80);
@@ -24037,6 +24765,7 @@
         p.opposition = clamp(p.opposition, 0, 100);
         const election=p.elections;election.daysUntil=Math.max(0,Math.round(num(election.daysUntil,p.electionInDays)));election.undecided=clamp(num(election.undecided,20),0,40);election.turnoutForecast=clamp(num(election.turnoutForecast,65),20,100);election.debateCooldown=Math.max(0,Math.round(num(election.debateCooldown,0)));election.actionCooldown=Math.max(0,Math.round(num(election.actionCooldown,0)));election.candidates=election.candidates.map((candidate,index)=>normalizeElectionCandidate(candidate,null,index));
         const justice=p.justice;["independence","ruleOfLaw","courtCapacity","prosecutionIndependence","policeAccountability","dueProcess","publicTrust","backlog","legalAid"].forEach(key=>justice[key]=clamp(num(justice[key]),0,100));justice.prisonLoad=clamp(num(justice.prisonLoad),0,120);justice.budget=Math.max(0,num(justice.budget));justice.cases=justice.cases.map(normalizeJusticeCase).slice(0,20);
+        const constitutionalOrder=p.constitutionalOrder;["constitutionalCulture","conventionConfidence","precedentConsistency","executiveRestraint","emergencyNormalization","amendmentStability"].forEach(key=>constitutionalOrder[key]=clamp(num(constitutionalOrder[key]),0,100));constitutionalOrder.reviewDays=Math.max(0,Math.round(num(constitutionalOrder.reviewDays)));constitutionalOrder.actionCooldown=Math.max(0,Math.round(num(constitutionalOrder.actionCooldown)));constitutionalOrder.traditions=constitutionalOrder.traditions.map(item=>normalizeConstitutionalTradition(item,item)).slice(0,12);constitutionalOrder.precedents=constitutionalOrder.precedents.map(normalizeJudicialPrecedent).slice(0,28);constitutionalOrder.history=(constitutionalOrder.history||[]).slice(0,50);
         if (p.constitution) {
           p.constitution.rights = clamp(p.constitution.rights, 0, 100);
           p.constitution.courtIndependence = clamp(p.constitution.courtIndependence, 0, 100);
@@ -24048,6 +24777,7 @@
         pop.education = clamp(pop.education, 0, 100);
         pop.poverty = clamp(pop.poverty, 0, 80);
         const demography=pop.demography;["inboundRate","outboundRate"].forEach(key=>demography[key]=clamp(num(demography[key]),0,40));["internalMobility","integrationCapacity","urbanization","laborParticipation","familySupport","housingProgram"].forEach(key=>demography[key]=clamp(num(demography[key]),0,100));demography.retirementAge=clamp(num(demography.retirementAge,65),55,75);demography.cohorts=demography.cohorts.map(cohort=>normalizeAgeCohort(cohort,null,pop.total));demography.history=(demography.history||[]).slice(0,60);syncDemographicIndicators(state);
+        const generational=pop.generationalMemory;["sharedMemory","intergenerationalGap","historicalPressure","civicContinuity","reconciliation","archiveReach"].forEach(key=>generational[key]=clamp(num(generational[key]),0,100));generational.actionCooldown=Math.max(0,Math.round(num(generational.actionCooldown)));generational.cohorts=generational.cohorts.map(item=>normalizeGenerationalCohort(item,item,state)).slice(0,10);generational.history=(generational.history||[]).slice(0,40);syncGenerationalPopulation(state);
         syncHousingAggregates(state);recalculateHouseholdBudgets(state,false);
         const attention=p.attention;attention.capital=clamp(num(attention.capital),0,num(attention.maxCapital,100));attention.capacity=clamp(Math.round(num(attention.capacity,3)),2,5);attention.overload=clamp(num(attention.overload),0,100);attention.active=attention.active.map(item=>normalizePresidentialPriority(item,state)).filter(item=>item.status==="active").slice(0,8);attention.history=(attention.history||[]).slice(0,30);
         const groupAggregate = calcPublicApproval(state);
@@ -24076,6 +24806,7 @@
         p.cabinet.directives ||= [];
         const delivery=state.governance.delivery;["procurementIntegrity","interagencyCoordination","regionalCompliance","fiscalDiscipline","implementationGap"].forEach(key=>delivery[key]=clamp(num(delivery[key]),0,100));delivery.programs=delivery.programs.map(item=>normalizeDeliveryProgram(item,state)).slice(0,36);delivery.auditTrail=(delivery.auditTrail||[]).slice(0,60);
         const procurement=state.governance.procurement;["competition","transparency","integrity","localShare","smeShare","averageBidders","overrunRate","delayRate"].forEach(key=>procurement[key]=clamp(num(procurement[key]),0,100));procurement.tenders=procurement.tenders.map(item=>normalizeProcurementTender(item,state)).slice(0,16);procurement.contracts=procurement.contracts.map(normalizeProcurementContract).slice(0,24);procurement.history=(procurement.history||[]).slice(0,24);
+        const doctrines=state.governance.doctrines;["strategicConsistency","adaptability","implementation","publicClarity"].forEach(key=>doctrines[key]=clamp(num(doctrines[key]),0,100));doctrines.revisionCooldown=Math.max(0,Math.round(num(doctrines.revisionCooldown)));const doctrineFallbacks={economic:"balanced",foreign:"multivector",social:"universal",territorial:"cooperative",security:"comprehensive"};doctrines.domains=Object.keys(doctrineFallbacks).map(id=>normalizeStateDoctrineDomain(doctrines.domains.find(item=>item.id===id),id,doctrineFallbacks[id],state));doctrines.history=(doctrines.history||[]).slice(0,45);
         const parliament=p.parliamentaryBargaining;["whipCapacity","crossPartyTrust","transparency","amendmentQuality"].forEach(key=>parliament[key]=clamp(num(parliament[key]),0,100));parliament.dossiers=parliament.dossiers.map(item=>{const bill=p.legislation.find(b=>b.id===item.billId);return bill?normalizeParliamentDossier(item,state,bill):null;}).filter(Boolean).slice(0,20);parliament.log=(parliament.log||[]).slice(0,24);
         const actorAI=p.actorAI;["polarization","negotiationClimate"].forEach(key=>actorAI[key]=clamp(num(actorAI[key]),0,100));actorAI.cycleDays=Math.max(0,Math.round(num(actorAI.cycleDays)));actorAI.actors=actorAI.actors.map(actor=>normalizeStrategicActor(actor,actor)).slice(0,320);actorAI.log=(actorAI.log||[]).slice(0,50);
         m.operations=(Array.isArray(m.operations)?m.operations:[]).filter(item=>item&&typeof item==="object").slice(0,40);
