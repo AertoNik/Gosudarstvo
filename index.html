@@ -1251,6 +1251,145 @@
       background: var(--panel-2);
     }
 
+    .career-objective.focused {
+      border-color: color-mix(in oklab, var(--accent) 52%, var(--line));
+      box-shadow: inset 3px 0 color-mix(in oklab, var(--accent) 82%, white 8%);
+    }
+
+    .objective-head-actions,
+    .objective-status-line,
+    .objective-footer {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .objective-head-actions { justify-content: flex-end; }
+
+    .objective-status-line,
+    .objective-footer {
+      justify-content: space-between;
+      margin-top: 9px;
+    }
+
+    .objective-path {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 5px;
+      margin-top: 9px;
+    }
+
+    .objective-step {
+      min-width: 0;
+      height: 6px;
+      border-radius: 3px;
+      background: color-mix(in oklab, var(--line) 80%, transparent);
+    }
+
+    .objective-step.done { background: var(--good); }
+    .objective-step.current { background: var(--warn); }
+
+    .strategy-diagnostic {
+      margin-top: 9px;
+      padding-top: 9px;
+      border-top: 1px solid var(--line);
+    }
+
+    .strategy-diagnostic summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .strategy-diagnostic ul {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .setting-list { display: grid; gap: 0; }
+
+    .setting-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line);
+      color: var(--text);
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .setting-row:last-child { border-bottom: 0; }
+
+    .setting-row span { min-width: 0; }
+
+    .setting-row strong,
+    .setting-row small { display: block; }
+
+    .setting-row small {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .setting-row input[type="checkbox"] {
+      width: 42px;
+      height: 22px;
+      min-height: 22px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .setting-range {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 52px;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+    }
+
+    .setting-range label {
+      color: var(--text);
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .setting-range output {
+      color: var(--muted);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    body.performance-efficient .panel,
+    body.performance-efficient .metric,
+    body.performance-efficient .career-objective { box-shadow: none !important; }
+
+    body.performance-efficient .sidebar,
+    body.performance-efficient .topbar,
+    body.performance-efficient .modal-backdrop { backdrop-filter: none !important; }
+
+    body.reduced-motion *,
+    body.reduced-motion *::before,
+    body.reduced-motion *::after {
+      scroll-behavior: auto !important;
+      animation-duration: .001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: .001ms !important;
+    }
+
     .career-objective header,
     .briefing-item {
       display: flex;
@@ -2803,7 +2942,8 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
       .career-objective-grid,
-      .briefing-columns {
+      .briefing-columns,
+      .settings-grid {
         grid-template-columns: 1fr;
       }
     }
@@ -3786,7 +3926,7 @@
 
       const STORAGE_KEY = "aaa_president_sim_state_v4";
       const SLOTS_KEY = "aaa_president_sim_slots_v4";
-      const SAVE_VERSION = 32;
+      const SAVE_VERSION = 33;
       const ECONOMY_MODEL_VERSION = 5;
       const FOREIGN_STATE_MODEL_VERSION = 1;
       const BILATERAL_MODEL_VERSION = 2;
@@ -3811,6 +3951,9 @@
       const CAMPAIGN_BALANCE_MODEL_VERSION = 1;
       const EXPLAINABILITY_MODEL_VERSION = 1;
       const CAMPAIGN_PACING_MODEL_VERSION = 1;
+      const LONG_TERM_GOALS_MODEL_VERSION = 1;
+      const EXPERIENCE_SETTINGS_MODEL_VERSION = 1;
+      const PERFORMANCE_MODEL_VERSION = 1;
       const SAVE_DB_NAME = "aaa_president_sim_storage";
       const SAVE_DB_STORE = "saves";
       const DAY_MS = 1800;
@@ -3838,6 +3981,7 @@
         ["news", "Инфопространство", "▤"],
         ["chronicle", "Хроника", "◫"],
         ["guide", "Учебник", "?"],
+        ["settings", "Настройки", "⚙"],
         ["editor", "Редактор", "✎"],
         ["saves", "Сохранения", "▣"]
       ];
@@ -3882,9 +4026,11 @@
       let simulationQueue = 0;
       let queuedSimulationState = null;
       let lastSimulationPaintAt = 0;
+      let lastFullRenderAt = 0;
       let pendingRender = false;
       let deferredRenderTimer = null;
       let saveTimer = null;
+      let saveIdleHandle = null;
       let lastSaveAt = 0;
       let lastIndexedSaveAt = 0;
       let lastStorageWarningAt = 0;
@@ -3899,6 +4045,14 @@
       let warLegalDrafts = new Map();
       let setupDraft = defaultSetupDraft();
       let randomGameContext = null;
+      let audioContext = null;
+      let audioMasterGain = null;
+      let audioEffectsGain = null;
+      let audioAmbientGain = null;
+      let ambientNodes = [];
+      let audioUnlocked = false;
+      let lastInterfaceSoundAt = 0;
+      let lastAlertSoundAt = 0;
       const nativeRandom = Math.random.bind(Math);
 
       const app = document.getElementById("app");
@@ -4042,6 +4196,327 @@
       function difficultySettings(game=state) {
         const id=game?.settings?.difficultyId;
         return difficultyCatalog()[id]||difficultyCatalog().realistic;
+      }
+
+      function defaultExperienceSettings() {
+        return {
+          modelVersion: EXPERIENCE_SETTINGS_MODEL_VERSION,
+          sound: {
+            enabled: true,
+            ambience: true,
+            effects: true,
+            alerts: true,
+            masterVolume: 46,
+            ambienceVolume: 22,
+            effectsVolume: 52
+          },
+          reducedMotion: false,
+          pauseWhenHidden: true,
+          performanceMode: "auto"
+        };
+      }
+
+      function migrateExperienceSettings(game) {
+        const settings = migrateGameSettings(game);
+        const base = defaultExperienceSettings();
+        const incoming = settings.experience && typeof settings.experience === "object" && !Array.isArray(settings.experience) ? settings.experience : {};
+        const incomingSound = incoming.sound && typeof incoming.sound === "object" && !Array.isArray(incoming.sound) ? incoming.sound : {};
+        const sound = Object.assign({}, base.sound, incomingSound);
+        ["enabled","ambience","effects","alerts"].forEach(key => sound[key] = sound[key] !== false);
+        ["masterVolume","ambienceVolume","effectsVolume"].forEach(key => sound[key] = clamp(num(sound[key], base.sound[key]), 0, 100));
+        settings.experience = Object.assign({}, base, incoming, {
+          modelVersion: EXPERIENCE_SETTINGS_MODEL_VERSION,
+          sound,
+          reducedMotion: !!incoming.reducedMotion,
+          pauseWhenHidden: incoming.pauseWhenHidden !== false,
+          performanceMode: ["auto","quality","efficient"].includes(incoming.performanceMode) ? incoming.performanceMode : "auto"
+        });
+        return settings.experience;
+      }
+
+      function defaultPerformanceSystem(game = null) {
+        return {
+          modelVersion: PERFORMANCE_MODEL_VERSION,
+          mode: game?.settings?.experience?.performanceMode || "auto",
+          tickAverageMs: 0,
+          tickPeakMs: 0,
+          renderAverageMs: 0,
+          renderPeakMs: 0,
+          tickCount: 0,
+          slowTicks: 0,
+          fullRenders: 0,
+          lightweightUpdates: 0,
+          lastProfile: "сбалансированный",
+          lastAssessment: "Телеметрия производительности будет сформирована после начала симуляции."
+        };
+      }
+
+      function migratePerformanceSystem(game) {
+        const experience = migrateExperienceSettings(game);
+        const base = defaultPerformanceSystem(game);
+        const incoming = game.performance && typeof game.performance === "object" && !Array.isArray(game.performance) ? game.performance : {};
+        const system = Object.assign({}, base, incoming, { modelVersion: PERFORMANCE_MODEL_VERSION, mode: experience.performanceMode });
+        ["tickAverageMs","tickPeakMs","renderAverageMs","renderPeakMs"].forEach(key => system[key] = Math.max(0, num(system[key], base[key])));
+        ["tickCount","slowTicks","fullRenders","lightweightUpdates"].forEach(key => system[key] = Math.max(0, Math.round(num(system[key], base[key]))));
+        system.lastProfile ||= base.lastProfile;
+        system.lastAssessment ||= base.lastAssessment;
+        game.performance = system;
+        return system;
+      }
+
+      function performanceFrameProfile(game = state) {
+        const system = game?.performance || (game ? migratePerformanceSystem(game) : defaultPerformanceSystem());
+        const mode = game?.settings?.experience?.performanceMode || system.mode || "auto";
+        const average = num(system.tickAverageMs);
+        if (mode === "quality") return { mode, label:"детальный", maxDays:3, budgetMs:7, passiveRenderMs:900 };
+        if (mode === "efficient") return { mode, label:"экономичный", maxDays:average > 4 ? 1 : 3, budgetMs:5, passiveRenderMs:4200 };
+        if (average > 6) return { mode, label:"адаптивный · высокая нагрузка", maxDays:1, budgetMs:4, passiveRenderMs:3200 };
+        if (average > 3) return { mode, label:"адаптивный · умеренная нагрузка", maxDays:2, budgetMs:6, passiveRenderMs:2400 };
+        return { mode, label:"адаптивный · плавный", maxDays:5, budgetMs:8, passiveRenderMs:game?.speed >= 20 ? 2600 : game?.speed >= 5 ? 1700 : 900 };
+      }
+
+      function recordTickPerformance(game, duration) {
+        const system = game.performance || migratePerformanceSystem(game);
+        const sample = Math.max(0, num(duration));
+        system.tickCount++;
+        system.tickAverageMs = system.tickCount === 1 ? sample : system.tickAverageMs * .94 + sample * .06;
+        system.tickPeakMs = Math.max(sample, system.tickPeakMs * .997);
+        if (sample > 18) system.slowTicks++;
+        const profile = performanceFrameProfile(game);
+        system.mode = profile.mode;
+        system.lastProfile = profile.label;
+        system.lastAssessment = system.tickAverageMs > 7
+          ? "Расчёт одного дня тяжёлый: очередь автоматически уменьшает пакет и реже перестраивает экран."
+          : system.renderAverageMs > 45
+            ? "Расчёты устойчивы, но активный раздел дорог для полной перерисовки; включены лёгкие промежуточные обновления."
+            : "Симуляция работает в устойчивом диапазоне без пропуска игровых систем.";
+        return system;
+      }
+
+      function recordRenderPerformance(game, duration, lightweight = false) {
+        const system = game.performance || migratePerformanceSystem(game);
+        if (lightweight) {
+          system.lightweightUpdates++;
+          return system;
+        }
+        const sample = Math.max(0, num(duration));
+        system.fullRenders++;
+        system.renderAverageMs = system.fullRenders === 1 ? sample : system.renderAverageMs * .9 + sample * .1;
+        system.renderPeakMs = Math.max(sample, system.renderPeakMs * .995);
+        return system;
+      }
+
+      function applyExperienceClasses(game = state) {
+        const experience = game ? migrateExperienceSettings(game) : defaultExperienceSettings();
+        document.body?.classList?.toggle("reduced-motion", !!experience.reducedMotion);
+        document.body?.classList?.toggle("performance-efficient", experience.performanceMode === "efficient");
+        return experience;
+      }
+
+      function currentAudioSettings(game = state) {
+        return game ? migrateExperienceSettings(game).sound : defaultExperienceSettings().sound;
+      }
+
+      function ensureAudioGraph() {
+        if (!audioContext || audioMasterGain) return !!audioContext;
+        try {
+          audioMasterGain = audioContext.createGain();
+          audioEffectsGain = audioContext.createGain();
+          audioAmbientGain = audioContext.createGain();
+          audioEffectsGain.connect(audioMasterGain);
+          audioAmbientGain.connect(audioMasterGain);
+          audioMasterGain.connect(audioContext.destination);
+          return true;
+        } catch {
+          audioMasterGain = audioEffectsGain = audioAmbientGain = null;
+          return false;
+        }
+      }
+
+      async function unlockAudioContext() {
+        if (audioContext) {
+          try {
+            if (audioContext.state === "suspended") await audioContext.resume();
+            audioUnlocked = audioContext.state === "running";
+            if (audioUnlocked) syncAudioSystem(false);
+            return audioUnlocked;
+          } catch { return false; }
+        }
+        const AudioEngine = window.AudioContext || window.webkitAudioContext;
+        if (!AudioEngine) return false;
+        try {
+          audioContext = new AudioEngine({ latencyHint:"interactive" });
+          audioUnlocked = true;
+          if (!ensureAudioGraph()) return false;
+          syncAudioSystem(false);
+          return true;
+        } catch {
+          audioContext = null;
+          audioUnlocked = false;
+          return false;
+        }
+      }
+
+      function ambientProfile(game = state) {
+        const wars = game?.military?.wars?.length || 0;
+        const crises = game?.governance?.crises?.filter(item => item.severity > 55).length || 0;
+        if (wars || activeTab === "military") return { base:46, second:69, intensity:.9 };
+        if (crises || ["governance","intelligence","climate"].includes(activeTab)) return { base:52, second:78, intensity:.7 };
+        if (["politics","cabinet","diplomacy","justice"].includes(activeTab)) return { base:58, second:87, intensity:.54 };
+        return { base:55, second:82.5, intensity:.43 };
+      }
+
+      function stopAmbientSound() {
+        ambientNodes.forEach(node => {
+          try { node.stop?.(); } catch {}
+          try { node.disconnect?.(); } catch {}
+        });
+        ambientNodes = [];
+      }
+
+      function startAmbientSound() {
+        if (!audioContext || !audioAmbientGain || ambientNodes.length) return;
+        const profile = ambientProfile();
+        try {
+          const first = audioContext.createOscillator();
+          const second = audioContext.createOscillator();
+          const firstGain = audioContext.createGain();
+          const secondGain = audioContext.createGain();
+          first.type = "sine";
+          second.type = "triangle";
+          first.frequency.value = profile.base;
+          second.frequency.value = profile.second;
+          firstGain.gain.value = .012 * profile.intensity;
+          secondGain.gain.value = .0045 * profile.intensity;
+          first.connect(firstGain); second.connect(secondGain);
+          firstGain.connect(audioAmbientGain); secondGain.connect(audioAmbientGain);
+          first.start(); second.start();
+          ambientNodes = [first, second, firstGain, secondGain];
+        } catch { stopAmbientSound(); }
+      }
+
+      function syncAmbientProfile() {
+        if (!audioContext || ambientNodes.length < 2) return;
+        const profile = ambientProfile();
+        try {
+          ambientNodes[0].frequency.setTargetAtTime(profile.base, audioContext.currentTime, .35);
+          ambientNodes[1].frequency.setTargetAtTime(profile.second, audioContext.currentTime, .35);
+          ambientNodes[2].gain.setTargetAtTime(.012 * profile.intensity, audioContext.currentTime, .4);
+          ambientNodes[3].gain.setTargetAtTime(.0045 * profile.intensity, audioContext.currentTime, .4);
+        } catch {}
+      }
+
+      function syncAudioSystem(allowResume = false) {
+        if (!audioContext || !ensureAudioGraph()) return false;
+        const sound = currentAudioSettings();
+        try {
+          const now = audioContext.currentTime;
+          audioMasterGain.gain.setTargetAtTime(sound.enabled ? sound.masterVolume / 100 : 0, now, .04);
+          audioEffectsGain.gain.setTargetAtTime(sound.effects ? sound.effectsVolume / 100 : 0, now, .04);
+          audioAmbientGain.gain.setTargetAtTime(sound.ambience ? sound.ambienceVolume / 100 : 0, now, .16);
+          if (sound.enabled && sound.ambience) {
+            startAmbientSound();
+            syncAmbientProfile();
+          } else stopAmbientSound();
+          if (allowResume && sound.enabled && audioContext.state === "suspended") void audioContext.resume();
+          if (!sound.enabled && audioContext.state === "running") void audioContext.suspend();
+          return true;
+        } catch { return false; }
+      }
+
+      function soundNote(frequency, start, duration, wave, level) {
+        if (!audioContext || !audioEffectsGain) return;
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        oscillator.type = wave;
+        oscillator.frequency.setValueAtTime(frequency, start);
+        oscillator.frequency.exponentialRampToValueAtTime(Math.max(35, frequency * .9), start + duration);
+        gain.gain.setValueAtTime(.0001, start);
+        gain.gain.exponentialRampToValueAtTime(Math.max(.001, level), start + Math.min(.018, duration * .22));
+        gain.gain.exponentialRampToValueAtTime(.0001, start + duration);
+        oscillator.connect(gain); gain.connect(audioEffectsGain);
+        oscillator.start(start); oscillator.stop(start + duration + .02);
+      }
+
+      function playInterfaceSound(type = "click") {
+        if (!state || !audioUnlocked || !audioContext || audioContext.state !== "running") return false;
+        const sound = currentAudioSettings();
+        if (!sound.enabled) return false;
+        const isAlert = type === "alert" || type === "war";
+        if (isAlert && !sound.alerts) return false;
+        if (!isAlert && !sound.effects) return false;
+        const nowMs = Date.now();
+        if (isAlert && nowMs - lastAlertSoundAt < 900) return false;
+        if (!isAlert && nowMs - lastInterfaceSoundAt < 55) return false;
+        if (isAlert) lastAlertSoundAt = nowMs; else lastInterfaceSoundAt = nowMs;
+        const now = audioContext.currentTime + .006;
+        try {
+          if (type === "document") {
+            soundNote(196, now, .11, "triangle", .036);
+            soundNote(294, now + .075, .16, "sine", .028);
+          } else if (type === "success" || type === "ceremony") {
+            soundNote(330, now, .12, "sine", .03);
+            soundNote(type === "ceremony" ? 495 : 440, now + .085, .2, "sine", .032);
+          } else if (type === "alert") {
+            soundNote(174, now, .2, "sawtooth", .028);
+            soundNote(146, now + .13, .22, "triangle", .025);
+          } else if (type === "war") {
+            soundNote(92, now, .24, "square", .024);
+          } else if (type === "day") {
+            soundNote(392, now, .075, "sine", .021);
+          } else {
+            soundNote(246, now, .055, "sine", .018);
+          }
+          return true;
+        } catch { return false; }
+      }
+
+      function requestInterfaceSound(type = "click") {
+        if (!state || !currentAudioSettings().enabled) return;
+        if (audioUnlocked) playInterfaceSound(type);
+        else void unlockAudioContext().then(unlocked => { if (unlocked) playInterfaceSound(type); });
+      }
+
+      function actionSoundType(action = "") {
+        if (/war|military|confirm-war/.test(action)) return "war";
+        if (/confirm|document|save|law|policy|decision|foreign-offer/.test(action)) return "document";
+        if (action === "tick") return "day";
+        return "click";
+      }
+
+      function handleAudioVisibility() {
+        if (!audioContext) return;
+        const experience = state ? migrateExperienceSettings(state) : defaultExperienceSettings();
+        if (document.hidden && experience.pauseWhenHidden) void audioContext.suspend();
+        else if (!document.hidden && experience.sound.enabled && audioUnlocked) void audioContext.resume().then(() => syncAudioSystem(false));
+      }
+
+      function toggleMasterSound() {
+        const sound=currentAudioSettings();
+        if(sound.enabled)playInterfaceSound("click");
+        sound.enabled=!sound.enabled;
+        if(sound.enabled){
+          void unlockAudioContext().then(unlocked=>{if(unlocked){syncAudioSystem(true);playInterfaceSound("success");}});
+          notify("Звуковая атмосфера включена.","good","Настройки");
+        }else{
+          syncAudioSystem(false);
+          notify("Все звуки отключены.","info","Настройки");
+        }
+      }
+
+      function previewAudio(mode="document") {
+        const sound=currentAudioSettings();
+        if(!sound.enabled)return notify("Сначала включите общий звук.","warn","Настройки");
+        void unlockAudioContext().then(unlocked=>{if(unlocked){syncAudioSystem(true);playInterfaceSound(["alert","document","success","war"].includes(mode)?mode:"click");}else notify("Браузер не предоставил доступ к Web Audio.","warn","Настройки");});
+      }
+
+      function setPerformanceMode(mode) {
+        if(!["auto","quality","efficient"].includes(mode))return;
+        const experience=migrateExperienceSettings(state);experience.performanceMode=mode;
+        const performance=migratePerformanceSystem(state);performance.mode=mode;
+        applyExperienceClasses(state);
+        const label={auto:"Автоматический",quality:"Детальный",efficient:"Экономичный"}[mode];
+        notify(`${label} режим отображения включён. Игровые расчёты остаются полными.`,"good","Производительность");
       }
 
       function rescaleScenarioPopulation(game, target) {
@@ -4261,6 +4736,7 @@
           <button class="toast-close" data-action="dismiss-toast" data-toast-id="${id}" title="Закрыть" aria-label="Закрыть уведомление">×</button>
         `;
         toastBox.appendChild(item);
+        if (tone === "bad" || tone === "warn") requestInterfaceSound("alert");
         setTimeout(() => item.remove(), 3600);
       }
 
@@ -4458,7 +4934,7 @@
         if (copy.history) {
           for (const key of Object.keys(copy.history)) copy.history[key] = (copy.history[key] || []).slice(-historyLimit);
         }
-        if (copy.chronicle?.entries) copy.chronicle.entries = copy.chronicle.entries.slice(0, level === "normal" ? 180 : 80);
+        if (copy.chronicle?.entries) copy.chronicle.entries = copy.chronicle.entries.slice(0, level === "normal" ? 160 : 72);
         if (copy.chronicle?.yearlyReports) copy.chronicle.yearlyReports = copy.chronicle.yearlyReports.slice(0, 12);
         if (copy.economy?.financial?.history) copy.economy.financial.history = copy.economy.financial.history.slice(0, level === "normal" ? 30 : 12);
         if (copy.economy?.privateSector?.history) copy.economy.privateSector.history = copy.economy.privateSector.history.slice(0, level === "normal" ? 36 : 14);
@@ -4483,7 +4959,7 @@
           const activeInstruments=(country.bilateral.strategicInstruments||[]).filter(item=>item.status==="active"&&item.daysLeft>0);
           const changedRepresentation=country.bilateral.ambassadorStatus&&country.bilateral.ambassadorStatus!==(country.embassy?"accredited":"none");
           const activeCooldowns=Object.values(country.bilateral.strategicCooldowns||{}).some(value=>num(value)>0);
-          const relevantHistory=(country.bilateral.history||[]).slice(0,level==="normal"?18:7);
+          const relevantHistory=(country.bilateral.history||[]).slice(0,level==="normal"?12:6);
           if(!activeAgreements.length&&!activeInstruments.length&&!changedRepresentation&&!activeCooldowns&&!relevantHistory.length){delete country.bilateral;return;}
           country.bilateral.history=relevantHistory;
           country.bilateral.agreements=activeAgreements.concat((country.bilateral.agreements||[]).filter(item=>item.status!=="active").slice(0,level==="normal"?4:1)).slice(0,level==="normal"?14:8);
@@ -4530,7 +5006,7 @@
         if (copy.politics?.promises?.log) copy.politics.promises.log = copy.politics.promises.log.slice(0, level === "normal" ? 24 : 10);
         if (copy.politics?.actorAI?.log) copy.politics.actorAI.log = copy.politics.actorAI.log.slice(0, level === "normal" ? 28 : 10);
         if (copy.politics?.actorAI?.actors) copy.politics.actorAI.actors.forEach(actor => {
-          actor.memory = (actor.memory || []).slice(0, level === "normal" ? 4 : 2);
+          actor.memory = (actor.memory || []).slice(0, level === "normal" ? 3 : 2);
           actor.planHistory = (actor.planHistory || []).slice(0, 1);
         });
         if (copy.narrative) {
@@ -4549,6 +5025,10 @@
           if (copy.explainability.current?.metrics) copy.explainability.current.metrics = copy.explainability.current.metrics.slice(0, level === "normal" ? 6 : 4);
         }
         if (copy.pacing) copy.pacing.history = (copy.pacing.history || []).slice(0, level === "normal" ? 20 : 8);
+        if (copy.longTermGoals) {
+          copy.longTermGoals.reviews = (copy.longTermGoals.reviews || []).slice(0, level === "normal" ? 12 : 5);
+          Object.values(copy.longTermGoals.goalStates || {}).forEach(goal => { goal.samples = (goal.samples || []).slice(0, level === "normal" ? 12 : 5); });
+        }
         if (copy.career?.legacySystem) copy.career.legacySystem.history = (copy.career.legacySystem.history || []).slice(0, level === "normal" ? 16 : 6);
         if (copy.governance?.delivery?.auditTrail) copy.governance.delivery.auditTrail = copy.governance.delivery.auditTrail.slice(0, level === "normal" ? 36 : 12);
         if (copy.governance?.delivery?.programs) copy.governance.delivery.programs = copy.governance.delivery.programs.slice(0, level === "normal" ? 24 : 12);
@@ -4649,7 +5129,14 @@
 
       function queueSave(delay = 900) {
         clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => saveState({ force: true }), delay);
+        if(saveIdleHandle!==null&&typeof window.cancelIdleCallback==="function")window.cancelIdleCallback(saveIdleHandle);
+        saveIdleHandle=null;
+        saveTimer = setTimeout(() => {
+          saveTimer=null;
+          const write=()=>{saveIdleHandle=null;saveState({force:true});};
+          if(typeof window.requestIdleCallback==="function")saveIdleHandle=window.requestIdleCallback(write,{timeout:2400});
+          else write();
+        }, delay);
       }
 
       function loadState() {
@@ -4667,10 +5154,15 @@
       function activateLoadedState(nextState) {
         if (!nextState) return false;
         clearTimeout(deferredRenderTimer);
+        clearTimeout(saveTimer);
+        if(saveIdleHandle!==null&&typeof window.cancelIdleCallback==="function")window.cancelIdleCallback(saveIdleHandle);
+        saveIdleHandle=null;
         if (simulationFrame !== null) cancelAnimationFrame(simulationFrame);
         simulationFrame = null;
         simulationQueue = 0;
         state = nextState;
+        migrateExperienceSettings(state);
+        migratePerformanceSystem(state);
         queuedSimulationState = state;
         pendingRender = false;
         modal = null;
@@ -4685,6 +5177,9 @@
         lastBattleSceneRefreshAt = 0;
         lastBattleLiveRefreshAt = 0;
         lastSimulationPaintAt = 0;
+        lastFullRenderAt = 0;
+        applyExperienceClasses(state);
+        syncAudioSystem(false);
         if (!tabs.some(([id]) => id === activeTab)) activeTab = "dashboard";
         return true;
       }
@@ -4829,6 +5324,10 @@
         migrateCampaignBalance(loaded);
         migrateExplainabilitySystem(loaded);
         migrateCampaignPacing(loaded);
+        migrateExperienceSettings(loaded);
+        migratePerformanceSystem(loaded);
+        migrateLongTermGoals(loaded);
+        reviewLongTermGoals(loaded,true);
         layoutAnnexedRegions(loaded);
         for (const r of loaded.regions) r.buildings ||= emptyBuildings();
         if (!loaded.history.date?.length) pushHistory(loaded);
@@ -8707,6 +9206,139 @@
         return objective;
       }
 
+      function longTermGoalProfile(game, id) {
+        const e=game.economy,p=game.politics,pop=game.population,accounts=e.nationalAccounts||{},world=game.worldMarket||{},law=game.diplomacy.law||{};
+        const profiles={
+          economy:{tab:"economy",mechanism:"Результат складывается из производительности, инвестиций, загрузки мощностей и устойчивого спроса.",signals:[`реальный рост ${pct(num(accounts.realGrowth,e.growth),1)}`,`производительность ${num(accounts.productivity,100).toFixed(1)}`,`разрыв выпуска ${pct(num(accounts.outputGap),1)}`]},
+          living:{tab:"population",mechanism:"Уровень жизни зависит от реальных зарплат, обязательных расходов семей, занятости, бедности и качества услуг.",signals:[`реальная зарплата ${pct(num(e.laborMarket?.realWageGrowth),1)}`,`обязательные расходы ${pct(num(pop.households?.essentialBurden,55),0)}`,`бедность ${pct(pop.poverty,1)}`]},
+          institutions:{tab:"justice",mechanism:"Институциональный результат требует независимого суда, честного аппарата, проверяемых данных и устойчивого исполнения.",signals:[`верховенство права ${pct(p.justice.ruleOfLaw,0)}`,`коррупция ${pct(p.corruption,0)}`,`независимость статистики ${pct(game.statistics.independence,0)}`]},
+          services:{tab:"cabinet",mechanism:"Финансирование превращается в результат только при достаточной мощности ведомств, инфраструктуре и межведомственной координации.",signals:[`качество услуг ${pct(calcServiceScore(game),0)}`,`исполнение ${pct(p.cabinet.execution,0)}`,`надёжность сетей ${pct(game.infrastructure.reliability,0)}`]},
+          fiscal:{tab:"economy",mechanism:"Устойчивость определяется долгом, первичным балансом, стоимостью обслуживания и отсутствием просроченных обязательств.",signals:[`долг ${pct(e.debt/Math.max(1,e.gdp)*100,1)} ВВП`,`годовой баланс ${money(calcIncome(game)-calcExpenses(game))}`,`суверенный риск ${pct(num(accounts.sovereignRisk),0)}`]},
+          world:{tab:"diplomacy",mechanism:"Международное положение опирается на договорную надёжность, правовую репутацию, коалиции и культурное влияние.",signals:[`репутация ${pct(law.reputation,0)}`,`надёжность договоров ${pct(law.treatyReliability,0)}`,`престиж ${pct(game.softPower.prestige,0)}`]},
+          prices:{tab:"finance",mechanism:"Ценовая стабильность требует согласования ставки, бюджета, предложения, импорта и ожиданий домохозяйств.",signals:[`инфляция ${pct(e.inflation,1)}`,`цель ${pct(e.financial.centralBank.inflationTarget,1)}`,`шок предложения ${pct(e.supplyShock,0)}`]},
+          financial:{tab:"finance",mechanism:"Финансовая система держится на капитале банков, ликвидности, качестве кредитов и доверии вкладчиков.",signals:[`здоровье системы ${pct(financialHealth(game),0)}`,`проблемные кредиты ${pct(e.financial.badLoanRatio,1)}`,`доверие вкладчиков ${pct(e.financial.depositConfidence,0)}`]},
+          security:{tab:"military",mechanism:"Безопасность определяется не численностью отдельно, а готовностью, снабжением, командованием, запасами и устойчивостью тыла.",signals:[`готовность ${pct(game.military.readiness,0)}`,`логистика ${pct(game.military.logistics,0)}`,`истощение ${pct(game.military.warExhaustion,0)}`]},
+          regions:{tab:"map",mechanism:"Федеративное единство требует работающих услуг, доверия к губернаторам, справедливых трансфертов и снижения регионального разрыва.",signals:[`единство ${pct(federalCohesion(game),0)}`,`сепаратизм ${pct(num(game.federation?.separatismRisk),0)}`,`лояльность ${pct(avg(game.regions,"loyalty"),0)}`]},
+          diversification:{tab:"markets",mechanism:"Диверсификация растёт через конкуренцию, новые отрасли, экспортные маршруты и снижение критической импортной зависимости.",signals:[`разнообразие экспорта ${pct(world.exportDiversity,0)}`,`зависимость от импорта ${pct(world.importDependency,0)}`,`конкуренция ${pct(e.privateSector.competition,0)}`]},
+          democracy:{tab:"politics",mechanism:"Демократическая устойчивость требует реальной конкуренции, прав, свободных медиа, независимого суда и мирной смены власти.",signals:[`права ${pct(p.constitution.rights,0)}`,`независимость суда ${pct(p.justice.independence,0)}`,`плюрализм ${pct(game.information.pluralism,0)}`]},
+          climate:{tab:"climate",mechanism:"Ресурсная устойчивость складывается из готовности к ЧС, адаптации, воды, энергетики и восстановления территорий.",signals:[`готовность ${pct(game.climate.preparedness,0)}`,`устойчивость ${pct(game.climate.resilience,0)}`,`водный стресс ${pct(game.climate.waterStress,0)}`]},
+          technology:{tab:"tech",mechanism:"Технологический результат требует образования, исследовательской базы, цифровых сетей, капитала и промышленного внедрения.",signals:[`образование ${pct(pop.education,0)}`,`венчурный капитал ${pct(e.privateSector.ventureCapital,0)}`,`цифровое покрытие ${pct(game.infrastructure.digitalCoverage,0)}`]}
+        };
+        return profiles[id]||profiles.institutions;
+      }
+
+      function defaultLongTermGoals(game) {
+        const career=game.career||defaultCareerSystem(game),objectives=career.objectives||[];
+        return {
+          modelVersion:LONG_TERM_GOALS_MODEL_VERSION,
+          termNumber:num(career.termNumber,1),
+          started:formatDate(game.date),
+          startedOfficeDays:num(game.chronicle?.daysInOffice),
+          horizonDays:Math.max(180,Math.round(num(game.politics?.electionInDays,1460))),
+          focusIds:objectives.slice(0,3).map(item=>item.id),
+          reviewDays:1,
+          annualReviewDays:365,
+          goalStates:{},
+          reviews:[],
+          score:0,
+          onTrack:0,
+          lastReview:formatDate(game.date),
+          lastBriefing:"Стратегия срока принята; первый контрольный обзор будет сформирован по фактической динамике показателей."
+        };
+      }
+
+      function migrateLongTermGoals(game) {
+        const base=defaultLongTermGoals(game),incoming=game.longTermGoals&&typeof game.longTermGoals==="object"&&!Array.isArray(game.longTermGoals)?game.longTermGoals:{},source=num(incoming.termNumber,base.termNumber)===base.termNumber?incoming:{},plan=Object.assign({},base,source,{modelVersion:LONG_TERM_GOALS_MODEL_VERSION,termNumber:base.termNumber});
+        const validIds=new Set((game.career?.objectives||[]).map(item=>item.id));
+        plan.focusIds=(Array.isArray(source.focusIds)?source.focusIds:base.focusIds).filter((id,index,list)=>validIds.has(id)&&list.indexOf(id)===index).slice(0,3);
+        plan.reviewDays=Math.max(0,Math.round(num(plan.reviewDays,1)));plan.annualReviewDays=Math.max(0,Math.round(num(plan.annualReviewDays,365)));plan.horizonDays=Math.max(90,Math.round(num(plan.horizonDays,base.horizonDays)));plan.startedOfficeDays=Math.max(0,Math.round(num(plan.startedOfficeDays,base.startedOfficeDays)));
+        plan.goalStates=plan.goalStates&&typeof plan.goalStates==="object"&&!Array.isArray(plan.goalStates)?plan.goalStates:{};
+        for(const id of validIds){
+          const source=plan.goalStates[id]&&typeof plan.goalStates[id]==="object"?plan.goalStates[id]:{};
+          plan.goalStates[id]={samples:(Array.isArray(source.samples)?source.samples:[]).filter(Boolean).slice(0,24),milestones:(Array.isArray(source.milestones)?source.milestones:[]).map(Number).filter(value=>[25,50,75,100].includes(value)).slice(0,4)};
+        }
+        Object.keys(plan.goalStates).forEach(id=>{if(!validIds.has(id))delete plan.goalStates[id];});
+        plan.reviews=(Array.isArray(source.reviews)?source.reviews:[]).filter(Boolean).slice(0,18);plan.score=clamp(num(plan.score),0,100);plan.onTrack=Math.max(0,Math.round(num(plan.onTrack)));plan.lastReview||=base.lastReview;plan.lastBriefing||=base.lastBriefing;
+        game.longTermGoals=plan;return plan;
+      }
+
+      function longTermGoalAssessment(game, objective) {
+        const plan=game.longTermGoals||migrateLongTermGoals(game),goalState=plan.goalStates[objective.id]||{samples:[],milestones:[]};
+        const remaining=Math.max(0,Math.round(num(game.politics.electionInDays))),elapsed=Math.max(0,plan.horizonDays-remaining),expected=clamp(elapsed/Math.max(1,plan.horizonDays)*100,0,100),progress=clamp(num(objective.progress),0,100);
+        const oldest=goalState.samples[goalState.samples.length-1],dayIndex=num(game.simulation?.dayIndex),sampleDays=Math.max(1,dayIndex-num(oldest?.dayIndex,dayIndex));
+        const dailyPace=oldest?(objective.current-num(oldest.value,objective.current))/sampleDays:0;
+        const forecastValue=clamp(objective.current+dailyPace*remaining,Math.min(objective.baseline,objective.target)-50,Math.max(objective.baseline,objective.target)+80);
+        const forecastProgress=clamp((forecastValue-objective.baseline)/Math.max(.1,objective.target-objective.baseline)*100,0,140);
+        const variance=progress-expected;
+        let status="формируется",tone="",label="стартовый период";
+        if(objective.status==="achieved"){status="достигнута";tone="good";label="цель закреплена";}
+        else if(elapsed>=45&&variance>=8){status="опережение";tone="good";label="выше плановой траектории";}
+        else if(elapsed>=45&&variance>=-10){status="по плану";tone="good";label="в пределах контрольного коридора";}
+        else if(elapsed>=45&&variance>=-24){status="под риском";tone="warn";label="нужно устранить ограничение";}
+        else if(elapsed>=45){status="отставание";tone="bad";label="без нового решения цель не будет достигнута";}
+        const checkpoints=[25,50,75,100],nextCheckpoint=checkpoints.find(value=>progress<value-.01)||100,checkpointValue=objective.baseline+(objective.target-objective.baseline)*nextCheckpoint/100;
+        const profile=longTermGoalProfile(game,objective.id);
+        return {remaining,elapsed,expected,variance,dailyPace,forecastValue,forecastProgress,status,tone,label,nextCheckpoint,checkpointValue,profile,focused:plan.focusIds.includes(objective.id)};
+      }
+
+      function reviewLongTermGoals(game, force=false) {
+        const plan=game.longTermGoals||migrateLongTermGoals(game);if(!force&&plan.reviewDays>0)return plan;
+        updateCareerObjectives(game,true);plan.reviewDays=30;plan.lastReview=formatDate(game.date);
+        const assessments=[];
+        for(const objective of game.career.objectives){
+          const stateForGoal=plan.goalStates[objective.id]||(plan.goalStates[objective.id]={samples:[],milestones:[]});
+          if(stateForGoal.samples[0]?.date!==formatDate(game.date))stateForGoal.samples.unshift({date:formatDate(game.date),dayIndex:num(game.simulation?.dayIndex),value:objective.current,progress:objective.progress});
+          stateForGoal.samples=stateForGoal.samples.slice(0,24);
+          for(const milestone of [25,50,75,100]){
+            if(objective.progress+0.01<milestone||stateForGoal.milestones.includes(milestone))continue;
+            stateForGoal.milestones.push(milestone);
+            const text=`${objective.title}: пройден контрольный рубеж ${milestone}% (${objective.current.toFixed(1)} из ${objective.target.toFixed(1)}).`;
+            game.career.milestones.unshift({id:uid("strategy_milestone"),date:formatDate(game.date),title:`Стратегический рубеж: ${objective.title}`,text,tone:milestone===100?"good":"info"});
+            recordChronicle(game,"Политика",`Стратегический рубеж: ${objective.title}`,text,milestone===100?5:3,["стратегия",objective.id]);
+            if(game===state&&milestone===100)notify(text,"good","Долгосрочная цель");
+          }
+          stateForGoal.milestones=stateForGoal.milestones.slice(0,4);assessments.push(longTermGoalAssessment(game,objective));
+        }
+        const track=assessments.filter(item=>["опережение","по плану","достигнута","формируется"].includes(item.status)).length;
+        plan.onTrack=track;plan.score=assessments.length?assessments.reduce((sum,item)=>sum+clamp(item.forecastProgress,0,100),0)/assessments.length:0;
+        const weakest=game.career.objectives.map((objective,index)=>({objective,assessment:assessments[index]})).sort((a,b)=>a.assessment.variance-b.assessment.variance)[0];
+        plan.lastBriefing=weakest&&weakest.assessment.status!=="формируется"?`Главное отставание: ${weakest.objective.title}; ${weakest.assessment.label}.`:`${track} из ${assessments.length} целей находятся в допустимом коридоре или стартовом периоде.`;
+        const review={date:formatDate(game.date),score:plan.score,onTrack:track,total:assessments.length,briefing:plan.lastBriefing};
+        if(plan.reviews[0]?.date===review.date)plan.reviews[0]=review;else plan.reviews.unshift(review);plan.reviews=plan.reviews.slice(0,18);
+        if(plan.annualReviewDays<=0){
+          plan.annualReviewDays=365;
+          recordChronicle(game,"Политика","Ежегодный обзор государственной стратегии",`${track} из ${assessments.length} целей сохраняют допустимую траекторию; прогноз исполнения ${pct(plan.score,0)}.`,4,["стратегия","годовой обзор"]);
+        }
+        game.career.milestones=game.career.milestones.slice(0,40);return plan;
+      }
+
+      function simulateLongTermGoals(game) {
+        const plan=game.longTermGoals||migrateLongTermGoals(game);plan.reviewDays=Math.max(0,plan.reviewDays-1);plan.annualReviewDays=Math.max(0,plan.annualReviewDays-1);if(!plan.reviewDays)reviewLongTermGoals(game,true);
+      }
+
+      function resetLongTermGoals(game) {
+        game.longTermGoals=defaultLongTermGoals(game);reviewLongTermGoals(game,true);return game.longTermGoals;
+      }
+
+      function longTermGoalAction(id,mode) {
+        const plan=state.longTermGoals||migrateLongTermGoals(state),objective=state.career.objectives.find(item=>item.id===id);
+        if(mode==="focus"&&objective){
+          if(plan.focusIds.includes(id)){
+            plan.focusIds=plan.focusIds.filter(item=>item!==id);notify(`Цель «${objective.title}» снята с президентского приоритета.`,"info","Стратегия срока");
+          }else{
+            if(plan.focusIds.length>=3)return showBlockedDecision("Лимит стратегических приоритетов","Президент может одновременно держать в личном фокусе не более трёх долгосрочных целей. Это не отменяет остальные обязательства срока.",[["В фокусе",`${plan.focusIds.length} из 3`,"warn"],["Решение","снимите один приоритет","warn"]]);
+            plan.focusIds.push(id);notify(`Цель «${objective.title}» включена в президентский фокус. Это меняет порядок контроля, но не даёт бесплатного бонуса показателям.`,"good","Стратегия срока");
+          }
+          reviewLongTermGoals(state,true);return;
+        }
+        if(mode==="review"){
+          const reviewed=reviewLongTermGoals(state,true),atRisk=state.career.objectives.map(item=>({item,a:longTermGoalAssessment(state,item)})).filter(entry=>["под риском","отставание"].includes(entry.a.status));
+          const elapsed=Math.max(0,reviewed.horizonDays-num(state.politics.electionInDays)),forecastReady=elapsed>=45&&reviewed.reviews.length>=2;
+          const summary=forecastReady?`${reviewed.onTrack} из ${state.career.objectives.length} долгосрочных целей находятся в допустимом коридоре; прогноз исполнения ${pct(reviewed.score,0)}.`:`Базовые значения ${state.career.objectives.length} долгосрочных целей зафиксированы. Трендовый прогноз появится после 45 дней сопоставимых наблюдений.`;
+          return showDecision("Стратегический обзор президентского срока",summary,[["До выборов",`${state.politics.electionInDays} дн.`,"warn"],["В личном фокусе",`${reviewed.focusIds.length} из 3`,"good"],["Требуют вмешательства",String(atRisk.length),atRisk.length?"bad":"good"],["Прогноз исполнения",forecastReady?pct(reviewed.score,0):"формируется",forecastReady?(reviewed.score>=60?"good":"warn"):"warn"]],atRisk.length?"warn":"good");
+        }
+      }
+
       function buildPresidentialBriefing(game) {
         const e=game.economy,p=game.politics,pop=game.population,accounts=e.nationalAccounts||{},threats=[],opportunities=[],decisions=[];
         const add=(list,title,severity,text,forecast,tab)=>list.push({title,severity:clamp(num(severity),0,100),text,forecast,tab});
@@ -8727,6 +9359,10 @@
         pendingChains.slice(0,3).forEach(chain=>add(decisions,chain.title,chain.pressure,chain.lastUpdate||"Требуется решение президента.",`Ответ нужен в течение ${chain.deadlineDays} дней.`,"governance"));
         const stalled=game.governance.delivery.programs.filter(program=>program.status==="active"&&program.stalledDays>12).sort((a,b)=>b.stalledDays-a.stalledDays);
         stalled.slice(0,2).forEach(program=>add(decisions,program.title,clamp(program.stalledDays*2,0,100),`Исполнение остановлено на ${program.stalledDays} дней.`,`Без приоритета возрастут стоимость и разрыв результата.`,"cabinet"));
+        if(game.career?.objectives&&game.longTermGoals){
+          const strategicRisk=game.career.objectives.map(objective=>({objective,assessment:longTermGoalAssessment(game,objective)})).filter(item=>["под риском","отставание"].includes(item.assessment.status)).sort((a,b)=>a.assessment.variance-b.assessment.variance)[0];
+          if(strategicRisk)add(decisions,`Отстаёт цель: ${strategicRisk.objective.title}`,clamp(50-Math.min(0,strategicRisk.assessment.variance),0,100),`Фактический прогресс ${pct(strategicRisk.objective.progress,0)} при плановой траектории ${pct(strategicRisk.assessment.expected,0)}.`,`Следующий рубеж ${strategicRisk.assessment.nextCheckpoint}% требует устранить указанные системные ограничения.`,strategicRisk.assessment.profile.tab);
+        }
         const weakest=game.politics.ministers.slice().sort((a,b)=>a.performance-b.performance)[0],strongest=game.politics.ministers.slice().sort((a,b)=>b.performance-a.performance)[0];
         const disagreement=weakest&&strongest?`${strongest.post} предлагает ускорить исполнение, тогда как ${weakest.post} предупреждает о нехватке мощности и кадров.`:"Кабинет не зафиксировал существенных разногласий.";
         threats.sort((a,b)=>b.severity-a.severity);opportunities.sort((a,b)=>b.severity-a.severity);decisions.sort((a,b)=>b.severity-a.severity);
@@ -8822,6 +9458,7 @@
         const career=game.career||migrateCareerSystem(game),scenario=gameScenarioCatalog()[career.scenarioId]||gameScenarioCatalog().balanced;
         career.status="active";career.termNumber=num(game.succession?.termNumber,career.termNumber+1);career.termStarted=formatDate(game.date);
         career.objectives=scenario.goals.map(id=>makeCareerObjective(game,id));career.reviewDays=1;career.briefingDays=1;career.constitutionalStressDays=0;career.stateFailureDays=0;career.legitimacyCrisisDays=0;
+        resetLongTermGoals(game);
         resetPluralLegacyTerm(game);
         career.lastBriefing=buildPresidentialBriefing(game);career.lastEvent=`Начался президентский срок №${career.termNumber}; цели пересчитаны относительно нового исходного состояния.`;
       }
@@ -13383,6 +14020,10 @@
         migrateCampaignBalance(game);
         migrateExplainabilitySystem(game);
         migrateCampaignPacing(game);
+        migrateExperienceSettings(game);
+        migratePerformanceSystem(game);
+        migrateLongTermGoals(game);
+        reviewLongTermGoals(game,true);
         selectedRegionId = regions[0]?.id || null;
         selectedCountryId = diplomacy.countries[0]?.id || null;
         pushNews(game, "Политика", "Инаугурация", `${country.president.name} вступает в должность президента государства ${country.name}. Правительство получает полный набор инструментов управления страной.`);
@@ -14093,6 +14734,7 @@
         document.addEventListener("pointerdown", markInteraction, true);
         document.addEventListener("scroll", markScroll, true);
         document.addEventListener("focusout", handleControlFocusOut);
+        document.addEventListener("visibilitychange", handleAudioVisibility);
         document.addEventListener("keydown", event => {
           markInteraction();
           if (event.key === "Escape" && modal) {
@@ -14106,7 +14748,7 @@
       function startTimer() {
         if (timer) clearInterval(timer);
         timer = setInterval(() => {
-          if (!state || !state.speed || document.hidden) return;
+          if (!state || !state.speed || (document.hidden && migrateExperienceSettings(state).pauseWhenHidden)) return;
           enqueueSimulationDays(state.speed);
         }, DAY_MS);
       }
@@ -14129,8 +14771,9 @@
           return;
         }
         const startedAt = Date.now();
+        const frameProfile = performanceFrameProfile(state);
         let processed = 0;
-        while (simulationQueue > 0 && processed < 4 && Date.now() - startedAt < 7) {
+        while (simulationQueue > 0 && processed < frameProfile.maxDays && Date.now() - startedAt < frameProfile.budgetMs) {
           tickDay(state);
           simulationQueue--;
           processed++;
@@ -14183,11 +14826,35 @@
         return !!(el?.matches && el.matches("input, textarea, select") && !el.matches("[data-action='metric-select'], [data-country-filter]"));
       }
 
+      function refreshLightweightChrome() {
+        if(!state)return false;
+        const values={
+          date:`${dateLabel(state.date)} · ${state.country.president.name} · ${state.country.capital}`,
+          popularity:pct(state.politics.popularity,0),
+          capital:`${state.politics.attention.capital.toFixed(0)} / ${state.politics.attention.maxCapital.toFixed(0)}`,
+          risk:pct(calcNationalRisk(),0),
+          budget:money(state.economy.budget)
+        };
+        Object.entries(values).forEach(([key,value])=>document.querySelectorAll(`[data-live-chrome="${key}"]`).forEach(el=>{if(el.textContent!==String(value))el.textContent=String(value);}));
+        document.querySelectorAll('[data-action="speed"]').forEach(button=>button.classList.toggle("active",num(button.dataset.speed)===state.speed));
+        document.querySelectorAll("[data-nav-badge]").forEach(el=>{const value=navBadge(el.dataset.navBadge);if(el.textContent!==String(value))el.textContent=String(value);});
+        recordRenderPerformance(state,0,true);return true;
+      }
+
       function scheduleRender(options = {}) {
         if (pendingRender) return;
         if (options.passive && modal?.kind === "battle-map") {
           refreshBattleMapLivePanel(modal.warId);
           return;
+        }
+        if(options.passive&&!modal&&!isEditingControl()){
+          const interval=performanceFrameProfile(state).passiveRenderMs,elapsed=Date.now()-lastFullRenderAt;
+          if(lastFullRenderAt&&elapsed<interval){
+            refreshLightweightChrome();
+            clearTimeout(deferredRenderTimer);
+            deferredRenderTimer=setTimeout(()=>{deferredRenderTimer=null;scheduleRender({force:true,preserveScroll:true});},Math.max(120,interval-elapsed));
+            return;
+          }
         }
         if (!options.force && shouldHoldRender()) {
           clearTimeout(deferredRenderTimer);
@@ -14391,9 +15058,15 @@
 
       function captureScrollState() {
         const scrollables = Array.from(document.querySelectorAll(".nav, .scroll, .news-feed, [data-scroll-key], textarea"));
+        const anchorCandidates=Array.from(document.querySelectorAll(".main .command-center, .main .panel, .main .career-objective, .main .manual-card")).filter(el=>{
+          const rect=el.getBoundingClientRect();return rect.bottom>76&&rect.top<window.innerHeight;
+        });
+        const anchorEl=anchorCandidates.sort((a,b)=>Math.abs(a.getBoundingClientRect().top-86)-Math.abs(b.getBoundingClientRect().top-86))[0];
+        const anchorHeading=anchorEl?.querySelector("h2, h3, h4, strong")?.textContent?.trim()?.slice(0,90)||"";
         return {
           x: window.scrollX || 0,
           y: window.scrollY || 0,
+          anchor:anchorEl?{key:`${anchorEl.tagName}|${anchorEl.className}|${anchorHeading}`,top:anchorEl.getBoundingClientRect().top}:null,
           nodes: scrollables.map((el, index) => ({
             key: el.id || el.dataset.scrollKey || `${el.tagName || "node"}:${el.className || ""}:${index}`,
             top: el.scrollTop || 0,
@@ -14404,7 +15077,7 @@
 
       function restoreScrollState(saved) {
         if (!saved) return;
-        requestAnimationFrame(() => {
+        const restoreNodes=()=>{
           window.scrollTo?.(saved.x, saved.y);
           const map = new Map(saved.nodes.map(item => [item.key, item]));
           Array.from(document.querySelectorAll(".nav, .scroll, .news-feed, [data-scroll-key], textarea")).forEach((el, index) => {
@@ -14415,6 +15088,20 @@
               el.scrollLeft = item.left;
             }
           });
+        };
+        restoreNodes();
+        requestAnimationFrame(() => {
+          restoreNodes();
+          if(!saved.anchor)return;
+          const candidates=Array.from(document.querySelectorAll(".main .command-center, .main .panel, .main .career-objective, .main .manual-card"));
+          const target=candidates.find(el=>{
+            const heading=el.querySelector("h2, h3, h4, strong")?.textContent?.trim()?.slice(0,90)||"";
+            return `${el.tagName}|${el.className}|${heading}`===saved.anchor.key;
+          });
+          if(target){
+            const delta=target.getBoundingClientRect().top-saved.anchor.top;
+            if(Math.abs(delta)>1)window.scrollTo?.(saved.x,(window.scrollY||0)+delta);
+          }
         });
       }
 
@@ -14423,16 +15110,24 @@
           refreshBattleMapLivePanel(modal.warId);
           return;
         }
+        if(options.force){clearTimeout(deferredRenderTimer);deferredRenderTimer=null;}
+        const renderStarted=typeof performance!=="undefined"&&performance.now?performance.now():Date.now();
         const scrollState = options.preserveScroll && state ? captureScrollState() : null;
         document.body.classList.toggle("light", state?.theme === "light");
         document.body.classList.toggle("modal-open", !!modal);
+        applyExperienceClasses(state);
         if (!state) {
           app.innerHTML = renderSetup();
+          lastFullRenderAt=Date.now();
           if (options.resetScroll) requestAnimationFrame(() => window.scrollTo?.(0, 0));
           return;
         }
         app.innerHTML = renderGame();
         renderCharts();
+        syncAudioSystem(false);
+        lastFullRenderAt=Date.now();
+        const renderFinished=typeof performance!=="undefined"&&performance.now?performance.now():Date.now();
+        recordRenderPerformance(state,Math.max(0,renderFinished-renderStarted));
         if (options.resetScroll) requestAnimationFrame(() => window.scrollTo?.(0, 0));
         else restoreScrollState(scrollState);
       }
@@ -14588,13 +15283,14 @@
               <header class="topbar">
                 <div class="top-title">
                   <h2>${esc(tab[1])}</h2>
-                  <p>${dateLabel(state.date)} · ${esc(state.country.president.name)} · ${esc(state.country.capital)}</p>
+                  <p data-live-chrome="date">${dateLabel(state.date)} · ${esc(state.country.president.name)} · ${esc(state.country.capital)}</p>
                 </div>
                 <div class="top-actions">
                   <div class="speedbar" title="Скорость времени. Рекомендация текущей фазы: ${state.pacing?.recommendedSpeed || 10}x">
                     ${speeds.map(s => `<button data-action="speed" data-speed="${s}" class="${state.speed === s ? "active" : ""}">${s ? s + "x" : "Пауза"}</button>`).join("")}
                   </div>
                   <button class="day-step" data-action="tick" title="Пройти один день вручную, даже когда игра на паузе">+1 день</button>
+                  <button class="icon ${state.settings?.experience?.sound?.enabled?"active":""}" data-action="sound-toggle" title="${state.settings?.experience?.sound?.enabled?"Выключить звук":"Включить звук"}" aria-label="${state.settings?.experience?.sound?.enabled?"Выключить звук":"Включить звук"}">♪</button>
                   <button class="icon" data-action="theme" title="Светлая/темная тема">◐</button>
                   <button class="icon" data-action="autosave" title="Сохранить">▣</button>
                 </div>
@@ -14617,13 +15313,13 @@
               </div>
             </div>
             <nav class="nav">
-              ${tabs.map(([id, label, icon]) => `<button data-tab="${id}" class="${activeTab === id ? "active" : ""}"><span class="nav-icon">${icon}</span><span>${label}</span><small>${navBadge(id)}</small></button>`).join("")}
+              ${tabs.map(([id, label, icon]) => `<button data-tab="${id}" class="${activeTab === id ? "active" : ""}"><span class="nav-icon">${icon}</span><span>${label}</span><small data-nav-badge="${id}">${navBadge(id)}</small></button>`).join("")}
             </nav>
             <div class="side-foot">
-              <div class="mini-stat"><span>Популярность</span><strong>${pct(state.politics.popularity, 0)}</strong></div>
-              <div class="mini-stat"><span>Политкапитал</span><strong>${state.politics.attention.capital.toFixed(0)} / ${state.politics.attention.maxCapital.toFixed(0)}</strong></div>
-              <div class="mini-stat"><span>Нацриск</span><strong>${pct(calcNationalRisk(), 0)}</strong></div>
-              <div class="mini-stat"><span>Бюджет</span><strong>${money(state.economy.budget)}</strong></div>
+              <div class="mini-stat"><span>Популярность</span><strong data-live-chrome="popularity">${pct(state.politics.popularity, 0)}</strong></div>
+              <div class="mini-stat"><span>Политкапитал</span><strong data-live-chrome="capital">${state.politics.attention.capital.toFixed(0)} / ${state.politics.attention.maxCapital.toFixed(0)}</strong></div>
+              <div class="mini-stat"><span>Нацриск</span><strong data-live-chrome="risk">${pct(calcNationalRisk(), 0)}</strong></div>
+              <div class="mini-stat"><span>Бюджет</span><strong data-live-chrome="budget">${money(state.economy.budget)}</strong></div>
             </div>
           </aside>
         `;
@@ -14670,41 +15366,64 @@
         if (activeTab === "news") return renderNews();
         if (activeTab === "chronicle") return renderChronicle();
         if (activeTab === "guide") return renderGuide();
+        if (activeTab === "settings") return renderSettings();
         if (activeTab === "editor") return renderEditor();
         if (activeTab === "saves") return renderSaves();
         return renderDashboard();
       }
 
       function renderCareerOverviewPanel(game=state) {
-        const career=game.career||migrateCareerSystem(game),scenario=gameScenarioCatalog()[career.scenarioId]||gameScenarioCatalog().balanced,difficulty=difficultyCatalog()[career.difficultyId]||difficultyCatalog().realistic;
-        const termDays=Math.max(1,num(game.politics.constitution?.termYears,4)*365),daysLeft=Math.max(0,num(game.politics.electionInDays,termDays)),termProgress=clamp((termDays-daysLeft)/termDays*100,0,100);
-        const achieved=career.objectives.filter(item=>item.status==="achieved").length,tone=career.score>=70?"good":career.score<42?"bad":"warn";
+        const career=game.career||migrateCareerSystem(game),plan=game.longTermGoals||migrateLongTermGoals(game),scenario=gameScenarioCatalog()[career.scenarioId]||gameScenarioCatalog().balanced,difficulty=difficultyCatalog()[career.difficultyId]||difficultyCatalog().realistic;
+        const termDays=Math.max(1,plan.horizonDays),daysLeft=Math.max(0,num(game.politics.electionInDays,termDays)),elapsedDays=Math.max(0,termDays-daysLeft),termProgress=clamp(elapsedDays/termDays*100,0,100),forecastReady=elapsedDays>=45&&(plan.reviews?.length||0)>=2;
+        const achieved=career.objectives.filter(item=>item.status==="achieved").length,tone=!forecastReady?"":plan.score>=70?"good":plan.score<42?"bad":"warn";
+        const assessed=career.objectives.map(item=>({item,assessment:longTermGoalAssessment(game,item)}));
+        const ordered=assessed.slice().sort((a,b)=>Number(b.assessment.focused)-Number(a.assessment.focused));
+        const atRisk=assessed.filter(entry=>["под риском","отставание"].includes(entry.assessment.status)).length;
         return `
           <section class="panel pad">
             <div class="panel-section-head">
               <span>
-                <h3 class="section-title">Президентский мандат · срок №${career.termNumber}</h3>
-                <p class="subtle">${esc(scenario.name)} · ${esc(scenario.challenge)}</p>
+                <h3 class="section-title">Президентский мандат и стратегия · срок №${career.termNumber}</h3>
+                <p class="subtle">${esc(scenario.name)} · ${esc(scenario.challenge)} Личный фокус меняет порядок контроля, но не создаёт бесплатных бонусов.</p>
               </span>
-              <span class="pill ${tone}">${career.status==="caretaker"?"переход власти":`${Math.round(career.score)}/100`}</span>
+              <span class="pill ${tone}">${career.status==="caretaker"?"переход власти":forecastReady?`прогноз ${Math.round(plan.score)}/100`:"базовая оценка"}</span>
             </div>
             <div class="kpi-strip" style="margin-top:12px;">
               <div class="kpi"><span>Режим</span><strong>${esc(difficulty.name)}</strong><small class="subtle">${difficulty.maxChains} одноврем. цепочки</small></div>
-              <div class="kpi"><span>До выборов</span><strong>${daysLeft} дн.</strong><small class="subtle">пройдено ${pct(termProgress,0)} срока</small></div>
-              <div class="kpi"><span>Цели достигнуты</span><strong>${achieved}/${career.objectives.length}</strong><small class="subtle">проверка раз в 7 дней</small></div>
+              <div class="kpi"><span>До выборов</span><strong>${daysLeft} дн.</strong><small class="subtle">пройдено ${pct(termProgress,0)} стратегии</small></div>
+              <div class="kpi"><span>На траектории</span><strong>${plan.onTrack}/${career.objectives.length}</strong><small class="subtle">достигнуто ${achieved}, под риском ${atRisk}</small></div>
+              <div class="kpi"><span>Президентский фокус</span><strong>${plan.focusIds.length}/3</strong><small class="subtle">обзор через ${plan.reviewDays} дн.</small></div>
               <div class="kpi"><span>Доверие к данным</span><strong>${pct(statisticsConfidence(game),0)}</strong><small class="subtle">учитывайте погрешность</small></div>
             </div>
+            <div class="decision-banner ${atRisk?"warn":"good"}" style="margin-top:12px;"><strong>${esc(plan.lastBriefing)}</strong><span class="subtle">Следующий ежегодный отчёт через ${plan.annualReviewDays} дн.; ежемесячная траектория пересчитывается по фактическим данным.</span></div>
             <div class="career-objective-grid" style="margin-top:12px;">
-              ${career.objectives.map(item=>`
-                <article class="career-objective">
-                  <header><strong>${esc(item.title)}</strong><span class="pill ${item.status==="achieved"?"good":item.progress<20?"warn":""}">${pct(item.progress,0)}</span></header>
+              ${ordered.map(({item,assessment})=>`
+                <article class="career-objective ${assessment.focused?"focused":""}">
+                  <header>
+                    <strong>${esc(item.title)}</strong>
+                    <span class="objective-head-actions">
+                      <span class="pill ${assessment.tone}">${esc(assessment.status)}</span>
+                      <button class="icon ${assessment.focused?"active":""}" data-action="long-term-goal" data-mode="focus" data-id="${esc(item.id)}" title="${assessment.focused?"Снять с личного контроля":"Включить в личный контроль"}" aria-label="${assessment.focused?"Снять с личного контроля":"Включить в личный контроль"}">${assessment.focused?"★":"☆"}</button>
+                    </span>
+                  </header>
                   <p>${esc(item.desc)}</p>
+                  <div class="objective-status-line"><small class="subtle">сейчас ${item.current.toFixed(1)} · цель ${item.target.toFixed(1)}</small><strong>${pct(item.progress,0)}</strong></div>
                   <div class="progress" style="margin-top:9px;"><i style="width:${clamp(item.progress,0,100)}%"></i></div>
-                  <small class="subtle">исходно ${item.baseline.toFixed(1)} · сейчас ${item.current.toFixed(1)} · цель ${item.target.toFixed(1)}</small>
+                  <div class="objective-path" aria-label="Контрольные рубежи 25, 50, 75 и 100 процентов">${[25,50,75,100].map(value=>`<i class="objective-step ${item.progress>=value?"done":item.progress>=value-25?"current":""}" title="Рубеж ${value}%"></i>`).join("")}</div>
+                  <div class="objective-footer"><small class="subtle">следующий рубеж ${assessment.nextCheckpoint}% · ${assessment.checkpointValue.toFixed(1)}</small><small class="subtle">${assessment.remaining} дн.</small></div>
+                  <details class="strategy-diagnostic">
+                    <summary>${esc(assessment.label)}</summary>
+                    <p class="subtle">${esc(assessment.profile.mechanism)}</p>
+                    <ul>${assessment.profile.signals.map(signal=>`<li>${esc(signal)}</li>`).join("")}</ul>
+                    <div class="actions" style="margin-top:9px;"><button data-tab="${assessment.profile.tab}">Открыть связанный раздел</button></div>
+                  </details>
                 </article>
               `).join("")}
             </div>
-            ${career.lastReport?`<div class="actions" style="margin-top:12px;"><button data-action="career-report">Открыть итоговый отчёт прошлого срока</button></div>`:""}
+            <div class="actions" style="margin-top:12px;">
+              <button data-action="long-term-goal" data-mode="review">Сформировать стратегический обзор</button>
+              ${career.lastReport?`<button data-action="career-report">Открыть итоговый отчёт прошлого срока</button>`:""}
+            </div>
           </section>
         `;
       }
@@ -19889,6 +20608,20 @@
                 "Государство регулирует конкуренцию, собственность, закупки и венчурный капитал, но не назначает частным компаниям прибыль.",
                 "Проверка поставщика только допускает компанию к конкурсу. Государственный контракт присуждается отдельно по заявкам во вкладке правительства; гарантия и стабилизация остаются условными инструментами с бюджетным риском."
               ])}
+              ${manualCard("Долгосрочная стратегия срока", [
+                "Шесть целей мандата имеют исходное значение, числовую цель, срок до выборов и контрольные рубежи 25, 50, 75 и 100 процентов.",
+                "Статус сравнивает фактический прогресс с траекторией текущего срока: стартовый период, по плану, опережение, под риском или отставание.",
+                "В личный фокус президента можно включить не более трёх целей. Это меняет порядок контроля и аналитических записок, но не повышает показатели бесплатно.",
+                "Внутри каждой цели показаны реальные ограничители и переход к разделу, где находятся связанные решения.",
+                "Ежемесячные обзоры сохраняют динамику, а ежегодный обзор попадает в историческую хронику президентства."
+              ])}
+              ${manualCard("Звук, атмосфера и производительность", [
+                "Встроенный Web Audio создаёт тихую атмосферу кабинета, сигналы документов, ручного дня, кризиса и войны без сетевых файлов.",
+                "Общий звук, атмосферу, интерфейсные эффекты, тревоги и три уровня громкости можно независимо менять во вкладке «Настройки».",
+                "Автоматический режим подбирает размер пакета дней по фактическому времени расчёта; детальный чаще обновляет экран, экономичный снижает графическую нагрузку.",
+                "Лёгкие промежуточные обновления меняют дату и основные индикаторы без полной пересборки тяжёлой вкладки. Все игровые системы продолжают рассчитываться.",
+                "Сокращённая анимация и пауза скрытой вкладки доступны отдельно и сохраняются вместе с кампанией."
+              ])}
               ${manualCard("Сохранения", [
                 "Автосохранение сжимает историю и новости, чтобы LocalStorage не переполнялся.",
                 "Изображения автоматически ограничиваются по размеру.",
@@ -19905,6 +20638,61 @@
             <header><strong>${esc(title)}</strong><span class="pill">система</span></header>
             <ul>${items.map(item => `<li>${esc(item)}</li>`).join("")}</ul>
           </article>
+        `;
+      }
+
+      function renderSettings() {
+        const experience=migrateExperienceSettings(state),sound=experience.sound,performance=migratePerformanceSystem(state),profile=performanceFrameProfile(state),audioSupported=!!(window.AudioContext||window.webkitAudioContext);
+        const healthTone=performance.tickAverageMs>7||performance.renderAverageMs>60?"bad":performance.tickAverageMs>3||performance.renderAverageMs>35?"warn":"good";
+        const modeLabels={auto:"Авто",quality:"Детальный",efficient:"Экономичный"};
+        const toggle=(key,title,desc,checked)=>`<label class="setting-row"><span><strong>${esc(title)}</strong><small>${esc(desc)}</small></span><input type="checkbox" data-audio-setting="${key}" ${checked?"checked":""}></label>`;
+        const range=(key,title,value)=>`<div class="setting-range"><label>${esc(title)}<input type="range" min="0" max="100" step="1" value="${value}" data-audio-setting="${key}"></label><output data-setting-output="${key}">${Math.round(value)}%</output></div>`;
+        return `
+          <section class="grid">
+            <section class="settings-grid">
+              <section class="panel pad">
+                <div class="panel-section-head"><span><h3 class="section-title">Звук и государственная атмосфера</h3><p class="subtle">Процедурный звук работает без внешних файлов и запускается только после действия пользователя.</p></span><span class="pill ${sound.enabled&&audioSupported?"good":sound.enabled?"warn":""}">${!audioSupported?"не поддерживается":sound.enabled?"включён":"выключен"}</span></div>
+                <div class="setting-list" style="margin-top:10px;">
+                  ${toggle("enabled","Общий звук","Единый выключатель всей аудиосистемы.",sound.enabled)}
+                  ${toggle("ambience","Фоновая атмосфера","Тихий кабинетный фон меняется при войне, кризисе и переходе между ведомствами.",sound.ambience)}
+                  ${toggle("effects","Звуки интерфейса и документов","Кнопки, ручной день, подписание актов и успешные решения.",sound.effects)}
+                  ${toggle("alerts","Критические сигналы","Автопаузы, война, кризисы и заблокированные решения.",sound.alerts)}
+                </div>
+                <div style="margin-top:8px;">
+                  ${range("masterVolume","Общая громкость",sound.masterVolume)}
+                  ${range("ambienceVolume","Громкость атмосферы",sound.ambienceVolume)}
+                  ${range("effectsVolume","Громкость эффектов",sound.effectsVolume)}
+                </div>
+                <div class="actions" style="margin-top:10px;"><button data-action="audio-preview" data-mode="document">Проверить документ</button><button data-action="audio-preview" data-mode="alert">Проверить тревогу</button></div>
+              </section>
+              <section class="panel pad">
+                <div class="panel-section-head"><span><h3 class="section-title">Производительность и плавность</h3><p class="subtle">Игровые системы не пропускаются: режим меняет размер пакета расчёта и частоту полной перестройки интерфейса.</p></span><span class="pill ${healthTone}">${esc(profile.label)}</span></div>
+                <div class="kpi-strip" style="margin-top:12px;">
+                  <div class="kpi"><span>Расчёт дня</span><strong>${performance.tickAverageMs.toFixed(2)} мс</strong><small class="subtle">пик ${performance.tickPeakMs.toFixed(1)} мс</small></div>
+                  <div class="kpi"><span>Полный рендер</span><strong>${performance.renderAverageMs.toFixed(1)} мс</strong><small class="subtle">пик ${performance.renderPeakMs.toFixed(1)} мс</small></div>
+                  <div class="kpi"><span>Лёгкие обновления</span><strong>${compact(performance.lightweightUpdates)}</strong><small class="subtle">без пересборки страницы</small></div>
+                  <div class="kpi"><span>Медленные дни</span><strong>${compact(performance.slowTicks)}</strong><small class="subtle">из ${compact(performance.tickCount)}</small></div>
+                </div>
+                <div class="decision-banner ${healthTone}" style="margin-top:12px;"><strong>${esc(performance.lastAssessment)}</strong><span class="subtle">Текущий пакет: до ${profile.maxDays} дн. за кадр; бюджет кадра ${profile.budgetMs} мс.</span></div>
+                <div style="margin-top:12px;"><span class="subtle">Режим отображения</span><div class="tabs-line" style="margin-top:7px;">
+                  ${["auto","quality","efficient"].map(mode=>`<button data-action="performance-mode" data-mode="${mode}" class="${experience.performanceMode===mode?"active":""}">${modeLabels[mode]}</button>`).join("")}
+                </div></div>
+                <div class="setting-list" style="margin-top:8px;">
+                  <label class="setting-row"><span><strong>Сокращённая анимация</strong><small>Отключает переходы и декоративное движение без изменения симуляции.</small></span><input type="checkbox" data-experience-setting="reducedMotion" ${experience.reducedMotion?"checked":""}></label>
+                  <label class="setting-row"><span><strong>Пауза в фоновой вкладке</strong><small>Не расходует ресурсы и не пропускает игровые дни, пока вкладка скрыта.</small></span><input type="checkbox" data-experience-setting="pauseWhenHidden" ${experience.pauseWhenHidden?"checked":""}></label>
+                </div>
+              </section>
+            </section>
+            <section class="panel pad">
+              <h3 class="section-title">Техническое состояние кампании</h3>
+              <div class="kpi-strip" style="margin-top:12px;">
+                <div class="kpi"><span>Версия сохранения</span><strong>v${SAVE_VERSION}</strong><small class="subtle">миграция старых игр включена</small></div>
+                <div class="kpi"><span>Очередь дней</span><strong>${simulationQueue}</strong><small class="subtle">обрабатывается по кадрам</small></div>
+                <div class="kpi"><span>Автосохранение</span><strong>${state.lastSaved?"активно":"ожидает"}</strong><small class="subtle">IndexedDB с резервом LocalStorage</small></div>
+                <div class="kpi"><span>Фоновая работа</span><strong>${experience.pauseWhenHidden?"приостановлена":"разрешена"}</strong><small class="subtle">при скрытой вкладке</small></div>
+              </div>
+            </section>
+          </section>
         `;
       }
 
@@ -20338,6 +21126,7 @@
             <div class="document-actions"><button class="primary" data-action="close-modal">Передать в архив</button></div>
           `
         };
+        requestInterfaceSound(blocked ? "alert" : "document");
         render({ force: true, preserveScroll: true });
       }
 
@@ -20624,7 +21413,8 @@
 
       function drawChart(canvas, data, label) {
         const rect = canvas.getBoundingClientRect();
-        const ratio = window.devicePixelRatio || 1;
+        if (rect.width < 2 || rect.height < 2 || document.hidden) return;
+        const ratio = Math.min(2, window.devicePixelRatio || 1);
         canvas.width = Math.max(320, Math.floor(rect.width * ratio));
         canvas.height = Math.max(180, Math.floor(rect.height * ratio));
         const ctx = canvas.getContext("2d");
@@ -20692,8 +21482,10 @@
 
         const tabButton = event.target.closest("[data-tab]");
         if (tabButton) {
+          requestInterfaceSound("click");
           activeTab = tabButton.dataset.tab;
           render({ force: true, resetScroll: true });
+          syncAmbientProfile();
           return;
         }
 
@@ -20701,6 +21493,8 @@
         if (!actionEl) return;
         const action = actionEl.dataset.action;
         const battleCommandAction = action === "war-step" || action === "war-plan" || action === "war-execute-plan";
+
+        if (action === "start-game") void unlockAudioContext();
 
         if (action === "dismiss-toast") {
           actionEl.closest(".toast-message")?.remove();
@@ -20729,11 +21523,22 @@
           return;
         }
         if (!state) return;
+        if(!["audio-preview","sound-toggle"].includes(action))requestInterfaceSound(actionSoundType(action));
         if (!authorizePresidentialAction(actionEl)) return;
 
-        if (action === "speed") { state.speed = num(actionEl.dataset.speed); if(state.pacing)state.pacing.pauseRequested=false; }
+        if (action === "speed") {
+          state.speed = num(actionEl.dataset.speed);
+          if(state.pacing)state.pacing.pauseRequested=false;
+          queueSave(300);
+          refreshLightweightChrome();
+          return;
+        }
         else if (action === "tick") tickManual();
         else if (action === "campaign-pacing") campaignPacingAction(actionEl.dataset.mode);
+        else if (action === "long-term-goal") longTermGoalAction(actionEl.dataset.id,actionEl.dataset.mode);
+        else if (action === "sound-toggle") toggleMasterSound();
+        else if (action === "audio-preview") previewAudio(actionEl.dataset.mode);
+        else if (action === "performance-mode") setPerformanceMode(actionEl.dataset.mode);
         else if (action === "theme") toggleTheme();
         else if (action === "autosave") { if (saveState({ force: true })) notify("Игра сохранена."); }
         else if (action === "select-region") selectedRegionId = actionEl.dataset.id;
@@ -20871,6 +21676,13 @@
         }
         if (!state) return;
         const el = event.target;
+        if (el.matches("[data-audio-setting][type='range']")) {
+          const key=el.dataset.audioSetting;
+          if(!["masterVolume","ambienceVolume","effectsVolume"].includes(key))return;
+          currentAudioSettings()[key]=clamp(num(el.value),0,100);
+          const output=document.querySelector(`[data-setting-output="${key}"]`);if(output)output.textContent=`${Math.round(num(el.value))}%`;
+          syncAudioSystem(false);queueSave(700);return;
+        }
         if (el.matches("[data-action='metric-select']")) {
           selectedMetric = el.value;
           renderCharts();
@@ -20926,6 +21738,16 @@
           return;
         }
         if (!state) return;
+        if (el.matches("[data-audio-setting][type='checkbox']")) {
+          const key=el.dataset.audioSetting;if(!["enabled","ambience","effects","alerts"].includes(key))return;
+          currentAudioSettings()[key]=!!el.checked;
+          if(key==="enabled"&&el.checked)void unlockAudioContext().then(()=>{syncAudioSystem(true);playInterfaceSound("success");});else syncAudioSystem(false);
+          queueSave(300);render({force:true,preserveScroll:true});return;
+        }
+        if (el.matches("[data-experience-setting][type='checkbox']")) {
+          const key=el.dataset.experienceSetting;if(!["reducedMotion","pauseWhenHidden"].includes(key))return;
+          migrateExperienceSettings(state)[key]=!!el.checked;applyExperienceClasses(state);queueSave(300);render({force:true,preserveScroll:true});return;
+        }
         if (el.matches("[data-war-legal-cause]")) {
           warLegalDrafts.set(el.dataset.country, el.value);
           const country = state.diplomacy.countries.find(item => item.id === el.dataset.country);
@@ -20985,6 +21807,8 @@
         activeTab = "dashboard";
         saveState();
         render();
+        syncAudioSystem(true);
+        playInterfaceSound("ceremony");
       }
 
       function imageToDataUrl(file, options = {}) {
@@ -21384,6 +22208,7 @@
           simulateCampaignPacing(game);
           simulateNarrativeSystem(game);
           simulateCareerSystem(game);
+          simulateLongTermGoals(game);
           simulatePluralLegacySystem(game);
           simulateInformationSpace(game);
           simulateStatisticsSystem(game);
@@ -21398,6 +22223,7 @@
           const finishedAt = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
           core.lastTickDuration = Math.max(0, finishedAt - startedAt);
           if (core.lastTickDuration > 18) core.slowTickCount++;
+          recordTickPerformance(game,core.lastTickDuration);
           core.processing = false;
           randomGameContext = previousContext;
         }
@@ -25582,6 +26408,9 @@
         if (!state.explainability || state.explainability.modelVersion!==EXPLAINABILITY_MODEL_VERSION) migrateExplainabilitySystem(state);
         if (!state.pacing || state.pacing.modelVersion!==CAMPAIGN_PACING_MODEL_VERSION) migrateCampaignPacing(state);
         if (!state.settings || !state.career || state.career.modelVersion !== CAREER_MODEL_VERSION) migrateCareerSystem(state);
+        if (!state.settings?.experience || state.settings.experience.modelVersion!==EXPERIENCE_SETTINGS_MODEL_VERSION) migrateExperienceSettings(state);
+        if (!state.performance || state.performance.modelVersion!==PERFORMANCE_MODEL_VERSION) migratePerformanceSystem(state);
+        if (!state.longTermGoals || state.longTermGoals.modelVersion!==LONG_TERM_GOALS_MODEL_VERSION || state.longTermGoals.termNumber!==state.career.termNumber) migrateLongTermGoals(state);
         if (!state.career.legacySystem || state.career.legacySystem.modelVersion!==PLURAL_LEGACY_MODEL_VERSION) migratePluralLegacySystem(state);
         if (!state.federation || state.regions.some(region => !region.identity)) migrateFederationSystem(state);
         if (!state.succession?.currentEra) migrateSuccessionSystem(state);
@@ -25844,7 +26673,11 @@
       }
 
       function startFreshGame() {
+        stopAmbientSound();
+        if(audioContext?.state==="running")void audioContext.suspend();
         clearTimeout(saveTimer);
+        if(saveIdleHandle!==null&&typeof window.cancelIdleCallback==="function")window.cancelIdleCallback(saveIdleHandle);
+        saveIdleHandle=null;
         clearTimeout(deferredRenderTimer);
         if (simulationFrame !== null) cancelAnimationFrame(simulationFrame);
         simulationFrame = null;
@@ -25874,11 +26707,13 @@
         lastBattleSceneRefreshAt = 0;
         lastBattleLiveRefreshAt = 0;
         lastSimulationPaintAt = 0;
+        lastFullRenderAt = 0;
         expandedActionCards.clear();
         warDrafts.clear();
         warLegalDrafts.clear();
         setupDraft = defaultSetupDraft();
         document.body.classList.remove("light");
+        document.body.classList.remove("reduced-motion","performance-efficient");
         if (importFile) importFile.value = "";
         startTimer();
         notify("Можно создать новую страну.", "good", "Новая игра");
