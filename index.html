@@ -3870,6 +3870,249 @@
       backface-visibility: hidden;
     }
 
+    /* Regional map workspace */
+    .map-layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .map-sidebar {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: start;
+    }
+
+    .map-layout.map-layout-expanded {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .map-layout.map-layout-expanded .map-sidebar {
+      display: none;
+    }
+
+    .regional-map-board {
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: color-mix(in oklab, var(--panel) 94%, #0b100d);
+    }
+
+    .map-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in oklab, var(--panel-2) 91%, var(--state-green));
+    }
+
+    .map-toolbar-copy {
+      min-width: 190px;
+      display: grid;
+      gap: 2px;
+    }
+
+    .map-toolbar-copy strong {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 18px;
+    }
+
+    .map-toolbar-copy small {
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .map-toolbar-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 7px;
+    }
+
+    .map-toolbar-actions button {
+      min-height: 34px;
+      padding: 6px 10px;
+      white-space: nowrap;
+    }
+
+    .map-stage {
+      min-height: 0;
+      overflow: auto;
+      border: 0;
+      border-radius: 0;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
+      background:
+        radial-gradient(circle at 50% 22%, rgba(194, 161, 95, .07), transparent 42%),
+        linear-gradient(145deg, rgba(49, 88, 72, .14), transparent 46%),
+        color-mix(in oklab, var(--panel-3) 96%, #050806);
+    }
+
+    .map-stage svg {
+      width: 100%;
+      height: auto;
+      min-height: 0;
+      display: block;
+      user-select: none;
+    }
+
+    .map-stage.arrange-mode {
+      cursor: grab;
+      touch-action: none;
+      box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--accent) 70%, transparent);
+    }
+
+    .map-stage.arrange-mode .map-region-group {
+      cursor: grab;
+    }
+
+    .map-stage.arrange-mode .map-region-group.dragging {
+      cursor: grabbing;
+    }
+
+    .map-stage.arrange-mode .region-poly {
+      stroke-dasharray: 8 5;
+    }
+
+    .map-grid-line.major {
+      stroke: rgba(194, 161, 95, .18);
+      stroke-width: 1.4;
+    }
+
+    .map-grid-dot {
+      fill: rgba(194, 161, 95, .18);
+      pointer-events: none;
+    }
+
+    .map-connection {
+      fill: none;
+      stroke: rgba(218, 197, 148, .2);
+      stroke-width: 7;
+      stroke-linecap: round;
+      pointer-events: none;
+    }
+
+    .map-connection-core {
+      fill: none;
+      stroke: rgba(226, 211, 176, .38);
+      stroke-width: 1.5;
+      stroke-dasharray: 9 7;
+      pointer-events: none;
+    }
+
+    .map-region-group {
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+
+    .map-region-group.dragging {
+      opacity: .92;
+      filter: drop-shadow(0 18px 18px rgba(0, 0, 0, .42));
+    }
+
+    .map-region-group.dragging .region-poly {
+      stroke: var(--accent);
+      stroke-width: 5;
+    }
+
+    .region-poly {
+      stroke: rgba(242, 237, 227, .84);
+      stroke-width: 2.4;
+      vector-effect: non-scaling-stroke;
+      filter: drop-shadow(0 8px 10px rgba(0, 0, 0, .2));
+    }
+
+    .map-region-texture {
+      fill: url(#regionalMapTexture);
+      stroke: rgba(255, 255, 255, .16);
+      stroke-width: 1;
+      pointer-events: none;
+    }
+
+    .map-region-road {
+      stroke: rgba(247, 240, 218, .36);
+      stroke-width: 3.2;
+      stroke-linecap: round;
+      stroke-dasharray: 4 5;
+      pointer-events: none;
+    }
+
+    .map-label-card {
+      fill: rgba(11, 15, 12, .84);
+      stroke: rgba(235, 220, 184, .52);
+      stroke-width: 1.2;
+      pointer-events: none;
+    }
+
+    .map-label {
+      fill: #fffaf0;
+      stroke: none;
+      font-size: 16px;
+      font-weight: 850;
+    }
+
+    .map-region-caption {
+      fill: rgba(241, 237, 227, .78);
+      font-size: 10px;
+      font-weight: 720;
+      pointer-events: none;
+    }
+
+    .map-facility-badge rect {
+      fill: rgba(8, 12, 9, .82);
+      stroke: rgba(242, 228, 192, .56);
+      stroke-width: 1;
+    }
+
+    .map-facility-badge {
+      pointer-events: none;
+    }
+
+    .map-facility-badge text {
+      fill: #f4ead0;
+      font-size: 9px;
+      font-weight: 850;
+      pointer-events: none;
+    }
+
+    .map-drag-guide {
+      stroke: rgba(194, 161, 95, .72);
+      stroke-width: 1.5;
+      stroke-dasharray: 7 7;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .map-drag-guide.visible {
+      opacity: 1;
+    }
+
+    .map-legend-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 12px;
+      border-top: 1px solid var(--line);
+      background: color-mix(in oklab, var(--panel-2) 88%, transparent);
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .map-legend-bar span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .map-legend-swatch {
+      width: 17px;
+      height: 4px;
+      background: var(--accent);
+    }
+
+    .map-legend-swatch.annexed { background: var(--warn); }
+    .map-legend-swatch.damaged { background: var(--danger); }
+
     @media (max-width: 620px) {
       .top-actions { width: 100%; }
       .speedbar button { flex: 0 0 auto; }
@@ -3904,6 +4147,12 @@
       .command-main h3 { font-size: 30px; }
       .setup-hero h1 { font-size: 38px; }
       .war-report-head h2 { font-size: 30px; }
+      .map-toolbar { align-items: flex-start; flex-direction: column; }
+      .map-toolbar-actions { width: 100%; justify-content: flex-start; }
+      .map-toolbar-actions button { flex: 1 1 132px; }
+      .map-sidebar { grid-template-columns: 1fr; }
+      .map-stage { min-height: 0; }
+      .map-stage svg { min-width: 880px; min-height: 0; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -3926,7 +4175,7 @@
 
       const STORAGE_KEY = "aaa_president_sim_state_v4";
       const SLOTS_KEY = "aaa_president_sim_slots_v4";
-      const SAVE_VERSION = 33;
+      const SAVE_VERSION = 34;
       const ECONOMY_MODEL_VERSION = 5;
       const FOREIGN_STATE_MODEL_VERSION = 1;
       const BILATERAL_MODEL_VERSION = 2;
@@ -3954,6 +4203,9 @@
       const LONG_TERM_GOALS_MODEL_VERSION = 1;
       const EXPERIENCE_SETTINGS_MODEL_VERSION = 1;
       const PERFORMANCE_MODEL_VERSION = 1;
+      const REGIONAL_MAP_MODEL_VERSION = 1;
+      const REGIONAL_MAP_WIDTH = 1280;
+      const REGIONAL_MAP_MIN_HEIGHT = 860;
       const SAVE_DB_NAME = "aaa_president_sim_storage";
       const SAVE_DB_STORE = "saves";
       const DAY_MS = 1800;
@@ -4021,6 +4273,7 @@
       let selectedTech = null;
       let drawMode = false;
       let drawingPoints = [];
+      let regionalMapDrag = null;
       let timer = null;
       let simulationFrame = null;
       let simulationQueue = 0;
@@ -5285,6 +5538,7 @@
           : [];
         loaded.regions = validRegions.length ? validRegions : defaultRegions();
         loaded.regions = loaded.regions.map((r, index) => ensureRegionDefaults(r, index));
+        migrateRegionalMap(loaded);
         migrateRegionalAdministration(loaded);
         migrateDemographySystem(loaded);
         migrateGenerationalMemory(loaded);
@@ -5328,7 +5582,6 @@
         migratePerformanceSystem(loaded);
         migrateLongTermGoals(loaded);
         reviewLongTermGoals(loaded,true);
-        layoutAnnexedRegions(loaded);
         for (const r of loaded.regions) r.buildings ||= emptyBuildings();
         if (!loaded.history.date?.length) pushHistory(loaded);
         return loaded;
@@ -10768,6 +11021,182 @@
         return r;
       }
 
+      function defaultRegionalMap(regionCount = 0) {
+        return {
+          modelVersion: REGIONAL_MAP_MODEL_VERSION,
+          width: REGIONAL_MAP_WIDTH,
+          height: regionalMapRecommendedHeight(regionCount),
+          editMode: false,
+          snap: true,
+          expanded: false,
+          layoutMode: "auto",
+          layoutRevision: 1,
+          regionCount: Math.max(0, Math.round(num(regionCount))),
+          lastMovedRegionId: ""
+        };
+      }
+
+      function regionalMapColumns(count) {
+        if (count <= 1) return 1;
+        if (count <= 4) return 2;
+        if (count <= 9) return 3;
+        return 4;
+      }
+
+      function regionalMapRecommendedHeight(count) {
+        const safeCount = Math.max(1, Math.round(num(count, 1)));
+        const rows = Math.ceil(safeCount / regionalMapColumns(safeCount));
+        return Math.max(REGIONAL_MAP_MIN_HEIGHT, 110 + rows * 250);
+      }
+
+      function mapRegionBounds(points) {
+        const valid = Array.isArray(points) ? points.filter(point => Array.isArray(point) && Number.isFinite(Number(point[0])) && Number.isFinite(Number(point[1]))) : [];
+        if (!valid.length) return { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 };
+        const xs = valid.map(point => Number(point[0]));
+        const ys = valid.map(point => Number(point[1]));
+        const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+        return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
+      }
+
+      function regionalMapPointsValid(points, width = REGIONAL_MAP_WIDTH, height = REGIONAL_MAP_MIN_HEIGHT) {
+        if (!Array.isArray(points) || points.length < 3) return false;
+        if (!points.every(point => Array.isArray(point) && Number.isFinite(Number(point[0])) && Number.isFinite(Number(point[1])))) return false;
+        const bounds = mapRegionBounds(points);
+        return bounds.width >= 24 && bounds.height >= 24 && bounds.minX >= 0 && bounds.minY >= 0 && bounds.maxX <= width && bounds.maxY <= height;
+      }
+
+      function defaultRegionShape(index = 0) {
+        const shapes = [
+          [[.06,.18],[.68,.04],[.96,.36],[.80,.92],[.17,.86]],
+          [[.08,.09],[.77,.05],[.94,.48],[.72,.91],[.18,.96],[.03,.44]],
+          [[.05,.24],[.48,.04],[.95,.20],[.88,.76],[.55,.95],[.12,.82]],
+          [[.13,.07],[.83,.13],[.97,.56],[.69,.94],[.11,.79],[.03,.34]],
+          [[.04,.16],[.58,.04],[.96,.25],[.91,.78],[.43,.94],[.08,.70]],
+          [[.10,.05],[.72,.09],[.96,.43],[.77,.92],[.21,.88],[.03,.38]]
+        ];
+        return shapes[index % shapes.length].map(point => point.slice());
+      }
+
+      function normalizedRegionShape(points, index = 0) {
+        if (!Array.isArray(points) || points.length < 3) return defaultRegionShape(index);
+        const bounds = mapRegionBounds(points);
+        if (bounds.width < 8 || bounds.height < 8) return defaultRegionShape(index);
+        return points.map(point => [
+          clamp((num(point[0]) - bounds.minX) / bounds.width, 0, 1),
+          clamp((num(point[1]) - bounds.minY) / bounds.height, 0, 1)
+        ]);
+      }
+
+      function fitRegionShape(points, cell, index = 0) {
+        const shape = normalizedRegionShape(points, index);
+        const insetX = Math.max(14, cell.width * .055);
+        const insetY = Math.max(14, cell.height * .07);
+        const width = Math.max(80, cell.width - insetX * 2);
+        const height = Math.max(70, cell.height - insetY * 2);
+        return shape.map(point => [
+          Math.round((cell.x + insetX + point[0] * width) * 10) / 10,
+          Math.round((cell.y + insetY + point[1] * height) * 10) / 10
+        ]);
+      }
+
+      function autoLayoutRegionalMap(game = state) {
+        if (!game?.regions?.length) return null;
+        game.regionalMap ||= defaultRegionalMap(game.regions.length);
+        const map = game.regionalMap;
+        map.width = REGIONAL_MAP_WIDTH;
+        map.height = regionalMapRecommendedHeight(game.regions.length);
+        const count = game.regions.length;
+        const columns = regionalMapColumns(count);
+        const rows = Math.ceil(count / columns);
+        const outerX = 42;
+        const availableWidth = map.width - outerX * 2;
+        const cellWidth = availableWidth / columns;
+        const cellHeight = Math.min(286, (map.height - 92) / Math.max(1, rows));
+        const gridHeight = cellHeight * rows;
+        const startY = Math.max(38, (map.height - gridHeight) / 2);
+        game.regions.forEach((region, index) => {
+          const column = index % columns;
+          const row = Math.floor(index / columns);
+          region.points = fitRegionShape(region.points, {
+            x: outerX + column * cellWidth,
+            y: startY + row * cellHeight,
+            width: cellWidth,
+            height: cellHeight
+          }, index);
+        });
+        map.layoutMode = "auto";
+        map.layoutRevision = Math.max(1, Math.round(num(map.layoutRevision, 0)) + 1);
+        map.regionCount = count;
+        map.lastMovedRegionId = "";
+        return map;
+      }
+
+      function regionalMapOverlapCount(regions = state?.regions || []) {
+        const boxes = regions.map(region => mapRegionBounds(region.points));
+        let count = 0;
+        for (let left = 0; left < boxes.length; left++) {
+          for (let right = left + 1; right < boxes.length; right++) {
+            const a = boxes[left], b = boxes[right];
+            const width = Math.max(0, Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX));
+            const height = Math.max(0, Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY));
+            const overlap = width * height;
+            const smaller = Math.max(1, Math.min(a.width * a.height, b.width * b.height));
+            if (overlap / smaller > .08) count++;
+          }
+        }
+        return count;
+      }
+
+      function migrateRegionalMap(game) {
+        if (!game || !Array.isArray(game.regions)) return null;
+        const incoming = game.regionalMap && typeof game.regionalMap === "object" && !Array.isArray(game.regionalMap) ? game.regionalMap : null;
+        const legacy = !incoming || num(incoming.modelVersion) !== REGIONAL_MAP_MODEL_VERSION;
+        const map = Object.assign(defaultRegionalMap(game.regions.length), incoming || {});
+        map.modelVersion = REGIONAL_MAP_MODEL_VERSION;
+        map.width = REGIONAL_MAP_WIDTH;
+        map.height = Math.max(regionalMapRecommendedHeight(game.regions.length), Math.round(num(map.height, REGIONAL_MAP_MIN_HEIGHT)));
+        map.editMode = !!map.editMode;
+        map.snap = map.snap !== false;
+        map.expanded = !!map.expanded;
+        map.layoutMode = map.layoutMode === "manual" ? "manual" : "auto";
+        map.layoutRevision = Math.max(1, Math.round(num(map.layoutRevision, 1)));
+        map.regionCount = game.regions.length;
+        map.lastMovedRegionId = String(map.lastMovedRegionId || "");
+        game.regionalMap = map;
+        const invalid = game.regions.some(region => !regionalMapPointsValid(region.points, map.width, map.height));
+        if (legacy || invalid) autoLayoutRegionalMap(game);
+        return game.regionalMap;
+      }
+
+      function boundsOverlapWithGap(a, b, gap = 12) {
+        return !(a.maxX + gap <= b.minX || b.maxX + gap <= a.minX || a.maxY + gap <= b.minY || b.maxY + gap <= a.minY);
+      }
+
+      function placeRegionInFreeMapSpace(game, region) {
+        const map = migrateRegionalMap(game);
+        if (!map || !region) return;
+        if (map.layoutMode !== "manual") {
+          autoLayoutRegionalMap(game);
+          return;
+        }
+        const occupied = game.regions.filter(item => item !== region).map(item => mapRegionBounds(item.points));
+        const cellWidth = 286, cellHeight = 224, startX = 48, startY = 52;
+        const columns = Math.max(1, Math.floor((map.width - startX * 2) / cellWidth));
+        for (let slot = 0; slot < 80; slot++) {
+          const column = slot % columns, row = Math.floor(slot / columns);
+          const cell = { x: startX + column * cellWidth, y: startY + row * cellHeight, width: cellWidth - 12, height: cellHeight - 12 };
+          const candidate = fitRegionShape(region.points, cell, game.regions.indexOf(region));
+          const bounds = mapRegionBounds(candidate);
+          if (occupied.some(box => boundsOverlapWithGap(bounds, box))) continue;
+          region.points = candidate;
+          map.height = Math.max(map.height, Math.ceil(bounds.maxY + 52));
+          map.regionCount = game.regions.length;
+          map.layoutRevision++;
+          return;
+        }
+        autoLayoutRegionalMap(game);
+      }
+
       function normalizeRegionalProgram(program) {
         const p = program || {};
         p.id ||= uid("regional_program");
@@ -13980,6 +14409,7 @@
         migrateElectionSystem(game);
         migrateJusticeSystem(game);
         migrateCabinetSystem(game);
+        migrateRegionalMap(game);
         migrateRegionalAdministration(game);
         migrateDemographySystem(game);
         migrateGenerationalMemory(game);
@@ -14730,6 +15160,10 @@
         document.addEventListener("input", onInput);
         document.addEventListener("change", onChange);
         document.addEventListener("submit", onSubmit);
+        document.addEventListener("pointerdown", handleRegionalMapPointerDown, true);
+        document.addEventListener("pointermove", handleRegionalMapPointerMove, { passive: false });
+        document.addEventListener("pointerup", handleRegionalMapPointerUp, true);
+        document.addEventListener("pointercancel", handleRegionalMapPointerCancel, true);
         document.addEventListener("pointermove", markInteraction, { passive: true });
         document.addEventListener("pointerdown", markInteraction, true);
         document.addEventListener("scroll", markScroll, true);
@@ -14743,6 +15177,118 @@
           }
         });
         importFile.addEventListener("change", importSaveFile);
+      }
+
+      function regionalMapPointerPoint(svg, event) {
+        if (!svg?.createSVGPoint || !svg.getScreenCTM()) return null;
+        const point = svg.createSVGPoint();
+        point.x = event.clientX;
+        point.y = event.clientY;
+        return point.matrixTransform(svg.getScreenCTM().inverse());
+      }
+
+      function handleRegionalMapPointerDown(event) {
+        if (!state || activeTab !== "map" || drawMode || !state.regionalMap?.editMode) return;
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        const group = event.target.closest?.("[data-map-region-id]");
+        const svg = group?.closest?.("#countryMap");
+        if (!group || !svg) return;
+        const region = state.regions.find(item => item.id === group.dataset.mapRegionId);
+        const start = regionalMapPointerPoint(svg, event);
+        if (!region || !start) return;
+        selectedRegionId = region.id;
+        regionalMapDrag = {
+          pointerId: event.pointerId,
+          regionId: region.id,
+          svg,
+          group,
+          start,
+          originalPoints: region.points.map(point => [num(point[0]), num(point[1])]),
+          dx: 0,
+          dy: 0,
+          moved: false
+        };
+        group.classList.add("dragging");
+        try { svg.setPointerCapture?.(event.pointerId); } catch {}
+        event.preventDefault();
+      }
+
+      function regionalMapDragOffset(drag, point) {
+        const map = migrateRegionalMap(state);
+        const bounds = mapRegionBounds(drag.originalPoints);
+        let dx = point.x - drag.start.x;
+        let dy = point.y - drag.start.y;
+        if (map.snap) {
+          const center = getCentroid(drag.originalPoints);
+          dx = Math.round((center.x + dx) / 20) * 20 - center.x;
+          dy = Math.round((center.y + dy) / 20) * 20 - center.y;
+        }
+        dx = clamp(dx, 18 - bounds.minX, map.width - 18 - bounds.maxX);
+        dy = clamp(dy, 18 - bounds.minY, map.height - 18 - bounds.maxY);
+        return { dx, dy };
+      }
+
+      function updateRegionalMapDragGuides(drag, visible) {
+        const center = getCentroid(drag.originalPoints);
+        const x = drag.svg.querySelector?.('[data-map-guide="x"]');
+        const y = drag.svg.querySelector?.('[data-map-guide="y"]');
+        if (x) {
+          x.setAttribute("x1", (center.x + drag.dx).toFixed(1));
+          x.setAttribute("x2", (center.x + drag.dx).toFixed(1));
+          x.classList.toggle("visible", visible);
+        }
+        if (y) {
+          y.setAttribute("y1", (center.y + drag.dy).toFixed(1));
+          y.setAttribute("y2", (center.y + drag.dy).toFixed(1));
+          y.classList.toggle("visible", visible);
+        }
+      }
+
+      function handleRegionalMapPointerMove(event) {
+        const drag = regionalMapDrag;
+        if (!drag || event.pointerId !== drag.pointerId) return;
+        const point = regionalMapPointerPoint(drag.svg, event);
+        if (!point) return;
+        const offset = regionalMapDragOffset(drag, point);
+        drag.dx = offset.dx;
+        drag.dy = offset.dy;
+        drag.moved ||= Math.hypot(drag.dx, drag.dy) >= 2;
+        drag.group.setAttribute("transform", `translate(${drag.dx.toFixed(1)} ${drag.dy.toFixed(1)})`);
+        updateRegionalMapDragGuides(drag, true);
+        event.preventDefault();
+      }
+
+      function finishRegionalMapDrag(event, cancelled = false) {
+        const drag = regionalMapDrag;
+        if (!drag || (event?.pointerId != null && event.pointerId !== drag.pointerId)) return;
+        regionalMapDrag = null;
+        try { drag.svg.releasePointerCapture?.(drag.pointerId); } catch {}
+        updateRegionalMapDragGuides(drag, false);
+        drag.group.classList.remove("dragging");
+        if (cancelled || !drag.moved) {
+          drag.group.removeAttribute("transform");
+          return;
+        }
+        const region = state.regions.find(item => item.id === drag.regionId);
+        if (!region) return;
+        region.points = drag.originalPoints.map(point => [
+          Math.round((point[0] + drag.dx) * 10) / 10,
+          Math.round((point[1] + drag.dy) * 10) / 10
+        ]);
+        state.regionalMap.layoutMode = "manual";
+        state.regionalMap.layoutRevision++;
+        state.regionalMap.regionCount = state.regions.length;
+        state.regionalMap.lastMovedRegionId = region.id;
+        queueSave(250);
+        render({ force: true, preserveScroll: true });
+      }
+
+      function handleRegionalMapPointerUp(event) {
+        finishRegionalMapDrag(event, false);
+      }
+
+      function handleRegionalMapPointerCancel(event) {
+        finishRegionalMapDrag(event, true);
       }
 
       function startTimer() {
@@ -15979,22 +16525,45 @@
       function renderMap() {
         const region = state.regions.find(r => r.id === selectedRegionId) || state.regions[0];
         const buildingButtons = buildingTypes.map(([key]) => renderActionCard(buildingDecisionMeta(key, region), { "data-action": "build", "data-building": key }, { compact: true })).join("");
-        const coreRegions = state.regions.filter(r => !r.annexedFrom);
-        const annexedRegions = state.regions.filter(r => r.annexedFrom);
+        const map = migrateRegionalMap(state);
+        const overlaps = regionalMapOverlapCount(state.regions);
+        const editMode = map.editMode && !drawMode;
         return `
-          <section class="map-layout">
-            <div class="map-stage">
-              <svg id="countryMap" viewBox="0 0 900 680" role="img" aria-label="Интерактивная карта">
-                ${Array.from({ length: 18 }, (_, i) => `<line class="map-grid-line" x1="${i * 54}" y1="0" x2="${i * 54}" y2="680"></line>`).join("")}
-                ${Array.from({ length: 14 }, (_, i) => `<line class="map-grid-line" x1="0" y1="${i * 52}" x2="900" y2="${i * 52}"></line>`).join("")}
-                ${coreRegions.map(renderRegionSvg).join("")}
-                ${renderAnnexedMapInset(annexedRegions)}
-                ${annexedRegions.map(renderRegionSvg).join("")}
-                ${renderMapWarOverlay()}
-                ${drawMode ? renderDrawingSvg() : ""}
-              </svg>
-            </div>
-            <aside class="grid">
+          <section class="map-layout${map.expanded ? " map-layout-expanded" : ""}">
+            <article class="regional-map-board">
+              <header class="map-toolbar">
+                <span class="map-toolbar-copy">
+                  <strong>Административная карта</strong>
+                  <small>${editMode ? "Перетащите регион в свободное место. Позиция сохранится автоматически." : drawMode ? "Ставьте точки границы прямо на поле карты." : "Выберите регион для управления или включите режим расстановки."}</small>
+                </span>
+                <div class="map-toolbar-actions">
+                  <span class="pill ${overlaps ? "warn" : "good"}">${overlaps ? `наложений: ${overlaps}` : "границы свободны"}</span>
+                  <button class="${editMode ? "active" : ""}" data-action="map-arrange" aria-pressed="${editMode}" title="Перемещать регионы мышью или касанием">${editMode ? "Завершить расстановку" : "Расставить регионы"}</button>
+                  <button data-action="map-auto-layout" title="Разместить все регионы без наложений">Автокомпоновка</button>
+                  <button class="${map.snap ? "active" : ""}" data-action="map-snap" aria-pressed="${map.snap}" title="Привязка центра региона к шагу сетки">Сетка ${map.snap ? "20: вкл." : "20: выкл."}</button>
+                  <button data-action="map-expand" title="${map.expanded ? "Вернуть административные панели" : "Скрыть панели и оставить только карту"}">${map.expanded ? "Показать панели" : "Только карта"}</button>
+                </div>
+              </header>
+              <div class="map-stage${editMode ? " arrange-mode" : ""}" data-scroll-key="regional-map">
+                <svg id="countryMap" viewBox="0 0 ${map.width} ${map.height}" style="aspect-ratio:${map.width}/${map.height};" role="img" aria-label="Интерактивная административная карта с ${state.regions.length} регионами">
+                  ${renderRegionalMapDefs()}
+                  ${renderRegionalMapGrid(map)}
+                  ${renderRegionalConnections(state.regions)}
+                  ${state.regions.map(renderRegionSvg).join("")}
+                  ${renderMapWarOverlay()}
+                  <line class="map-drag-guide" data-map-guide="x" x1="0" y1="0" x2="0" y2="${map.height}"></line>
+                  <line class="map-drag-guide" data-map-guide="y" x1="0" y1="0" x2="${map.width}" y2="0"></line>
+                  ${drawMode ? renderDrawingSvg() : ""}
+                </svg>
+              </div>
+              <footer class="map-legend-bar">
+                <span><i class="map-legend-swatch"></i> основной регион</span>
+                <span><i class="map-legend-swatch annexed"></i> присоединённая территория</span>
+                <span><i class="map-legend-swatch damaged"></i> ущерб или спорный контроль</span>
+                <span>${state.regions.length} регионов · поле ${map.width} × ${map.height} · ${map.layoutMode === "manual" ? "ручная схема" : "автосхема"}</span>
+              </footer>
+            </article>
+            <aside class="grid map-sidebar">
               ${renderMapWarPanel()}
               ${renderFederationPanel(region)}
               <section class="panel pad">
@@ -16046,6 +16615,56 @@
             </aside>
           </section>
         `;
+      }
+
+      function renderRegionalMapDefs() {
+        return `
+          <defs>
+            <pattern id="regionalMapTexture" width="18" height="18" patternUnits="userSpaceOnUse" patternTransform="rotate(24)">
+              <line x1="0" y1="0" x2="0" y2="18" stroke="rgba(255,255,255,.1)" stroke-width="1"></line>
+            </pattern>
+            <pattern id="regionalMapPaper" width="7" height="7" patternUnits="userSpaceOnUse">
+              <circle cx="1" cy="1" r=".6" fill="rgba(226,211,176,.12)"></circle>
+            </pattern>
+          </defs>
+          <rect x="0" y="0" width="100%" height="100%" fill="url(#regionalMapPaper)" pointer-events="none"></rect>
+        `;
+      }
+
+      function renderRegionalMapGrid(map) {
+        const step = 40;
+        const vertical = Array.from({ length: Math.floor(map.width / step) + 1 }, (_, index) => {
+          const x = index * step;
+          return `<line class="map-grid-line${index % 5 === 0 ? " major" : ""}" x1="${x}" y1="0" x2="${x}" y2="${map.height}"></line>`;
+        }).join("");
+        const horizontal = Array.from({ length: Math.floor(map.height / step) + 1 }, (_, index) => {
+          const y = index * step;
+          return `<line class="map-grid-line${index % 5 === 0 ? " major" : ""}" x1="0" y1="${y}" x2="${map.width}" y2="${y}"></line>`;
+        }).join("");
+        const dots = [];
+        for (let x = 200; x < map.width; x += 200) for (let y = 200; y < map.height; y += 200) dots.push(`<circle class="map-grid-dot" cx="${x}" cy="${y}" r="2.2"></circle>`);
+        return `<g aria-hidden="true">${vertical}${horizontal}${dots.join("")}</g>`;
+      }
+
+      function renderRegionalConnections(regions) {
+        if (!Array.isArray(regions) || regions.length < 2) return "";
+        const connected = [];
+        for (let index = 1; index < regions.length; index++) {
+          const current = getCentroid(regions[index].points);
+          let nearest = null;
+          for (let candidate = 0; candidate < index; candidate++) {
+            const target = getCentroid(regions[candidate].points);
+            const distance = Math.hypot(current.x - target.x, current.y - target.y);
+            if (!nearest || distance < nearest.distance) nearest = { target, distance };
+          }
+          if (!nearest) continue;
+          const bend = ((index % 3) - 1) * 24;
+          const midX = (current.x + nearest.target.x) / 2;
+          const midY = (current.y + nearest.target.y) / 2 + bend;
+          const path = `M ${current.x.toFixed(1)} ${current.y.toFixed(1)} Q ${midX.toFixed(1)} ${midY.toFixed(1)} ${nearest.target.x.toFixed(1)} ${nearest.target.y.toFixed(1)}`;
+          connected.push(`<path class="map-connection" d="${path}"></path><path class="map-connection-core" d="${path}"></path>`);
+        }
+        return `<g aria-label="Межрегиональные транспортные коридоры">${connected.join("")}</g>`;
       }
 
       function renderAnnexedMapInset(regions) {
@@ -16123,14 +16742,15 @@
 
       function mapWarGeometry(war, index = 0) {
         const regions = state.regions || [];
+        const map = migrateRegionalMap(state);
         const baseRegion = chooseWarHomeRegion(state, war) || regions[index % Math.max(1, regions.length)];
-        const home = baseRegion ? getCentroid(baseRegion.points) : { x: 450, y: 260 };
+        const home = baseRegion ? getCentroid(baseRegion.points) : { x: map.width / 2, y: map.height / 2 };
         const offset = mapWarOffset(war, index);
-        const enemy = { x: clamp(home.x + offset.x, 38, 862), y: clamp(home.y + offset.y, 38, 482) };
+        const enemy = { x: clamp(home.x + offset.x, 38, map.width - 38), y: clamp(home.y + offset.y, 38, map.height - 38) };
         const t = clamp(war.control / 100, .18, .84);
         const contact = {
-          x: clamp(home.x + (enemy.x - home.x) * t, 34, 866),
-          y: clamp(home.y + (enemy.y - home.y) * t, 34, 486)
+          x: clamp(home.x + (enemy.x - home.x) * t, 34, map.width - 34),
+          y: clamp(home.y + (enemy.y - home.y) * t, 34, map.height - 34)
         };
         const mx = (home.x + enemy.x + contact.x) / 3;
         const my = (home.y + enemy.y + contact.y) / 3;
@@ -16149,6 +16769,7 @@
 
       function renderMapWarFront(war, index) {
         const balance = calcWarBalance(state, war);
+        const map = migrateRegionalMap(state);
         ensureWarObjectives(war, balance.enemy);
         const g = mapWarGeometry(war, index);
         const activeTarget = (war.targetRegions || []).find(t => !t.captured) || (war.targetRegions || [])[0];
@@ -16158,7 +16779,7 @@
           [g.enemy.x + 28, g.enemy.y - 30],
           [g.enemy.x + 46, g.enemy.y + 36],
           [g.contact.x - 26, g.contact.y + 40]
-        ].map(([x, y]) => `${clamp(x, 12, 888)},${clamp(y, 12, 508)}`).join(" ");
+        ].map(([x, y]) => `${clamp(x, 12, map.width - 12)},${clamp(y, 12, map.height - 12)}`).join(" ");
         return `
           <g class="map-war-front" data-action="battle-map" data-id="${esc(war.id)}">
             <polygon class="map-war-zone" points="${zone}"></polygon>
@@ -16167,9 +16788,9 @@
             <circle class="map-war-node" cx="${g.home.x}" cy="${g.home.y}" r="10" fill="#21c7a8"></circle>
             <circle class="map-war-node" cx="${g.enemy.x}" cy="${g.enemy.y}" r="12" fill="#ff5c7a"></circle>
             <circle class="map-war-contact" cx="${g.contact.x}" cy="${g.contact.y}" r="8"></circle>
-            <text class="map-war-label" x="${clamp(g.contact.x + 14, 40, 760)}" y="${clamp(g.contact.y - 18, 26, 494)}">${esc(war.enemy)}</text>
-            <text class="map-war-small" x="${clamp(g.contact.x + 14, 40, 760)}" y="${clamp(g.contact.y, 42, 510)}">фронт ${pct(war.control,0)} · ${esc(pressure.text)}</text>
-            <text class="map-war-small" x="${clamp(g.contact.x + 14, 40, 760)}" y="${clamp(g.contact.y + 15, 58, 510)}">${activeTarget ? `цель: ${esc(activeTarget.name)} ${pct(activeTarget.control,0)}` : "цель не назначена"}</text>
+            <text class="map-war-label" x="${clamp(g.contact.x + 14, 40, map.width - 210)}" y="${clamp(g.contact.y - 18, 26, map.height - 46)}">${esc(war.enemy)}</text>
+            <text class="map-war-small" x="${clamp(g.contact.x + 14, 40, map.width - 210)}" y="${clamp(g.contact.y, 42, map.height - 30)}">фронт ${pct(war.control,0)} · ${esc(pressure.text)}</text>
+            <text class="map-war-small" x="${clamp(g.contact.x + 14, 40, map.width - 210)}" y="${clamp(g.contact.y + 15, 58, map.height - 14)}">${activeTarget ? `цель: ${esc(activeTarget.name)} ${pct(activeTarget.control,0)}` : "цель не назначена"}</text>
           </g>
         `;
       }
@@ -16227,17 +16848,33 @@
         const annexed = !!region.annexedFrom;
         const damaged = num(region.damage, 0) > 8;
         const occupied = num(region.occupation, 0) > 12 || !!region.occupiedBy;
-        const label = annexed ? shortMapLabel(region.name) : region.name;
+        const label = shortMapLabel(region.name, 24);
+        const labelWidth = clamp(104 + label.length * 4.5, 138, 236);
+        const status = regionMapStatus(region);
+        const source = annexed ? ` · ${shortMapLabel(region.annexedFrom, 12)}` : "";
+        const tooltip = `${region.name}. Население ${compact(region.population)}, лояльность ${pct(region.loyalty,0)}, безопасность ${pct(region.security,0)}, ущерб ${pct(region.damage || 0,0)}.${annexed ? ` Присоединено от ${region.annexedFrom}.` : ""}`;
         return `
-          <g>
+          <g class="map-region-group${annexed ? " annexed" : ""}" data-map-region-id="${esc(region.id)}">
+            <title>${esc(tooltip)}</title>
             <polygon class="region-poly ${selected}${annexed ? " annexed" : ""}${damaged ? " damaged" : ""}${occupied ? " occupied" : ""}" data-action="select-region" data-id="${region.id}" points="${pointsAttr(region.points)}" fill="${esc(region.color)}" opacity="${annexed ? ".9" : ".82"}"></polygon>
+            <polygon class="map-region-texture" points="${pointsAttr(region.points)}"></polygon>
+            ${renderRegionRoads(region)}
             ${renderRegionWarDamage(region, centroid)}
-            ${annexed ? "" : renderRegionRoads(region)}
-            ${annexed ? "" : renderBuildingMarkers(region, centroid)}
-            <text class="map-label${annexed ? " annexed" : ""}" x="${centroid.x}" y="${centroid.y - (annexed ? 4 : 0)}" text-anchor="middle">${esc(label)}</text>
-            ${annexed ? `<text class="map-label-source" x="${centroid.x}" y="${centroid.y + 12}" text-anchor="middle">${esc(shortMapLabel(region.annexedFrom, 18))}</text>` : ""}
+            <rect class="map-label-card" x="${(centroid.x - labelWidth / 2).toFixed(1)}" y="${(centroid.y - 35).toFixed(1)}" width="${labelWidth.toFixed(1)}" height="55" rx="5"></rect>
+            <text class="map-label" x="${centroid.x}" y="${(centroid.y - 12).toFixed(1)}" text-anchor="middle">${esc(label)}</text>
+            <text class="map-region-caption" x="${centroid.x}" y="${(centroid.y + 7).toFixed(1)}" text-anchor="middle">${esc(`${compact(region.population)} · ${status}${source}`)}</text>
+            ${renderBuildingMarkers(region, centroid)}
           </g>
         `;
+      }
+
+      function regionMapStatus(region) {
+        if (region.occupiedBy || num(region.occupation) >= 35) return "оккупация";
+        if (region.contested || num(region.occupation) >= 10) return "спорный";
+        if (num(region.damage) >= 30) return "восстановление";
+        if (num(region.damage) >= 8) return "повреждён";
+        if (num(region.loyalty, 50) < 38) return "напряжение";
+        return "стабильно";
       }
 
       function renderRegionWarDamage(region, centroid) {
@@ -16248,11 +16885,11 @@
         const tags = [];
         if (damage >= 8) {
           tags.push(`<circle class="map-damage-zone" cx="${centroid.x}" cy="${centroid.y}" r="${r}"></circle>`);
-          tags.push(`<text class="map-label-source" x="${centroid.x}" y="${centroid.y + 30}" text-anchor="middle">ущерб ${pct(damage,0)}</text>`);
+          tags.push(`<text class="map-label-source" x="${centroid.x}" y="${centroid.y + 78}" text-anchor="middle">ущерб ${pct(damage,0)}</text>`);
         }
         if (occupation >= 12 || region.occupiedBy) {
-          tags.push(`<rect class="map-repair-tag" x="${centroid.x - 54}" y="${centroid.y - 48}" width="108" height="22" rx="6"></rect>`);
-          tags.push(`<text class="map-label-source" x="${centroid.x}" y="${centroid.y - 33}" text-anchor="middle">${occupation >= 55 ? "оккупация" : "спорный контроль"} ${pct(occupation,0)}</text>`);
+          tags.push(`<rect class="map-repair-tag" x="${centroid.x - 58}" y="${centroid.y - 70}" width="116" height="22" rx="5"></rect>`);
+          tags.push(`<text class="map-label-source" x="${centroid.x}" y="${centroid.y - 55}" text-anchor="middle">${occupation >= 55 ? "оккупация" : "спорный контроль"} ${pct(occupation,0)}</text>`);
         }
         return tags.join("");
       }
@@ -16266,27 +16903,29 @@
         const pts = region.points;
         const c = getCentroid(pts);
         let roads = "";
-        for (let i = 0; i < Math.min(region.buildings.roads, pts.length); i++) {
-          const p = pts[i % pts.length];
-          roads += `<line x1="${c.x}" y1="${c.y}" x2="${p[0]}" y2="${p[1]}" stroke="rgba(255,255,255,.72)" stroke-width="4" stroke-linecap="round"></line>`;
+        const count = Math.min(Math.max(1, Math.round(num(region.buildings.roads))), pts.length, 4);
+        for (let i = 0; i < count; i++) {
+          const p = pts[Math.floor(i * pts.length / count) % pts.length];
+          roads += `<line class="map-region-road" x1="${c.x}" y1="${c.y}" x2="${p[0]}" y2="${p[1]}"></line>`;
         }
         return roads;
       }
 
       function renderBuildingMarkers(region, centroid) {
-        const markers = [];
-        const icons = { cities:"●", airports:"✈", ports:"⚓", bases:"▲", plants:"◆", factories:"■", schools:"S", hospitals:"+", universities:"U", farms:"F", mines:"M", oil:"O", gas:"G" };
-        let idx = 0;
-        for (const [key] of buildingTypes) {
-          const count = region.buildings[key] || 0;
-          for (let i = 0; i < Math.min(count, key === "roads" ? 0 : 3); i++) {
-            const angle = (idx++ / 16) * Math.PI * 2;
-            const x = centroid.x + Math.cos(angle) * (26 + (idx % 3) * 18);
-            const y = centroid.y + Math.sin(angle) * (20 + (idx % 4) * 14);
-            markers.push(`<g class="build-marker"><circle cx="${x}" cy="${y}" r="11" fill="rgba(5,10,18,.78)" stroke="white" stroke-width="1.5"></circle><text x="${x}" y="${y + 4}" text-anchor="middle" fill="white" font-size="11" font-weight="900">${icons[key] || "•"}</text></g>`);
-          }
-        }
-        return markers.join("");
+        const groups = [
+          { icon:"Г", label:"города и социальные объекты", keys:["cities","schools","hospitals","universities"] },
+          { icon:"Т", label:"транспорт", keys:["roads","airports","ports"] },
+          { icon:"П", label:"производство", keys:["plants","factories","farms","mines","oil","gas"] },
+          { icon:"Щ", label:"военная инфраструктура", keys:["bases"] }
+        ].map(group => ({ ...group, count: group.keys.reduce((sum, key) => sum + Math.max(0, Math.round(num(region.buildings[key]))), 0) })).filter(group => group.count > 0);
+        if (!groups.length) return "";
+        const badgeWidth = 38, gap = 5;
+        const totalWidth = groups.length * badgeWidth + (groups.length - 1) * gap;
+        return groups.map((group, index) => {
+          const x = centroid.x - totalWidth / 2 + index * (badgeWidth + gap);
+          const y = centroid.y + 27;
+          return `<g class="map-facility-badge" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><title>${esc(group.label)}: ${group.count}</title><rect width="${badgeWidth}" height="21" rx="4"></rect><text x="${badgeWidth / 2}" y="14" text-anchor="middle">${esc(group.icon)} ${group.count}</text></g>`;
+        }).join("");
       }
 
       function renderDrawingSvg() {
@@ -19445,26 +20084,23 @@
       }
 
       function annexedRegionPoints(index) {
-        const col = index % 6;
-        const row = Math.floor(index / 6) % 2;
-        const layer = Math.floor(index / 12);
-        const x = 214 + col * 104 + layer * 4;
-        const y = 588 + row * 42 + layer * 3;
-        return [
-          [x + 4, y + 5],
-          [x + 64, y],
-          [x + 88, y + 21],
-          [x + 64, y + 40],
-          [x + 10, y + 36],
-          [x - 4, y + 19]
-        ].map(([px, py]) => [clamp(px, 34, 866), clamp(py, 586, 650)]);
+        const column = index % 4;
+        const row = Math.floor(index / 4);
+        return fitRegionShape(defaultRegionShape(index + 3), {
+          x: 52 + column * 292,
+          y: 54 + row * 228,
+          width: 276,
+          height: 212
+        }, index + 3);
       }
 
       function layoutAnnexedRegions(game = state) {
         const annexed = (game?.regions || []).filter(r => r.annexedFrom);
-        annexed.forEach((region, index) => {
-          region.points = annexedRegionPoints(index);
+        const map = migrateRegionalMap(game);
+        annexed.forEach(region => {
+          if (!regionalMapPointsValid(region.points, map.width, map.height)) placeRegionInFreeMapSpace(game, region);
         });
+        map.regionCount = game.regions.length;
       }
 
       function foreignRegionToPlayerRegion(region, country, index, disputed = false) {
@@ -19521,6 +20157,7 @@
           if (source) source.ceded = true;
           const region = foreignRegionToPlayerRegion(source || target, country, index, outcome !== "victory");
           game.regions.push(region);
+          placeRegionInFreeMapSpace(game, region);
           game.population.total += region.population;
           const productionFactor = outcome === "victory" ? .22 : .08;
           game.economy.gdp += target.value * productionFactor;
@@ -19549,6 +20186,9 @@
         const index = game.regions.findIndex(r => r.annexedFrom === country?.name);
         if (index < 0) return null;
         const [region] = game.regions.splice(index, 1);
+        const map = migrateRegionalMap(game);
+        if (map.layoutMode === "auto") autoLayoutRegionalMap(game);
+        else map.regionCount = game.regions.length;
         game.population.total = Math.max(10000, game.population.total - region.population);
         game.economy.gdp = Math.max(1000, game.economy.gdp - (region.wealth || 40) * 220);
         game.economy.exports = Math.max(100, game.economy.exports - resourceValue(region.resources || {}) * 22);
@@ -19577,6 +20217,9 @@
         const index = game.regions.findIndex(r => r.id === region?.id);
         if (index < 0) return null;
         const [lost] = game.regions.splice(index, 1);
+        const map = migrateRegionalMap(game);
+        if (map.layoutMode === "auto") autoLayoutRegionalMap(game);
+        else map.regionCount = game.regions.length;
         game.population.total = Math.max(10000, Math.round(game.population.total - lost.population * .92));
         game.economy.gdp = Math.max(1000, game.economy.gdp - (lost.wealth || 40) * 260);
         game.economy.exports = Math.max(100, game.economy.exports - resourceValue(lost.resources || {}) * 16);
@@ -21542,7 +22185,22 @@
         else if (action === "theme") toggleTheme();
         else if (action === "autosave") { if (saveState({ force: true })) notify("Игра сохранена."); }
         else if (action === "select-region") selectedRegionId = actionEl.dataset.id;
-        else if (action === "toggle-draw") { drawMode = !drawMode; drawingPoints = []; }
+        else if (action === "map-arrange") {
+          const map = migrateRegionalMap(state);
+          map.editMode = !map.editMode;
+          if (map.editMode) { drawMode = false; drawingPoints = []; }
+        }
+        else if (action === "map-auto-layout") {
+          autoLayoutRegionalMap(state);
+          notify("Регионы размещены без наложений. При необходимости включите ручную расстановку.", "good", "Карта");
+        }
+        else if (action === "map-snap") migrateRegionalMap(state).snap = !migrateRegionalMap(state).snap;
+        else if (action === "map-expand") migrateRegionalMap(state).expanded = !migrateRegionalMap(state).expanded;
+        else if (action === "toggle-draw") {
+          drawMode = !drawMode;
+          drawingPoints = [];
+          if (drawMode) migrateRegionalMap(state).editMode = false;
+        }
         else if (action === "finish-region") finishRegion();
         else if (action === "cancel-draw") drawingPoints = [];
         else if (action === "build") buildInRegion(actionEl.dataset.building);
@@ -24599,7 +25257,7 @@
           notify("Для региона нужно минимум три точки на карте.");
           return;
         }
-        const region = {
+        const region = ensureRegionDefaults({
           id: uid("region"),
           name: `Новый регион ${state.regions.length + 1}`,
           color: `hsl(${Math.floor(rnd(0, 360))} 58% 52%)`,
@@ -24612,8 +25270,12 @@
           pollution: 18,
           points: drawingPoints.map(p => [Math.round(p[0]), Math.round(p[1])]),
           buildings: emptyBuildings()
-        };
+        }, state.regions.length);
         state.regions.push(region);
+        const map = migrateRegionalMap(state);
+        map.layoutMode = "manual";
+        map.layoutRevision++;
+        map.regionCount = state.regions.length;
         selectedRegionId = region.id;
         drawingPoints = [];
         drawMode = false;
@@ -26700,6 +27362,7 @@
         selectedTech = null;
         drawMode = false;
         drawingPoints = [];
+        regionalMapDrag = null;
         lastSaveAt = 0;
         lastStorageWarningAt = 0;
         lastInteractionAt = 0;
@@ -26733,7 +27396,8 @@
         pt.x = event.clientX;
         pt.y = event.clientY;
         const p = pt.matrixTransform(svg.getScreenCTM().inverse());
-        drawingPoints.push([clamp(p.x, 0, 900), clamp(p.y, 0, 680)]);
+        const map = migrateRegionalMap(state);
+        drawingPoints.push([clamp(p.x, 0, map.width), clamp(p.y, 0, map.height)]);
         render();
       });
 
